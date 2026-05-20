@@ -1,28 +1,52 @@
 package analyzer.bet365;
 
-import java.sql.*;
-import java.util.*;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.EnumSet;
+import java.util.HashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Random;
+import java.util.Set;
+import java.util.StringJoiner;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
- * GENETİK ALGORİTMA İLE TURNUVA — TÜM 10 MAÇ AYNI ANDA OPTİMİZE
+ * GENETİK ALQORİTM İLƏ TURNİVA — İTERATİV SUCCESS‑POOL TƏKAMÜL
  * ═══════════════════════════════════════════════════════════════════════════
  *
- *  Filtre havuzundaki maçların en az %80'i hedefle aynı kriteri taşırsa
- *  o kriter başarılı sayılır. En az bir kriter %80 tutarsa filtre o maçı geçer.
- *  Fitness = 10 maçta geçilen maç sayısı.
+ *  Hər matç üçün filtri keçmə şərti:
+ *    filtri meydana gətirən kolonların hər biri üzrə,
+ *    verilənlər bazasındakı həmin kolon dəyəri ilə eyni olan
+ *    ən az 20 matçdan ibarət hovuz yaradılır.
+ *    Hovuzdakı matçların ≥80%-i eyni HT/FT, MS Skor və ya MS Tərəf
+ *    kriteriyasını daşıyırsa → filtr o matçı KEÇİR.
+ *
+ *  Yeni xüsusiyyət: successPool vasitəsilə tapılmış ən yaxşı filtrlər
+ *  yadda saxlanılır, onların uğursuz olduğu matçlara fokuslanaraq
+ *  yeni nəsillər yaradılır. Dayanma yoxdur – nə qədər uzun çəkərsə çəksin.
  */
-public class Bet365FilterFinderSQL {
+public class Bet365FilterFinderEnhanced {
 
-    private static final int POP_SIZE       = 2_000;
-    private static final int GENERATIONS    = 100;
+    // ─── Parametrlər ────────────────────────────────────────────────────
+    private static final int POP_SIZE = 2000;
+    private static final int INNER_GENS = 15;   // hər mərhələdəki qısa GA nəsli
     private static final int TOURNAMENT_SIZE = 5;
-    private static final int TARGET_COUNT   = 10;
-    private static final double THRESHOLD   = 0.80; // %80 aynı olma zorunluluğu
+    private static final int TARGET_COUNT = 10;
+    private static final double THRESHOLD = 0.80;
+    private static final int MAX_POOL_SIZE = 25;   // uğur hovuzunun maks. ölçüsü
+    private static final int STAGNATION_LIMIT = 5;   // tıxanma limiti (yeni 10‑luq seç)
 
-    // ─── kolon tanımları ────────────────────────────────────────────────────
+    // ─── Kolon təyinləri (dəyişməz) ────────────────────────────────────
     static class ColumnDef {
         final String sqlColumn, displayName;
         ColumnDef(String s, String d) { sqlColumn = s; displayName = d; }
@@ -78,7 +102,7 @@ public class Bet365FilterFinderSQL {
             new ColumnDef("ft_score_2_5_a","MS Skor 2:5")
     );
 
-    // ─── MatchRecord ──────────────────────────────────────────────────────
+    // ─── MatchRecord ──────────────────────────────────────────────────
     static class MatchRecord {
         String league, date, homeTeam, awayTeam, id;
         int htHome, htAway, ftHome, ftAway;
@@ -101,19 +125,18 @@ public class Bet365FilterFinderSQL {
         }
         String fullDetail() {
             return toString() + " | İY:" + htScore() + " MS:" + ftScore()
-                    + " [HT/FT:" + htFtLabel() + "]" + " [MS:" + ftSide() + "]";
+                   + " [HT/FT:" + htFtLabel() + "]" + " [MS:" + ftSide() + "]";
         }
     }
 
-    // ─── Case enum ────────────────────────────────────────────────────────
+    // ─── Case enum ────────────────────────────────────────────────────
     enum Case { HTFT, CORRECT_SCORE, MS_SIDE }
 
-    // ─── Filter ──────────────────────────────────────────────────────────
+    // ─── Filter ──────────────────────────────────────────────────────
     static class Filter {
         final int[] cols;
         Filter(int[] cols) { this.cols = cols; }
 
-        // Belirli bir maç için havuz (max 20 maça izin veriyoruz, threshold için)
         List<Integer> getPoolLarge(MatchRecord target, List<MatchRecord> all) {
             List<Integer> pool = new ArrayList<>();
             double[] tOdds = target.odds;
@@ -126,13 +149,12 @@ public class Bet365FilterFinderSQL {
                 }
                 if (ok) {
                     pool.add(i);
-                    if (pool.size() > 20) break; // Büyük havuzda tümünü saymak yavaşlatır, 20 yeter
+                    if (pool.size() > 20) break;
                 }
             }
             return pool;
         }
 
-        // Esnek başarı kontrolü: Her kriter için havuzdaki maçların en az %80'i aynı değeri taşıyorsa o kriter geçerli
         EnumSet<Case> flexibleSuccess(MatchRecord target, List<MatchRecord> all) {
             List<Integer> pool = getPoolLarge(target, all);
             if (pool.isEmpty()) return EnumSet.noneOf(Case.class);
@@ -165,10 +187,48 @@ public class Bet365FilterFinderSQL {
             for (int c : cols) sj.add("\"" + ALL_ODDS_COLS.get(c).displayName + "\"");
             return sj.toString();
         }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (!(o instanceof Filter)) return false;
+            Filter f = (Filter) o;
+            if (cols.length != f.cols.length) return false;
+            int[] sortedThis = cols.clone();
+            int[] sortedThat = f.cols.clone();
+            Arrays.sort(sortedThis);
+            Arrays.sort(sortedThat);
+            return Arrays.equals(sortedThis, sortedThat);
+        }
+
+        @Override
+        public int hashCode() {
+            return Arrays.hashCode(cols);
+        }
     }
 
-    // ─── Akıllı filtre üretici (frekans + altın kolon) ──────────────────
-    private Map<Integer, Map<Double, Integer>> colValueFreq;
+    // ─── SuccessRecord ────────────────────────────────────────────────
+    static class SuccessRecord {
+        Filter filter;
+        int fitness;                  // neçə matçı keçdi
+        boolean[] passed;             // hər matç üçün true/false
+
+        SuccessRecord(Filter f, int fit, boolean[] passed) {
+            this.filter = f;
+            this.fitness = fit;
+            this.passed = passed.clone();
+        }
+
+        // Uğursuz matçların indekslərini qaytarır
+        List<Integer> failedMatches() {
+            List<Integer> list = new ArrayList<>();
+            for (int i = 0; i < passed.length; i++)
+                if (!passed[i]) list.add(i);
+            return list;
+        }
+    }
+
+    // ─── Qızıl kolon məlumatları ──────────────────────────────────────
     private static final Map<String, List<Integer>> GOLDEN_BY_SIDE = new HashMap<>();
     private static final Map<String, List<Integer>> GOLDEN_BY_HTFT = new HashMap<>();
     static {
@@ -204,6 +264,9 @@ public class Bet365FilterFinderSQL {
         return -1;
     }
 
+    // ─── Frekans xəritəsi ──────────────────────────────────────────────
+    private Map<Integer, Map<Double, Integer>> colValueFreq;
+
     private void buildFrequencyMap() {
         colValueFreq = new HashMap<>();
         for (int i = 0; i < ALL_ODDS_COLS.size(); i++) colValueFreq.put(i, new HashMap<>());
@@ -215,6 +278,7 @@ public class Bet365FilterFinderSQL {
         }
     }
 
+    // ─── Kolon seçimi köməkçiləri ──────────────────────────────────────
     private List<Integer> weightedRandomSelect(List<Integer> available, double[] targetOdds, Random rng, int count) {
         List<Integer> result = new ArrayList<>();
         List<Integer> pool = new ArrayList<>(available);
@@ -247,7 +311,6 @@ public class Bet365FilterFinderSQL {
         if (GOLDEN_BY_SIDE.containsKey(side)) golden.addAll(GOLDEN_BY_SIDE.get(side));
         String htft = target.htFtLabel();
         if (GOLDEN_BY_HTFT.containsKey(htft)) golden.addAll(GOLDEN_BY_HTFT.get(htft));
-        // CS altın kolonu da ekleyelim (ör: "2-1")
         String colName = "ft_score_" + target.ftScore().replace("-", "_") + "_a";
         int csIdx = indexOf(colName);
         if (csIdx >= 0) golden.add(csIdx);
@@ -255,6 +318,7 @@ public class Bet365FilterFinderSQL {
         return new ArrayList<>(golden);
     }
 
+    // ─── İlkin filtr generatoru ─────────────────────────────────────────
     private Filter generateRandomFilter(MatchRecord target, Random rng) {
         List<Integer> available = new ArrayList<>();
         for (int i = 0; i < ALL_ODDS_COLS.size(); i++)
@@ -284,11 +348,8 @@ public class Bet365FilterFinderSQL {
         return new Filter(chosenSet.stream().mapToInt(Integer::intValue).toArray());
     }
 
-    // ─── GA bileşenleri ──────────────────────────────────────────────────
-    private List<MatchRecord> targets;
-
-    // Fitness: 10 maçta geçilen maç sayısı (esnek kriter ile)
-    private int fitness(Filter f) {
+    // ─── GA əməliyyatları ──────────────────────────────────────────────
+    private int fitness(Filter f, List<MatchRecord> targets) {
         int score = 0;
         for (MatchRecord m : targets) {
             if (!f.flexibleSuccess(m, allRecords).isEmpty()) score++;
@@ -296,7 +357,15 @@ public class Bet365FilterFinderSQL {
         return score;
     }
 
-    // Turnuva seçilimi
+    // Hədəf siyahısına görə keçən/keçməyən massivi
+    private boolean[] passArray(Filter f, List<MatchRecord> targets) {
+        boolean[] arr = new boolean[targets.size()];
+        for (int i = 0; i < targets.size(); i++) {
+            arr[i] = !f.flexibleSuccess(targets.get(i), allRecords).isEmpty();
+        }
+        return arr;
+    }
+
     private Filter tournamentSelect(List<Filter> pop, int[] fitnesses, Random rng) {
         Filter best = null;
         int bestFit = -1;
@@ -310,53 +379,62 @@ public class Bet365FilterFinderSQL {
         return best;
     }
 
-    // Çaprazlama (tek nokta)
     private Filter crossover(Filter p1, Filter p2, Random rng) {
         Set<Integer> set = new LinkedHashSet<>();
         for (int col : p1.cols) set.add(col);
         for (int col : p2.cols) set.add(col);
-        // En az 1, en çok 5 kolon seç
         List<Integer> list = new ArrayList<>(set);
         int size = Math.min(5, Math.max(1, rng.nextInt(set.size()) + 1));
         Collections.shuffle(list, rng);
         return new Filter(list.subList(0, size).stream().mapToInt(Integer::intValue).toArray());
     }
 
-    // Mutasyon (bir kolonu frekans ağırlıklı değiştir)
-    private Filter mutate(Filter f, MatchRecord refTarget, Random rng) {
+    // Xüsusi mutasiya – konkret hədəf matça fokuslanır
+    private Filter mutateForTarget(Filter f, MatchRecord refTarget, Random rng) {
         List<Integer> current = new ArrayList<>();
         for (int c : f.cols) current.add(c);
         if (current.isEmpty() || rng.nextDouble() < 0.2) {
-            // Yeni bir kolon ekle
             List<Integer> available = new ArrayList<>();
             for (int i = 0; i < ALL_ODDS_COLS.size(); i++)
                 if (refTarget.odds[i] > 0.0) available.add(i);
             available.removeAll(current);
             if (!available.isEmpty()) {
-                int newCol = weightedRandomSelect(available, refTarget.odds, rng, 1).get(0);
-                current.add(newCol);
+                // Qızıl kolonlara öncelik
+                List<Integer> goldAvail = new ArrayList<>(collectGoldenColumns(refTarget));
+                goldAvail.removeAll(current);
+                if (!goldAvail.isEmpty() && rng.nextDouble() < 0.6) {
+                    current.add(goldAvail.get(rng.nextInt(goldAvail.size())));
+                } else {
+                    int newCol = weightedRandomSelect(available, refTarget.odds, rng, 1).get(0);
+                    current.add(newCol);
+                }
             }
         } else {
-            // Bir kolonu değiştir
             int idx = rng.nextInt(current.size());
             List<Integer> available = new ArrayList<>();
             for (int i = 0; i < ALL_ODDS_COLS.size(); i++)
                 if (refTarget.odds[i] > 0.0) available.add(i);
             available.removeAll(current);
             if (!available.isEmpty()) {
-                int newCol = weightedRandomSelect(available, refTarget.odds, rng, 1).get(0);
-                current.set(idx, newCol);
+                List<Integer> goldAvail = new ArrayList<>(collectGoldenColumns(refTarget));
+                goldAvail.removeAll(current);
+                if (!goldAvail.isEmpty() && rng.nextDouble() < 0.6) {
+                    current.set(idx, goldAvail.get(rng.nextInt(goldAvail.size())));
+                } else {
+                    int newCol = weightedRandomSelect(available, refTarget.odds, rng, 1).get(0);
+                    current.set(idx, newCol);
+                }
             }
         }
         if (current.size() > 5) current = current.subList(0, 5);
         return new Filter(current.stream().mapToInt(Integer::intValue).toArray());
     }
 
-    // ─── Veritabanı işlemleri ────────────────────────────────────────────
+    // ─── DB bağlantısı ─────────────────────────────────────────────────
     private Connection        conn;
     private List<MatchRecord> allRecords = new ArrayList<>();
 
-    public Bet365FilterFinderSQL() {
+    public Bet365FilterFinderEnhanced() {
         try {
             Class.forName("org.postgresql.Driver");
             conn = DriverManager.getConnection(
@@ -415,80 +493,225 @@ public class Bet365FilterFinderSQL {
         catch (Exception ignored) { return 0.0; }
     }
 
-    // ─── ANA GENETİK ALGORİTMA ───────────────────────────────────────────
-    public void startFilterHunt() {
+    // ─── Hovuzdan populyasiya toxumu ───────────────────────────────────
+    private List<Filter> seedPopulationFromPool(List<SuccessRecord> pool,
+                                                List<MatchRecord> targets,
+                                                Random rng) {
+        List<Filter> seeded = new ArrayList<>();
+        if (pool.isEmpty()) return seeded;
+
+        // Hovuzdakı hər fərd üçün: özü, mutasiyaları, uşaqları
+        for (SuccessRecord sr : pool) {
+            seeded.add(sr.filter);
+            // Uğursuz matçları hədəf alan mutasiyalar
+            List<Integer> failed = sr.failedMatches();
+            if (!failed.isEmpty()) {
+                MatchRecord focusTarget = targets.get(failed.get(rng.nextInt(failed.size())));
+                for (int i = 0; i < 4; i++) { // 4 mutasiya
+                    seeded.add(mutateForTarget(sr.filter, focusTarget, rng));
+                }
+            } else {
+                // Əgər heç bir uğursuz matç yoxdursa (10/10), yenə də mutasiya et
+                MatchRecord anyTarget = targets.get(rng.nextInt(targets.size()));
+                for (int i = 0; i < 2; i++) {
+                    seeded.add(mutateForTarget(sr.filter, anyTarget, rng));
+                }
+            }
+        }
+
+        // Hovuzdakı fərqli fərdlər arasında çarpazlama
+        for (int i = 0; i < pool.size() * 3; i++) {
+            SuccessRecord p1 = pool.get(rng.nextInt(pool.size()));
+            SuccessRecord p2 = pool.get(rng.nextInt(pool.size()));
+            seeded.add(crossover(p1.filter, p2.filter, rng));
+        }
+
+        // Bənzərsiz fərdləri qoru
+        return seeded.stream().distinct().collect(Collectors.toList());
+    }
+
+    // ─── Populyasiyanı tamamla ─────────────────────────────────────────
+    private void fillRandom(List<Filter> pop, MatchRecord refTarget, Random rng, int maxSize) {
+        while (pop.size() < maxSize) {
+            Filter f = generateRandomFilter(refTarget, rng);
+            if (f.cols.length > 0 && !pop.contains(f))
+                pop.add(f);
+        }
+        // Əgər təsadüfi filtr çıxmazsa, ölçüyə çatana qədər klonla
+        while (pop.size() < maxSize) {
+            pop.add(generateRandomFilter(refTarget, rng));
+        }
+    }
+
+    // ─── Hovuzu güncəllə ──────────────────────────────────────────────
+    private void updateSuccessPool(List<Filter> population, List<SuccessRecord> pool,
+                                   List<MatchRecord> targets, Random rng) {
+        for (Filter f : population) {
+            int fit = fitness(f, targets);
+            // Hovuza yalnız kifayət qədər yaxşı və yeni fərdləri at
+            boolean alreadyInPool = pool.stream().anyMatch(sr -> sr.filter.equals(f));
+            if (!alreadyInPool && fit >= 3) {   // ən az 3 matç keçən
+                boolean[] passed = passArray(f, targets);
+                pool.add(new SuccessRecord(f, fit, passed));
+            }
+        }
+        // Fitnessə görə sırala, ən yaxşıları saxla
+        pool.sort((a, b) -> Integer.compare(b.fitness, a.fitness));
+        while (pool.size() > MAX_POOL_SIZE) {
+            pool.remove(pool.size() - 1);
+        }
+    }
+
+    // ─── Yeni 10 hədəf seç ─────────────────────────────────────────────
+    private List<MatchRecord> pickNewTargets(List<MatchRecord> valid) {
+        Collections.shuffle(valid, new Random());
+        return valid.subList(0, TARGET_COUNT);
+    }
+
+    // ─══ ANA İTERATİV TƏKAMÜL MEXANİZMİ ═────────────────────────────────
+    public void startEnhancedHunt() {
         List<MatchRecord> valid = allRecords.stream()
                 .filter(m -> m.ftHome >= 0 && m.ftAway >= 0 && m.htHome >= 0 && m.htAway >= 0)
                 .collect(Collectors.toList());
-        if (valid.size() < TARGET_COUNT) { System.out.println("❌ Yeterli maç yok."); return; }
-        Collections.shuffle(valid, new Random(42));
-        targets = valid.subList(0, TARGET_COUNT);
-
-        System.out.println("🏆 GENETİK ALGORİTMA TURNUVASI — " + TARGET_COUNT + " MAÇ");
-        System.out.println("=".repeat(70));
-        for (int i = 0; i < TARGET_COUNT; i++)
-            System.out.printf(" MAÇ %2d: %s%n", i + 1, targets.get(i).fullDetail());
-        System.out.println("=".repeat(70));
-
-        // Başlangıç popülasyonu (ilk maça göre üretilmiş)
-        List<Filter> population = new ArrayList<>();
-        MatchRecord first = targets.get(0);
-        Random rng = new Random(123);
-        while (population.size() < POP_SIZE) {
-            Filter f = generateRandomFilter(first, rng);
-            if (f.cols.length > 0) population.add(f);
+        if (valid.size() < TARGET_COUNT) {
+            System.out.println("❌ Yeterli maç yok.");
+            return;
         }
 
-        int[] fitnesses = new int[POP_SIZE];
-        int bestEver = 0;
-        Filter bestFilterEver = null;
+        // İlk 10 hədəf
+        List<MatchRecord> targets = pickNewTargets(valid);
+        List<SuccessRecord> successPool = new ArrayList<>();
+        Random rng = new Random(123);
+        int globalBest = 0;
+        Filter globalBestFilter = null;
+        int stagnationCounter = 0;
+        int megaIteration = 0;
 
         long t0 = System.currentTimeMillis();
-        for (int gen = 0; gen < GENERATIONS; gen++) {
-            // Fitness hesapla (paralel)
-            List<Filter> finalPopulation = population;
-            IntStream.range(0, population.size()).parallel().forEach(i -> {
-                fitnesses[i] = fitness(finalPopulation.get(i));
-            });
 
-            int maxFit = Arrays.stream(fitnesses).max().orElse(0);
-            if (maxFit > bestEver) {
-                bestEver = maxFit;
-                int idx = IntStream.range(0, fitnesses.length).filter(i -> fitnesses[i] == maxFit).findFirst().orElse(0);
-                bestFilterEver = population.get(idx);
+        System.out.println("══════════════════════════════════════════════════════");
+        System.out.println("   İTERATİV GENETİK TURNİVA (SUCCESS‑POOL İLƏ)");
+        System.out.println("══════════════════════════════════════════════════════");
+        System.out.println("🎯 Dayanma şərti: 10 matçdan ən az 9‑u keçilənə qədər.");
+        System.out.println("   (Proses avtomatik dayanmayacaq, 10/10 tapılana qədər davam edəcək.)");
+
+        // ─── Əsas xarici dövr ────────────────────────────────────────
+        while (globalBest < TARGET_COUNT) {   // 10/10 olana qədər dayanma
+            megaIteration++;
+            System.out.printf("%n🔁 MEGA‑İTERASİYA %d | Hazırki ən yaxşı: %d/%d%n",
+                    megaIteration, globalBest, TARGET_COUNT);
+            System.out.println("Hədəf matçlar:");
+            for (int i = 0; i < targets.size(); i++)
+                System.out.printf("  %2d: %s%n", i + 1, targets.get(i).fullDetail());
+
+            // Populyasiyanı qur: hovuzdan toxum + təsadüfi
+            List<Filter> population = seedPopulationFromPool(successPool, targets, rng);
+            fillRandom(population, targets.get(0), rng, POP_SIZE);
+
+            int[] fitnesses = new int[POP_SIZE];
+            int innerBest = 0;
+
+            // ─── Daxili GA nəsilləri ──────────────────────────────────
+            for (int gen = 0; gen < INNER_GENS; gen++) {
+                List<Filter> finalPopulation = population;
+                List<MatchRecord> finalTargets = targets;
+                IntStream.range(0, population.size()).parallel().forEach(i -> {
+                    fitnesses[i] = fitness(finalPopulation.get(i), finalTargets);
+                });
+
+                int maxFit = Arrays.stream(fitnesses).max().orElse(0);
+                if (maxFit > innerBest) innerBest = maxFit;
+
+                // Elitizm: ən yaxşı 2 fərdi qoru
+                List<Filter> newPop = new ArrayList<>();
+                int[] sortedIdx = IntStream.range(0, fitnesses.length)
+                        .boxed().sorted((a, b) -> Integer.compare(fitnesses[b], fitnesses[a]))
+                        .mapToInt(Integer::intValue).toArray();
+                for (int i = 0; i < Math.min(2, population.size()); i++) {
+                    newPop.add(population.get(sortedIdx[i]));
+                }
+
+                while (newPop.size() < POP_SIZE) {
+                    Filter p1 = tournamentSelect(population, fitnesses, rng);
+                    Filter p2 = tournamentSelect(population, fitnesses, rng);
+                    Filter child = crossover(p1, p2, rng);
+                    // Uğursuz matça yönəlik mutasiya ehtimalı
+                    if (rng.nextDouble() < 0.4) {
+                        // Rastgele uğursuz matçı hədəf al
+                        int fidx = rng.nextInt(targets.size());
+                        child = mutateForTarget(child, targets.get(fidx), rng);
+                    }
+                    newPop.add(child);
+                }
+                population = newPop;
             }
 
-            if (gen % 10 == 0) {
-                System.out.printf("Nesil %3d: En iyi = %d/%d, Ortalama = %.1f%n",
-                        gen, maxFit, TARGET_COUNT, Arrays.stream(fitnesses).average().orElse(0));
+            // Daxili GA bitdikdən sonra hovuzu güncəllə
+            updateSuccessPool(population, successPool, targets, rng);
+            if (!successPool.isEmpty()) {
+                int poolBest = successPool.get(0).fitness;
+                if (poolBest > globalBest) {
+                    globalBest = poolBest;
+                    globalBestFilter = successPool.get(0).filter;
+                    stagnationCounter = 0;
+                    System.out.printf("  🏆 YENİ REKORD: %d/%d  Filtr: %s%n",
+                            globalBest, TARGET_COUNT, globalBestFilter.getColumnNames());
+                } else {
+                    stagnationCounter++;
+                }
             }
 
-            // Yeni nesil
-            List<Filter> newPop = new ArrayList<>();
-            while (newPop.size() < POP_SIZE) {
-                Filter p1 = tournamentSelect(population, fitnesses, rng);
-                Filter p2 = tournamentSelect(population, fitnesses, rng);
-                Filter child = crossover(p1, p2, rng);
-                if (rng.nextDouble() < 0.3) child = mutate(child, first, rng);
-                newPop.add(child);
+            // Tıxanma aşkarlanarsa → yeni 10 hədəf seç
+            if (stagnationCounter >= STAGNATION_LIMIT && globalBest < 9) {
+                System.out.println("⚠️ Tıxanma aşkarlandı – yeni 10 matç seçilir...");
+                targets = pickNewTargets(valid);
+                // Hovuzdakı fərdlərin fitnessini yeni hədəflərə görə yenilə
+                List<SuccessRecord> newPool = new ArrayList<>();
+                for (SuccessRecord sr : successPool) {
+                    int newFit = fitness(sr.filter, targets);
+                    boolean[] newPassed = passArray(sr.filter, targets);
+                    newPool.add(new SuccessRecord(sr.filter, newFit, newPassed));
+                }
+                successPool = newPool;
+                successPool.sort((a, b) -> Integer.compare(b.fitness, a.fitness));
+                if (!successPool.isEmpty()) {
+                    globalBest = successPool.get(0).fitness;
+                    globalBestFilter = successPool.get(0).filter;
+                } else {
+                    globalBest = 0;
+                }
+                stagnationCounter = 0;
             }
-            population = newPop;
+
+            // Ara hesabat
+            System.out.printf("  Hovuz ölçüsü: %d  |  Ən yaxşı: %d  |  Stagnasiya: %d%n",
+                    successPool.size(),
+                    successPool.isEmpty() ? 0 : successPool.get(0).fitness,
+                    stagnationCounter);
         }
 
-        System.out.printf("⏱️ Süre: %d ms%n", System.currentTimeMillis() - t0);
-        System.out.println("En iyi filtre skoru: " + bestEver + "/" + TARGET_COUNT);
-        if (bestFilterEver != null) {
-            System.out.println("Kolonlar: " + bestFilterEver.getColumnNames());
-            // Detaylı maç raporu
-            for (int i = 0; i < TARGET_COUNT; i++) {
-                MatchRecord m = targets.get(i);
-                EnumSet<Case> cs = bestFilterEver.flexibleSuccess(m, allRecords);
-                System.out.printf("MAÇ %d: %s → %s%n", i+1, m.fullDetail(), cs.isEmpty() ? "❌" : "✅ " + cs);
-            }
+        // ─── Nəticə ──────────────────────────────────────────────────
+        System.out.println("\n══════════════════════════════════════════════════════");
+        System.out.println("🏁 OPTİMAL FİLTR TAPILDI!");
+        System.out.printf("⏱️ Ümumi vaxt: %d ms | Mega‑iterasiya: %d%n",
+                System.currentTimeMillis() - t0, megaIteration);
+        System.out.println("Fitness: " + globalBest + "/" + TARGET_COUNT);
+        System.out.println("Kolonlar: " + globalBestFilter.getColumnNames());
+        System.out.println("\n📋 Matç detalları:");
+        for (int i = 0; i < targets.size(); i++) {
+            MatchRecord m = targets.get(i);
+            EnumSet<Case> cs = globalBestFilter.flexibleSuccess(m, allRecords);
+            System.out.printf("  MAÇ %d: %s → %s%n", i + 1, m.fullDetail(),
+                    cs.isEmpty() ? "❌" : "✅ " + cs);
+        }
+
+        try {
+            conn.close();
+        } catch (Exception ignored) {
         }
     }
 
     public static void main(String[] args) {
-        new Bet365FilterFinderSQL().startFilterHunt();
+        new Bet365FilterFinderEnhanced().startEnhancedHunt();
     }
 }
