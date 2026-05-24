@@ -1,90 +1,117 @@
 package analyzer.mackolik.patternfinder;
 
+import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
-class MatchPattern {
-    public String score1;
-    public String score2;
-    public String homeTeam1;
-    public String awayTeam1;
-    public String homeTeam2;
-    public String awayTeam2;
-    public String teamName;
-    public String nextHomeTeam;
-    public String nextAwayTeam;
-    public String middleHomeTeam; // ara maç ev sahibi
-    public String middleAwayTeam; // ara maç deplasman
+/**
+ * N maçlık (3, 4 veya 5) bir pattern'i temsil eder.
+ *
+ * Maçlar kronolojik sıradadır:
+ *   matches.get(0)  → en eski maç
+ *   matches.get(N-1)→ en yeni maç (bitmiş ama "başlamamış sayılır")
+ *
+ * Her Match iç sınıfı: ev sahibi, deplasman, skor bilgisini taşır.
+ */
+public class MatchPattern {
 
-    public MatchPattern(String score1, String score2, String homeTeam1, String awayTeam1,
-                        String homeTeam2, String awayTeam2, String teamName,
-                        String nextHomeTeam, String nextAwayTeam) {
-        this.score1 = score1;
-        this.score2 = score2;
-        this.homeTeam1 = homeTeam1;
-        this.awayTeam1 = awayTeam1;
-        this.homeTeam2 = homeTeam2;
-        this.awayTeam2 = awayTeam2;
+    // ─── İç sınıf ────────────────────────────────────────────────────────────
+    public static class Match {
+        public final String homeTeam;
+        public final String awayTeam;
+        public final String score;   // Son maç için "???" olabilir
+
+        public Match(String homeTeam, String awayTeam, String score) {
+            this.homeTeam = homeTeam;
+            this.awayTeam = awayTeam;
+            this.score    = score;
+        }
+
+        @Override
+        public String toString() {
+            return homeTeam + " vs " + awayTeam + " -> " + score;
+        }
+    }
+
+    // ─── Alanlar ─────────────────────────────────────────────────────────────
+    public final List<Match> matches;   // Kronolojik sıra: [0..N-1]
+    public final String teamName;
+    public final int size;              // 3, 4 veya 5
+
+    // Eski kodla uyumluluk için kısa yollar ──────────────────────────────────
+    public final String score1, score2;
+    public final String homeTeam1, awayTeam1;
+    public final String homeTeam2, awayTeam2;
+    public final String nextHomeTeam, nextAwayTeam;
+    public final String middleHomeTeam, middleAwayTeam; // compat
+
+    // ─── Kurucu ──────────────────────────────────────────────────────────────
+    public MatchPattern(List<Match> matches, String teamName) {
+        if (matches == null || matches.size() < 3 || matches.size() > 5)
+            throw new IllegalArgumentException("Pattern boyutu 3-5 arasında olmalı, verilen: "
+                    + (matches == null ? "null" : matches.size()));
+
+        this.matches  = new ArrayList<>(matches);
         this.teamName = teamName;
-        this.nextHomeTeam = nextHomeTeam;
-        this.nextAwayTeam = nextAwayTeam;
-        this.middleHomeTeam = nextHomeTeam;
-        this.middleAwayTeam = nextAwayTeam;
+        this.size     = matches.size();
+
+        // Eski compat alanlar (ilk 2 maç + son maç)
+        Match m0 = matches.get(0);
+        Match m1 = matches.get(1);
+        Match mL = matches.get(matches.size() - 1);
+
+        this.score1       = m0.score;
+        this.score2       = m1.score;
+        this.homeTeam1    = m0.homeTeam;
+        this.awayTeam1    = m0.awayTeam;
+        this.homeTeam2    = m1.homeTeam;
+        this.awayTeam2    = m1.awayTeam;
+        this.nextHomeTeam = mL.homeTeam;
+        this.nextAwayTeam = mL.awayTeam;
+        this.middleHomeTeam = mL.homeTeam;
+        this.middleAwayTeam = mL.awayTeam;
+    }
+
+    // ─── Yardımcı ─────────────────────────────────────────────────────────────
+
+    /** Pattern'deki tüm skoru aranacak maçlar (son maç hariç) */
+    public List<String> getSearchScores() {
+        List<String> scores = new ArrayList<>();
+        for (int i = 0; i < size - 1; i++) {
+            scores.add(matches.get(i).score);
+        }
+        return scores;
+    }
+
+    /** Pattern'deki tüm takım isimlerini döner */
+    public Set<String> getAllTeams() {
+        Set<String> teams = new HashSet<>();
+        for (Match m : matches) {
+            teams.add(m.homeTeam);
+            teams.add(m.awayTeam);
+        }
+        return teams;
+    }
+
+    /** Son maç (bitmiş ama "başlamamış sayılan") */
+    public Match getLastMatch() {
+        return matches.get(size - 1);
     }
 
     @Override
     public String toString() {
         StringBuilder sb = new StringBuilder();
-        sb.append(String.format("%s vs %s -> %s\n", homeTeam1, awayTeam1, score1));
-        if (middleHomeTeam != null)
-            sb.append(String.format("%s vs %s -> ??? (ARA MAC - tahmin)\n", middleHomeTeam, middleAwayTeam));
-        if (homeTeam2 != null)
-            sb.append(String.format("%s vs %s -> Henuz oynanmadi", homeTeam2, awayTeam2));
-        return sb.toString();
+        for (int i = 0; i < size; i++) {
+            Match m = matches.get(i);
+            if (i == size - 1) {
+                sb.append(String.format("  Maç %d : %s vs %s -> ??? (aranan)\n",
+                        i + 1, m.homeTeam, m.awayTeam));
+            } else {
+                sb.append(String.format("  Maç %d : %s vs %s -> %s\n",
+                        i + 1, m.homeTeam, m.awayTeam, m.score));
+            }
+        }
+        return sb.toString().stripTrailing();
     }
-
-    public Set<String> getAllTeams() {
-        Set<String> teams = new HashSet<>();
-        teams.add(homeTeam1); teams.add(awayTeam1);
-        if (homeTeam2 != null) teams.add(homeTeam2);
-        if (awayTeam2 != null) teams.add(awayTeam2);
-        return teams;
-    }
-}
-
-class MatchResult {
-    String homeTeam, awayTeam, score;
-    String middleHomeTeam, middleAwayTeam, middleScore, middleHTScore;
-    String previousMatchScore, previousHTScore;
-    String nextMatchScore, nextHTScore;
-    String season, firstMatchHTScore;
-    String secondMatchHomeTeam, secondMatchScore, secondMatchAwayTeam, secondMatchHTScore;
-    MatchPattern originalPattern;
-
-    public MatchResult(String homeTeam, String awayTeam, String score, String season, MatchPattern originalPattern) {
-        this.homeTeam = homeTeam; this.awayTeam = awayTeam;
-        this.score = score; this.season = season;
-        this.originalPattern = originalPattern;
-    }
-
-    @Override
-    public String toString() {
-        String prev   = previousMatchScore != null ? previousMatchScore + " (HT: " + nvl(previousHTScore) + ")" : "Bilgi Yok";
-        String next   = nextMatchScore != null ? nextMatchScore + " (HT: " + nvl(nextHTScore) + ")" : "Bilgi Yok";
-        String m1     = homeTeam + " " + score + " " + awayTeam + " (HT: " + nvl(firstMatchHTScore) + ")";
-        String mid    = (middleHomeTeam != null && middleScore != null)
-                ? middleHomeTeam + " " + middleScore + " " + middleAwayTeam + " (HT: " + nvl(middleHTScore) + ")"
-                : "Bilgi Yok";
-        String m2     = secondMatchHomeTeam != null
-                ? secondMatchHomeTeam + " " + secondMatchScore + " " + secondMatchAwayTeam + " (HT: " + nvl(secondMatchHTScore) + ")"
-                : "Bilgi Yok";
-
-        return String.format(
-                "[%s Sezonu]\nonceki mac    -> %s\n1. pat. mac   -> %s\nARA MAC (2/1) -> %s\n2. pat. mac   -> %s\nsonraki mac   -> %s",
-                season, prev, m1, mid, m2, next);
-    }
-
-    private String nvl(String s) { return s != null ? s : "N/A"; }
-
-    public boolean containsOriginalTeamVsOpponent() { return true; }
 }

@@ -1,4 +1,4 @@
-package analyzer.mackolik.patternfinder;// HttpClient v4 importları (HttpScoreScraper ile uyumlu)
+package analyzer.mackolik.patternfinder;
 
 import analyzer.util.TeamIdsFetcher;
 import org.apache.http.client.config.RequestConfig;
@@ -9,6 +9,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
@@ -22,102 +23,179 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
+/**
+ * Tüm takımları sanal thread'lerle paralel işler.
+ *
+ * Her takım için 3 ayrı pattern boyutu (3, 4, 5) çalışır.
+ * Her boyut kendi raporunu üretir.
+ *
+ * Console çıktısı:
+ *   İDEAL EŞLEŞME → ★ işaretiyle
+ *   HAVUZ EŞLEŞME → ◈ işaretiyle
+ */
 public class OnlyLeagueVirtualThreadedAnalyzer {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(OnlyLeagueVirtualThreadedAnalyzer.class);
+    private static final Logger LOGGER =
+            LoggerFactory.getLogger(OnlyLeagueVirtualThreadedAnalyzer.class);
+
+    // Aranacak geçmiş sezon aralığı (kapsayıcı, azalan sırayla)
     private static final int START_YEAR = 2024;
-    private static final int END_YEAR = 2017;
+    private static final int END_YEAR   = 2010;
+
+    // Bağlantı havuzu
     private static final int CONNECTION_POOL_SIZE = 1000;
 
+    // Çalıştırılacak pattern boyutları
+    private static final int[] PATTERN_SIZES = {3, 4, 5};
+
+    // ═══════════════════════════════════════════════════════════════════════════
+    //  Görev
+    // ═══════════════════════════════════════════════════════════════════════════
+
     private static class TeamProcessorTask implements Callable<String> {
+
         private final int teamId;
         private final CloseableHttpClient httpClient;
 
-        public TeamProcessorTask(int teamId, CloseableHttpClient httpClient) {
-            this.teamId = teamId;
+        TeamProcessorTask(int teamId, CloseableHttpClient httpClient) {
+            this.teamId     = teamId;
             this.httpClient = httpClient;
         }
 
-        /**
-         * Bu metod, her bir takım için ne kadar süre harcandığını ölçmek ve loglamak için güncellendi.
-         * Bu sayede yavaşlığın ağdan mı yoksa programdan mı kaynaklandığı görülebilir.
-         */
         @Override
         public String call() {
-            long taskStartTime = System.currentTimeMillis(); // Görev başlangıç zamanı
-            LOGGER.info("[START] Processing Team ID: {}", teamId);
-            try {
-                MatchPattern currentPattern = OnlyLeagueScraper.findCurrentSeasonLastTwoMatches(httpClient, teamId);
-                if (currentPattern == null) {
-                    LOGGER.warn("[SKIP] Could not find a current pattern for team ID: {}", teamId);
-                    return null;
-                }
+            long startTime = System.currentTimeMillis();
+            LOGGER.info("[START] Takım ID: {}", teamId);
 
-                LOGGER.info("[PATTERN] Found current pattern for team '{}' (ID: {})", currentPattern.teamName, teamId);
-                Map<Integer, List<MatchResult>> allFoundMatches = searchPastSeasons(currentPattern);
+            StringBuilder teamReport = new StringBuilder();
 
-                if (allFoundMatches.isEmpty()) {
-                    LOGGER.info("[NO-MATCH] No matching patterns found for team '{}' (ID: {})", currentPattern.teamName, teamId);
-                    return null;
-                } else {
-                    int totalMatches = allFoundMatches.values().stream().mapToInt(List::size).sum();
-                    LOGGER.info("[SUCCESS] Found {} matches for team '{}' (ID: {})", totalMatches, currentPattern.teamName, teamId);
-                    return formatResultsString(currentPattern, allFoundMatches);
+            for (int patternSize : PATTERN_SIZES) {
+                String singleReport = processForSize(patternSize);
+                if (singleReport != null) {
+                    teamReport.append(singleReport);
                 }
-            } catch (Exception e) {
-                LOGGER.error("[ERROR] An unexpected error occurred while processing team ID: {}", teamId, e);
-                return null;
-            } finally {
-                // Bu blok, görev başarılı da olsa hata da alsa çalışır.
-                long taskDuration = System.currentTimeMillis() - taskStartTime;
-                LOGGER.info("[END] Team ID: {} processed in {} ms.", teamId, taskDuration);
             }
+
+            long duration = System.currentTimeMillis() - startTime;
+            LOGGER.info("[END] Takım ID: {} → {} ms", teamId, duration);
+
+            String result = teamReport.toString().trim();
+            return result.isEmpty() ? null : result;
+        }
+
+        /**
+         * Belirli bir pattern boyutu için:
+         *   1. Mevcut sezondaki son N maçı çek → pattern oluştur
+         *   2. Geçmiş sezonlarda bu pattern'i ara
+         *   3. Bulunan sonuçları formatla
+         */
+        private String processForSize(int patternSize) {
+            MatchPattern currentPattern;
+            try {
+                currentPattern = OnlyLeagueScraper.findCurrentSeasonPattern(
+                        httpClient, teamId, patternSize);
+            } catch (Exception e) {
+                LOGGER.warn("[SKIP-{}] Takım ID {}: {}",
+                        patternSize, teamId, e.getMessage());
+                return null;
+            }
+
+            LOGGER.info("[PATTERN-{}] Takım '{}' (ID: {})",
+                    patternSize, currentPattern.teamName, teamId);
+
+            // Geçmiş sezonlarda ara
+            Map<Integer, List<MatchResult>> allFound = searchPastSeasons(currentPattern);
+
+            if (allFound.isEmpty()) {
+                LOGGER.info("[NO-MATCH-{}] Takım '{}' (ID: {})",
+                        patternSize, currentPattern.teamName, teamId);
+                return null;
+            }
+
+            long total = allFound.values().stream().mapToLong(List::size).sum();
+            LOGGER.info("[SUCCESS-{}] {} eşleşme — Takım '{}' (ID: {})",
+                    patternSize, total, currentPattern.teamName, teamId);
+
+            return formatReport(patternSize, currentPattern, allFound);
         }
 
         private Map<Integer, List<MatchResult>> searchPastSeasons(MatchPattern pattern) {
-            Map<Integer, List<MatchResult>> foundMatchesBySeason = new TreeMap<>();
+            Map<Integer, List<MatchResult>> found = new TreeMap<>();
             for (int year = START_YEAR; year >= END_YEAR; year--) {
                 String season = year + "/" + (year + 1);
-                LOGGER.debug("Searching team ID {} in season {}", teamId, season);
                 try {
-                    List<MatchResult> seasonMatches = OnlyLeagueScraper.findScorePattern(httpClient, pattern, season, teamId);
-                    if (seasonMatches != null && !seasonMatches.isEmpty()) {
-                        LOGGER.info("Found {} matches for team ID {} in season {}", seasonMatches.size(), teamId, season);
-                        foundMatchesBySeason.put(year, seasonMatches);
+                    List<MatchResult> results = OnlyLeagueScraper.findScorePattern(
+                            httpClient, pattern, season, teamId);
+                    if (results != null && !results.isEmpty()) {
+                        LOGGER.info("  {} sezonu → {} eşleşme (takım ID: {})",
+                                season, results.size(), teamId);
+                        found.put(year, results);
                     }
                 } catch (IOException e) {
-                    LOGGER.error("IOException while searching season {} for team ID {}", season, teamId, e);
+                    LOGGER.error("  IOException — sezon {} takım ID {}", season, teamId, e);
                 }
             }
-            return foundMatchesBySeason;
+            return found;
         }
 
-        private String formatResultsString(MatchPattern pattern, Map<Integer, List<MatchResult>> allMatches) {
-            StringBuilder report = new StringBuilder();
-            report.append(String.format("=== Team ID: %d (%s) ===\n", teamId, pattern.teamName));
-            report.append("Aranan skor paterni:\n").append(pattern.toString()).append("\n");
-            for (Map.Entry<Integer, List<MatchResult>> entry : allMatches.entrySet()) {
-                report.append("\n").append(entry.getKey()).append(" Sezonu Analizi:\n");
-                report.append("------------------------\n");
-                String seasonResults = entry.getValue().stream()
-                        .map(MatchResult::toString)
-                        .collect(Collectors.joining("\n\n"));
-                report.append(seasonResults).append("\n");
+        private String formatReport(int patternSize,
+                                    MatchPattern pattern,
+                                    Map<Integer, List<MatchResult>> allFound) {
+            StringBuilder sb = new StringBuilder();
+
+            sb.append(String.format(
+                    "\n╔══════════════════════════════════════════════════════╗\n" +
+                            "║  %d'lü Pattern  —  Takım ID: %-5d  (%s)\n" +
+                            "╚══════════════════════════════════════════════════════╝\n",
+                    patternSize, teamId, pattern.teamName));
+
+            sb.append("Aranan pattern:\n").append(pattern.toString()).append("\n\n");
+
+            // İDEAL ve HAVUZ ayrı grupla
+            List<MatchResult> idealList = new ArrayList<>();
+            List<MatchResult> poolList  = new ArrayList<>();
+
+            for (List<MatchResult> results : allFound.values()) {
+                for (MatchResult mr : results) {
+                    if ("İDEAL".equals(mr.matchType)) idealList.add(mr);
+                    else                              poolList.add(mr);
+                }
             }
-            return report.toString();
+
+            if (!idealList.isEmpty()) {
+                sb.append("─── ★ İDEAL EŞLEŞMELER (" + idealList.size() + " adet) ───\n");
+                for (MatchResult mr : idealList) {
+                    sb.append(mr.toString()).append("\n\n");
+                }
+            }
+
+            if (!poolList.isEmpty()) {
+                sb.append("─── ◈ HAVUZ EŞLEŞMELER (" + poolList.size() + " adet) ───\n");
+                for (MatchResult mr : poolList) {
+                    sb.append(mr.toString()).append("\n\n");
+                }
+            }
+
+            return sb.toString();
         }
     }
 
+    // ═══════════════════════════════════════════════════════════════════════════
+    //  main
+    // ═══════════════════════════════════════════════════════════════════════════
+
     public static void main(String[] args) {
+
         List<String> teamIds = TeamIdsFetcher.fetchUnstartedTeamIds();
-            if (teamIds.isEmpty()) {
-                LOGGER.warn("Team IDs file is empty. Exiting.");
-                return;
-            }
-            LOGGER.info("Loaded {} team IDs to process.", teamIds.size());
+        if (teamIds.isEmpty()) {
+            LOGGER.warn("Takım ID listesi boş. Çıkılıyor.");
+            return;
+        }
+        LOGGER.info("{} takım ID'si yüklendi.", teamIds.size());
 
-
-        PoolingHttpClientConnectionManager cm = new PoolingHttpClientConnectionManager();
+        // HTTP bağlantı havuzu
+        PoolingHttpClientConnectionManager cm =
+                new PoolingHttpClientConnectionManager();
         cm.setMaxTotal(CONNECTION_POOL_SIZE + 10);
         cm.setDefaultMaxPerRoute(CONNECTION_POOL_SIZE);
 
@@ -133,60 +211,72 @@ public class OnlyLeagueVirtualThreadedAnalyzer {
                 .build()) {
 
             ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();
-            CompletionService<String> completionService = new ExecutorCompletionService<>(executor);
+            CompletionService<String> completionService =
+                    new ExecutorCompletionService<>(executor);
 
             long startTime = System.currentTimeMillis();
-            int submittedTasks = 0;
+            int submitted  = 0;
 
             for (String idStr : teamIds) {
                 try {
-                    int teamId = Integer.parseInt(idStr.trim());
-                    completionService.submit(new TeamProcessorTask(teamId, httpClient));
-                    submittedTasks++;
+                    int id = Integer.parseInt(idStr.trim());
+                    completionService.submit(new TeamProcessorTask(id, httpClient));
+                    submitted++;
                 } catch (NumberFormatException e) {
-                    LOGGER.warn("Skipping invalid team ID format: {}", idStr);
+                    LOGGER.warn("Geçersiz ID formatı atlandı: {}", idStr);
                 }
             }
 
-            LOGGER.info("{} tasks submitted. Waiting for results...", submittedTasks);
-            System.out.println("\n--- İşlem Başladı. Sonuçlar bulundukça gösterilecektir ---\n");
+            LOGGER.info("{} görev gönderildi. Sonuçlar bekleniyor...", submitted);
+            System.out.println(
+                    "\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n" +
+                            "   İşlem Başladı — Eşleşmeler bulundukça gösterilir\n" +
+                            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
 
             int foundCount = 0;
-            for (int i = 0; i < submittedTasks; i++) {
-                try {
-                    Future<String> completedFuture = completionService.take();
-                    String result = completedFuture.get();
 
-                    if (result != null && !result.isEmpty()) {
+            for (int i = 0; i < submitted; i++) {
+                try {
+                    Future<String> future = completionService.take();
+                    String result = future.get();
+
+                    if (result != null && !result.isBlank()) {
                         System.out.println(result);
-                        System.out.println("====================================\n");
+                        System.out.println(
+                                "═══════════════════════════════════════════════════\n");
                         foundCount++;
                     }
+
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
-                    LOGGER.error("Main thread was interrupted.", e);
+                    LOGGER.error("Ana thread kesildi.", e);
                     break;
                 } catch (ExecutionException e) {
-                    LOGGER.error("A task failed with an exception.", e.getCause());
+                    LOGGER.error("Görev hata verdi.", e.getCause());
                 }
             }
 
             long duration = System.currentTimeMillis() - startTime;
-            System.out.println("--- Tüm işlemler tamamlandı ---");
-            LOGGER.info("Processing complete in {} ms. Found patterns for {} out of {} processed teams.",
-                    duration, foundCount, submittedTasks);
+
+            System.out.printf(
+                    "%n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━%n" +
+                            "   Tüm işlemler tamamlandı — %.1f sn%n" +
+                            "   %d / %d takımda eşleşme bulundu%n" +
+                            "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━%n",
+                    duration / 1000.0, foundCount, submitted);
+
+            LOGGER.info("Tamamlandı: {}ms, eşleşme: {}/{}", duration, foundCount, submitted);
 
             executor.shutdown();
             try {
-                if (!executor.awaitTermination(10, TimeUnit.SECONDS)) {
+                if (!executor.awaitTermination(10, TimeUnit.SECONDS))
                     executor.shutdownNow();
-                }
             } catch (InterruptedException e) {
                 executor.shutdownNow();
             }
 
         } catch (IOException e) {
-            LOGGER.error("Error with HttpClient lifecycle.", e);
+            LOGGER.error("HttpClient lifecycle hatası.", e);
         }
     }
 }

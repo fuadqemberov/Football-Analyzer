@@ -139,16 +139,13 @@ public class Bet365DailyAutoAnalyzer {
         }
 
         // ---- EK SKORLAR (yeni filtre desenleri için gerekli) ----
-        // FT extra scores used in new patterns
         String[] extraFtScores = {"3:4", "1:4", "2:3", "2:4"};
         for (String sc : extraFtScores) {
             String sqlCol = "ft_score_" + sc.replace(":", "_") + "_a";
             String display = "MS Skor " + sc;
-            // Tekrar eklenmesini önle
             boolean exists = ALL_COLS.stream().anyMatch(c -> c.displayName.equals(display));
             if (!exists) ALL_COLS.add(new ColumnDef(sqlCol, display, "Correct score|Full Time|" + sc));
         }
-        // HT extra scores used in new patterns
         String[] extraHtScores = {"0:2", "0:3", "2:2", "3:2"};
         for (String sc : extraHtScores) {
             String sqlCol = "first_score_" + sc.replace(":", "_") + "_a";
@@ -678,7 +675,7 @@ public class Bet365DailyAutoAnalyzer {
         }
 
         System.out.println("═══════════════════════════════════════════════════════════════");
-        System.out.println("🤖 9 ANALİZ YÖNTEMİ İLE OTOMATİK ANALİZ BAŞLIYOR: " + todayMatches.size() + " maç");
+        System.out.println("🤖 11 ANALİZ YÖNTEMİ İLE OTOMATİK ANALİZ BAŞLIYOR: " + todayMatches.size() + " maç");
         System.out.println("═══════════════════════════════════════════════════════════════\n");
 
         for (MatchInfo match : todayMatches) {
@@ -780,6 +777,44 @@ public class Bet365DailyAutoAnalyzer {
                             "2Y 2"
                     ),
                     "🔵 YÖNTEM 8 [İY Skor 3:2 / İY KG Hayır / MS Skor 2:1 / MS Skor 3:4 / MS Skor 3:1 / KG Hayır / 2Y 2]"
+            );
+
+            // ── YÖNTEM 9: YENİ EKLENEN İLK YARI 0-0/0-1 SÜRPRİZ DESENİ 1 ──────────
+            analyzeWithSequentialPattern(match,
+                    List.of(
+                            "MS Skor 1:3",
+                            "MS 2",
+                            "İY Skor 1:2",
+                            "İY A/U 2.5 Üst",
+                            "A/U 5.5 Üst",
+                            "2Y A/U 2.5 Üst"
+                    ),
+                    "🟤 YÖNTEM 9 [MS Skor 1:3 / MS 2 / İY Skor 1:2 / İY A/U 2.5 Üst / A/U 5.5 Üst / 2Y A/U 2.5 Üst]"
+            );
+
+            // ── YÖNTEM 10: YENİ EKLENEN İLK YARI 0-0/0-1 SÜRPRİZ DESENİ 2 ──────────
+            analyzeWithSequentialPattern(match,
+                    List.of(
+                            "2Y KG Evet",
+                            "MS 2",
+                            "2Y A/U 2.5 Alt",
+                            "HT/FT 2/1",
+                            "MS Skor 1:2",
+                            "İY A/U 2.5 Alt"
+                    ),
+                    "⚫ YÖNTEM 10 [2Y KG Evet / MS 2 / 2Y A/U 2.5 Alt / HT/FT 2/1 / MS Skor 1:2 / İY A/U 2.5 Alt]"
+            );
+
+            // ── YÖNTEM 11: YENİ EKLENEN İLK YARI 0-0/0-1 SÜRPRİZ DESENİ 3 ──────────
+            analyzeWithSequentialPattern(match,
+                    List.of(
+                            "2Y 1",
+                            "MS 2",
+                            "A/U 4.5 Alt",
+                            "2Y 2",
+                            "2Y KG Evet"
+                    ),
+                    "🔴 YÖNTEM 11 [2Y 1 / MS 2 / A/U 4.5 Alt / 2Y 2 / 2Y KG Evet]"
             );
         }
 

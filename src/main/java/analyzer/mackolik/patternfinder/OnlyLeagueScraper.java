@@ -12,7 +12,6 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
@@ -21,30 +20,37 @@ import java.util.Set;
 public class OnlyLeagueScraper {
 
     private static final Logger log = LoggerFactory.getLogger(OnlyLeagueScraper.class);
-    private static final String BASE_URL = "https://arsiv.mackolik.com/Team/Default.aspx?id=%d&season=%s";
 
-    // İşlem yaptığın sezon hangisiyse burada ayarlı kalsın. (Örn: 2024/2025 veya 2025/2026)
+    private static final String BASE_URL =
+            "https://arsiv.mackolik.com/Team/Default.aspx?id=%d&season=%s";
+
     private static final String CURRENT_SEASON = "2025/2026";
 
-    private static String fetchHtml(CloseableHttpClient httpClient, String url) throws IOException {
+    // ═══════════════════════════════════════════════════════════════════════
+    //  HTTP
+    // ═══════════════════════════════════════════════════════════════════════
+
+    private static String fetchHtml(CloseableHttpClient httpClient, String url)
+            throws IOException {
         HttpGet request = new HttpGet(url);
-        request.addHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36");
+        request.addHeader("User-Agent",
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36");
         try (CloseableHttpResponse response = httpClient.execute(request)) {
-            int statusCode = response.getStatusLine().getStatusCode();
-            if (statusCode == 200) return EntityUtils.toString(response.getEntity());
+            int status = response.getStatusLine().getStatusCode();
+            if (status == 200) return EntityUtils.toString(response.getEntity());
+            log.warn("HTTP {} for URL: {}", status, url);
             return null;
         }
     }
 
-    /**
-     * Başlığın esas lig mi yoksa bir kupa/hazırlık maçı mı olduğunu kontrol eder.
-     * Bu sayede Güney Amerika'daki Apertura/Clausura (Aşama 1, Aşama 2) ligleri tek lig gibi birleşir.
-     */
+    // ═══════════════════════════════════════════════════════════════════════
+    //  Lig filtresi
+    // ═══════════════════════════════════════════════════════════════════════
+
     private static boolean isLeagueCompetition(String compName) {
         if (compName == null) return false;
         String lower = compName.toLowerCase(new Locale("tr", "TR"));
 
-        // Kupa, hazırlık ve kıtasal turnuvaları engelleme listesi
         String[] excluded = {
                 "kupa", "cup", "copa", "coppa", "pokal", "taça", "taca",
                 "hazırlık", "hazirlik", "friendlies", "avrupa", "europe",
@@ -57,18 +63,29 @@ public class OnlyLeagueScraper {
         for (String ex : excluded) {
             if (lower.contains(ex)) return false;
         }
-        return true; // Eğer yasaklı kelime yoksa bu bir LİG'dir.
+        return true;
     }
 
-    public static MatchPattern findCurrentSeasonLastTwoMatches(CloseableHttpClient httpClient, int teamId)
+    // ═══════════════════════════════════════════════════════════════════════
+    //  Mevcut sezon — N maçlık pattern çıkar (son maç "V" olabilir)
+    // ═══════════════════════════════════════════════════════════════════════
+
+    public static MatchPattern findCurrentSeasonPattern(
+            CloseableHttpClient httpClient, int teamId, int patternSize)
             throws IOException {
 
-        String html = fetchHtml(httpClient, String.format(BASE_URL, teamId, CURRENT_SEASON));
-        if (html == null) throw new RuntimeException("Sayfa alinamadi: " + teamId);
+        if (patternSize < 3 || patternSize > 5)
+            throw new IllegalArgumentException("patternSize 3-5 arasında olmalı: " + patternSize);
+
+        String html = fetchHtml(httpClient,
+                String.format(BASE_URL, teamId, CURRENT_SEASON));
+        if (html == null)
+            throw new RuntimeException("Sayfa alınamadı: " + teamId);
 
         Document doc = Jsoup.parse(html);
         Element tableBody = doc.selectFirst("#tblFixture > tbody");
-        if (tableBody == null) throw new RuntimeException("Fikstür tablosu bulunamadi: " + teamId);
+        if (tableBody == null)
+            throw new RuntimeException("Fikstür tablosu bulunamadı: " + teamId);
 
         String teamName = "Unknown";
         try {
@@ -84,14 +101,12 @@ public class OnlyLeagueScraper {
         boolean collecting = false;
 
         for (Element row : tableBody.select("tr")) {
-            // Sadece Esas Ligleri Al, Kupaları Atla
             if (row.hasClass("competition")) {
                 Element a = row.selectFirst("a");
                 String compName = a != null ? a.text() : row.text();
                 collecting = isLeagueCompetition(compName);
                 continue;
             }
-
             if (!collecting) continue;
             if (row.hasClass("leg")) continue;
 
@@ -102,21 +117,24 @@ public class OnlyLeagueScraper {
             Element scoreEl = row.selectFirst("td:nth-child(5) b a");
             String score = "";
             boolean isPlayed = false;
-
-            boolean isFuture = row.hasAttr("itemprop") && row.attr("itemprop").equals("sportsevent");
+            boolean isFuture = row.hasAttr("itemprop")
+                    && row.attr("itemprop").equals("sportsevent");
 
             if (scoreEl != null) {
                 score = scoreEl.text().trim();
-                // Eğer skor "v" veya Ertelenmiş (ERT) değilse ve maç gelecek maçı değilse OYNANMIŞTIR
-                if (!score.equalsIgnoreCase("v") && !score.toLowerCase().contains("ert") && !isFuture) {
+                if (!score.equalsIgnoreCase("v")
+                        && !score.toLowerCase().contains("ert")
+                        && !isFuture) {
                     isPlayed = true;
                 }
             } else {
                 Element scoreTd = row.selectFirst("td:nth-child(5)");
                 if (scoreTd != null) {
                     score = scoreTd.text().trim();
-                    if (score.contains("-") && !score.equals("-") && !score.equalsIgnoreCase("v")
-                        && !score.toLowerCase().contains("ert") && !isFuture) {
+                    if (score.contains("-") && !score.equals("-")
+                            && !score.equalsIgnoreCase("v")
+                            && !score.toLowerCase().contains("ert")
+                            && !isFuture) {
                         isPlayed = true;
                     }
                 }
@@ -125,54 +143,43 @@ public class OnlyLeagueScraper {
             homeTeams.add(homeEl.text().trim().replaceAll("&nbsp;", ""));
             awayTeams.add(awayEl.text().trim().replaceAll("&nbsp;", ""));
             scores.add(score);
-            played.add(isPlayed);
+            played.add(isPlayed || score.equalsIgnoreCase("v"));
         }
 
-        int lastIdx = -1;
-        int secondLastIdx = -1;
-        for (int i = scores.size() - 1; i >= 0; i--) {
-            if (played.get(i)) {
-                if (lastIdx == -1) {
-                    lastIdx = i;
-                } else {
-                    secondLastIdx = i;
-                    break;
-                }
-            }
+        if (scores.size() < patternSize) {
+            throw new RuntimeException(
+                    String.format("En az %d maç bulunamadı (takım: %d, bulunan: %d)",
+                            patternSize, teamId, scores.size()));
         }
 
-        if (lastIdx < 0 || secondLastIdx < 0)
-            throw new RuntimeException("2 oynanan mac bulunamadi: " + teamId);
-
-        String score1 = scores.get(secondLastIdx);
-        String home1  = homeTeams.get(secondLastIdx);
-        String away1  = awayTeams.get(secondLastIdx);
-
-        String score2 = scores.get(lastIdx);
-        String home2  = homeTeams.get(lastIdx);
-        String away2  = awayTeams.get(lastIdx);
-
-        // Sıradaki maçı bul
-        String nextHome = "Belirsiz", nextAway = "Belirsiz";
-        for (int i = lastIdx + 1; i < scores.size(); i++) {
-            if (!played.get(i)) {
-                nextHome = homeTeams.get(i);
-                nextAway = awayTeams.get(i);
-                break;
-            }
+        int startIdx = scores.size() - patternSize;
+        List<MatchPattern.Match> matchList = new ArrayList<>();
+        for (int i = startIdx; i < scores.size(); i++) {
+            matchList.add(new MatchPattern.Match(
+                    homeTeams.get(i),
+                    awayTeams.get(i),
+                    scores.get(i)));
         }
 
-        return new MatchPattern(score1, score2, home1, away1, home2, away2, teamName, nextHome, nextAway);
+        return new MatchPattern(matchList, teamName);
     }
 
-    public static List<MatchResult> findScorePattern(CloseableHttpClient httpClient, MatchPattern pattern,
-                                                     String seasonYear, int teamId) throws IOException {
+    // ═══════════════════════════════════════════════════════════════════════
+    //  Geçmiş sezon arama — SADECE İDEAL (sıra esnek)
+    // ═══════════════════════════════════════════════════════════════════════
+
+    public static List<MatchResult> findScorePattern(
+            CloseableHttpClient httpClient, MatchPattern pattern,
+            String seasonYear, int teamId) throws IOException {
+
         List<MatchResult> foundResults = new ArrayList<>();
 
-        String html = fetchHtml(httpClient, String.format(BASE_URL, teamId, seasonYear));
+        String html = fetchHtml(httpClient,
+                String.format(BASE_URL, teamId, seasonYear));
         if (html == null) return foundResults;
 
         Document doc = Jsoup.parse(html);
+
         List<Element> leagueMatches = new ArrayList<>();
         boolean collecting = false;
 
@@ -187,159 +194,242 @@ public class OnlyLeagueScraper {
                 leagueMatches.add(row);
         }
 
-        String mainTeam = pattern.teamName;
-        if (pattern.homeTeam1.equals(pattern.homeTeam2) || pattern.homeTeam1.equals(pattern.awayTeam2)) {
-            mainTeam = pattern.homeTeam1;
-        } else if (pattern.awayTeam1.equals(pattern.homeTeam2) || pattern.awayTeam1.equals(pattern.awayTeam2)) {
-            mainTeam = pattern.awayTeam1;
-        }
+        int n = leagueMatches.size();
+        int windowSize = pattern.size;
 
-        Set<String> patternOpponents = new HashSet<>(Arrays.asList(
-                pattern.homeTeam1, pattern.awayTeam1,
-                pattern.homeTeam2, pattern.awayTeam2
-        ));
-        patternOpponents.remove(mainTeam);
+        if (n < windowSize) return foundResults;
 
-        for (int i = 0; i < leagueMatches.size() - 1; i++) {
-            Element row1 = leagueMatches.get(i);
-            Element row2 = leagueMatches.get(i + 1);
+        MatchPattern.Match lastPatternMatch = pattern.getLastMatch();
 
-            try {
-                String score1 = row1.selectFirst("td:nth-child(5) b a").text().trim();
-                String score2 = row2.selectFirst("td:nth-child(5) b a").text().trim();
+        for (int i = 0; i <= n - windowSize; i++) {
 
-                boolean directOrder = isScoreEquivalent(score1, pattern.score1) &&
-                                      isScoreEquivalent(score2, pattern.score2);
-                boolean reverseOrder = isScoreEquivalent(score1, pattern.score2) &&
-                                       isScoreEquivalent(score2, pattern.score1);
+            List<ParsedMatch> window = new ArrayList<>();
+            boolean parseOk = true;
+            for (int j = 0; j < windowSize; j++) {
+                ParsedMatch pm = parseRow(leagueMatches.get(i + j));
+                if (pm == null) { parseOk = false; break; }
+                window.add(pm);
+            }
+            if (!parseOk) continue;
 
-                if (!directOrder && !reverseOrder) continue;
+            // ── 1. Son maç kontrolü (birebir aynı olmalı) ──────────────────
+            ParsedMatch lastWindow = window.get(windowSize - 1);
+            if (!teamsMatchExact(lastWindow, lastPatternMatch)) continue;
 
-                String h1 = row1.selectFirst("td:nth-child(3)").text().trim();
-                String a1 = row1.selectFirst("td:nth-child(7)").text().trim();
-                String h2 = row2.selectFirst("td:nth-child(3)").text().trim();
-                String a2 = row2.selectFirst("td:nth-child(7)").text().trim();
+            // ── 2. İlk N-1 maç için sıra esnek kontrol ──────────────────────
+            List<MatchPattern.Match> firstNMinus1Pattern = pattern.matches.subList(0, windowSize - 1);
+            List<ParsedMatch> firstNMinus1Window = window.subList(0, windowSize - 1);
 
-                Set<String> pastOpponents = new HashSet<>(Arrays.asList(h1, a1, h2, a2));
-                pastOpponents.remove(mainTeam);
-
-                boolean opponentMatch = false;
-                for (String pastOpp : pastOpponents) {
-                    if (patternOpponents.contains(pastOpp)) {
-                        opponentMatch = true;
+            boolean firstPartOk = false;
+            // Tüm permütasyonları dene (max 4! = 24 kombinasyon, performans sorun değil)
+            List<List<MatchPattern.Match>> permutations = generatePermutations(firstNMinus1Pattern);
+            for (List<MatchPattern.Match> perm : permutations) {
+                boolean match = true;
+                for (int j = 0; j < firstNMinus1Window.size(); j++) {
+                    if (!teamsMatchExact(firstNMinus1Window.get(j), perm.get(j))) {
+                        match = false;
                         break;
                     }
                 }
-
-                if (!opponentMatch) continue;
-
-                String ht1 = nullIfEmpty(row1.selectFirst("td:nth-child(9)").text().trim());
-                String ht2 = nullIfEmpty(row2.selectFirst("td:nth-child(9)").text().trim());
-
-                Element prev = (i > 0) ? leagueMatches.get(i - 1) : null;
-                Element next = (i + 2 < leagueMatches.size()) ? leagueMatches.get(i + 2) : null;
-
-                String prevScore = null, prevHt = null;
-                if (prev != null) {
-                    prevScore = prev.selectFirst("td:nth-child(5) b a").text().trim();
-                    prevHt = nullIfEmpty(prev.selectFirst("td:nth-child(9)").text().trim());
+                if (match) {
+                    firstPartOk = true;
+                    break;
                 }
-
-                String nextScore = null, nextHt = null;
-                if (next != null) {
-                    nextScore = next.selectFirst("td:nth-child(5) b a").text().trim();
-                    nextHt = nullIfEmpty(next.selectFirst("td:nth-child(9)").text().trim());
-                }
-
-                String cb1 = calculateComeback(score1, ht1);
-                String cb2 = calculateComeback(score2, ht2);
-                String cbPrev = calculateComeback(prevScore, prevHt);
-                String cbNext = calculateComeback(nextScore, nextHt);
-
-                if (cb1 == null && cb2 == null && cbPrev == null && cbNext == null) {
-                    continue;
-                }
-
-                MatchResult result = new MatchResult(h1, a1, score1, seasonYear, pattern);
-
-                result.firstMatchHTScore = ht1 + (cb1 != null ? " 🔥" + cb1 : "");
-                result.secondMatchHTScore = ht2 + (cb2 != null ? " 🔥" + cb2 : "");
-                result.secondMatchHomeTeam  = h2;
-                result.secondMatchAwayTeam  = a2;
-                result.secondMatchScore     = score2;
-
-                if (prev != null) {
-                    String ph = prev.selectFirst("td:nth-child(3)").text().trim();
-                    String pa = prev.selectFirst("td:nth-child(7)").text().trim();
-                    result.previousMatchScore = ph + " " + prevScore + " " + pa;
-                    result.previousHTScore = prevHt + (cbPrev != null ? " 🔥" + cbPrev : "");
-                } else {
-                    result.previousMatchScore = "Bilgi Yok (Ilk Mac)";
-                }
-
-                if (next != null) {
-                    String nh = next.selectFirst("td:nth-child(3)").text().trim();
-                    String na = next.selectFirst("td:nth-child(7)").text().trim();
-                    result.nextMatchScore = nh + " " + nextScore + " " + na;
-                    result.nextHTScore = nextHt + (cbNext != null ? " 🔥" + cbNext : "");
-                } else {
-                    result.nextMatchScore = "Bilgi Yok (Son Mac)";
-                }
-
-                foundResults.add(result);
-
-            } catch (Exception e) {
-                log.error("Pencere hatasi idx:{} sezon:{}: {}", i, seasonYear, e.getMessage());
             }
+
+            if (!firstPartOk) continue;
+
+            // ── 3. Eşleşme bulundu, kaydet ─────────────────────────────────
+            MatchResult mr = buildResult(
+                    window, pattern, seasonYear, "İDEAL",
+                    i > 0 ? leagueMatches.get(i - 1) : null,
+                    i + windowSize < n ? leagueMatches.get(i + windowSize) : null);
+            if (mr != null) foundResults.add(mr);
         }
 
         return foundResults;
     }
 
-    private static boolean isScoreEquivalent(String s1, String s2) {
-        if (s1 == null || s2 == null) return false;
+    // ═══════════════════════════════════════════════════════════════════════
+    //  Permütasyon oluşturucu (yardımcı)
+    // ═══════════════════════════════════════════════════════════════════════
 
-        String clean1 = s1.replaceAll("\\s+", "");
-        String clean2 = s2.replaceAll("\\s+", "");
-
-        if (clean1.equals(clean2)) return true;
-
-        String[] parts1 = clean1.split("-");
-        String[] parts2 = clean2.split("-");
-
-        if (parts1.length == 2 && parts2.length == 2) {
-            return parts1[0].equals(parts2[1]) && parts1[1].equals(parts2[0]);
+    private static <T> List<List<T>> generatePermutations(List<T> original) {
+        List<List<T>> result = new ArrayList<>();
+        if (original.isEmpty()) {
+            result.add(new ArrayList<>());
+            return result;
         }
-        return false;
+        permute(original, 0, result);
+        return result;
+    }
+
+    private static <T> void permute(List<T> arr, int index, List<List<T>> result) {
+        if (index == arr.size()) {
+            result.add(new ArrayList<>(arr));
+            return;
+        }
+        for (int i = index; i < arr.size(); i++) {
+            swap(arr, i, index);
+            permute(arr, index + 1, result);
+            swap(arr, i, index);
+        }
+    }
+
+    private static <T> void swap(List<T> arr, int i, int j) {
+        T temp = arr.get(i);
+        arr.set(i, arr.get(j));
+        arr.set(j, temp);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  MatchResult oluştur
+    // ═══════════════════════════════════════════════════════════════════════
+
+    private static MatchResult buildResult(
+            List<ParsedMatch> window,
+            MatchPattern pattern,
+            String season,
+            String matchType,
+            Element prevRow,
+            Element nextRow) {
+
+        try {
+            MatchResult mr = new MatchResult(season, matchType, pattern);
+
+            for (ParsedMatch pm : window) {
+                String cb = calculateComeback(pm.score, pm.htScore);
+                mr.patternMatches.add(new MatchResult.PatternMatch(
+                        pm.homeTeam, pm.awayTeam, pm.score, pm.htScore, cb));
+            }
+
+            if (prevRow != null) {
+                ParsedMatch prev = parseRow(prevRow);
+                if (prev != null) {
+                    String cbPrev = calculateComeback(prev.score, prev.htScore);
+                    String cbStr  = cbPrev != null ? " 🔥" + cbPrev : "";
+                    mr.previousMatchLine = prev.homeTeam + " " + prev.score + " "
+                            + prev.awayTeam + " (HT: " + nvl(prev.htScore) + cbStr + ")";
+                }
+            } else {
+                mr.previousMatchLine = "Bilgi Yok (İlk Maç)";
+            }
+
+            if (nextRow != null) {
+                ParsedMatch next = parseRow(nextRow);
+                if (next != null) {
+                    String cbNext = calculateComeback(next.score, next.htScore);
+                    String cbStr  = cbNext != null ? " 🔥" + cbNext : "";
+                    mr.nextMatchLine = next.homeTeam + " " + next.score + " "
+                            + next.awayTeam + " (HT: " + nvl(next.htScore) + cbStr + ")";
+                }
+            } else {
+                mr.nextMatchLine = "Bilgi Yok (Son Maç)";
+            }
+
+            fillCompatFields(mr, window);
+
+            return mr;
+
+        } catch (Exception e) {
+            log.error("buildResult hatası sezon={} matchType={}: {}",
+                    season, matchType, e.getMessage());
+            return null;
+        }
+    }
+
+    private static void fillCompatFields(MatchResult mr, List<ParsedMatch> window) {
+        if (window.isEmpty()) return;
+
+        ParsedMatch m0 = window.get(0);
+        mr.homeTeam = m0.homeTeam;
+        mr.awayTeam = m0.awayTeam;
+        mr.score    = m0.score;
+        mr.firstMatchHTScore = m0.htScore;
+
+        if (window.size() >= 2) {
+            ParsedMatch m1 = window.get(1);
+            mr.secondMatchHomeTeam = m1.homeTeam;
+            mr.secondMatchAwayTeam = m1.awayTeam;
+            mr.secondMatchScore    = m1.score;
+            mr.secondMatchHTScore  = m1.htScore;
+        }
+        if (window.size() >= 3) {
+            ParsedMatch m2 = window.get(2);
+            mr.thirdMatchHomeTeam = m2.homeTeam;
+            mr.thirdMatchAwayTeam = m2.awayTeam;
+            mr.thirdMatchScore    = m2.score;
+            mr.thirdMatchHTScore  = m2.htScore;
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  HTML Row → ParsedMatch
+    // ═══════════════════════════════════════════════════════════════════════
+
+    private static class ParsedMatch {
+        final String homeTeam, awayTeam, score, htScore;
+
+        ParsedMatch(String homeTeam, String awayTeam, String score, String htScore) {
+            this.homeTeam = homeTeam;
+            this.awayTeam = awayTeam;
+            this.score    = score;
+            this.htScore  = htScore;
+        }
+    }
+
+    private static ParsedMatch parseRow(Element row) {
+        try {
+            Element homeEl  = row.selectFirst("td:nth-child(3)");
+            Element awayEl  = row.selectFirst("td:nth-child(7)");
+            Element scoreEl = row.selectFirst("td:nth-child(5) b a");
+            Element htEl    = row.selectFirst("td:nth-child(9)");
+
+            if (homeEl == null || awayEl == null || scoreEl == null) return null;
+
+            String home  = homeEl.text().trim().replaceAll("&nbsp;", "");
+            String away  = awayEl.text().trim().replaceAll("&nbsp;", "");
+            String score = scoreEl.text().trim();
+            String ht    = htEl != null ? nullIfEmpty(htEl.text().trim()) : null;
+
+            return new ParsedMatch(home, away, score, ht);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  Yardımcı metodlar
+    // ═══════════════════════════════════════════════════════════════════════
+
+    // ── Birebir takım eşleşmesi (ev/deplasman aynı olmalı) ──
+    private static boolean teamsMatchExact(ParsedMatch window, MatchPattern.Match patternMatch) {
+        return window.homeTeam.equals(patternMatch.homeTeam) && window.awayTeam.equals(patternMatch.awayTeam);
     }
 
     private static String calculateComeback(String ftScore, String htScore) {
         if (ftScore == null || htScore == null) return null;
         try {
-            String cleanFt = ftScore.replaceAll("[^0-9-]", "").trim();
-            String cleanHt = htScore.replaceAll("[^0-9-]", "").trim();
-
-            if (cleanFt.isEmpty() || cleanHt.isEmpty()) return null;
-
-            String[] ft = cleanFt.split("-");
-            String[] ht = cleanHt.split("-");
+            String[] ft = ftScore.replaceAll("[^0-9-]", "").trim().split("-");
+            String[] ht = htScore.replaceAll("[^0-9-]", "").trim().split("-");
 
             if (ft.length == 2 && ht.length == 2) {
-                int ftH = Integer.parseInt(ft[0]);
-                int ftA = Integer.parseInt(ft[1]);
-                int htH = Integer.parseInt(ht[0]);
-                int htA = Integer.parseInt(ht[1]);
+                int ftH = Integer.parseInt(ft[0]), ftA = Integer.parseInt(ft[1]);
+                int htH = Integer.parseInt(ht[0]), htA = Integer.parseInt(ht[1]);
 
                 int htResult = Integer.compare(htH, htA);
                 int ftResult = Integer.compare(ftH, ftA);
 
-                if (htResult == -1 && ftResult == 1) return "2/1";
-                if (htResult == 1 && ftResult == -1) return "1/2";
+                if (htResult == -1 && ftResult ==  1) return "2/1";
+                if (htResult ==  1 && ftResult == -1) return "1/2";
             }
-        } catch (Exception ignored) { }
-
+        } catch (Exception ignored) {}
         return null;
     }
 
-    private static String nullIfEmpty(String s) { return (s == null || s.isEmpty()) ? null : s; }
+    private static String nullIfEmpty(String s) {
+        return (s == null || s.isEmpty()) ? null : s;
+    }
+
+    private static String nvl(String s) { return s != null ? s : "N/A"; }
 }
