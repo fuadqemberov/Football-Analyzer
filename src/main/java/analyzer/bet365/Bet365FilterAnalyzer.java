@@ -13,17 +13,11 @@ public class Bet365FilterAnalyzer {
     // ═══════════════════════════════════════════════════════════════════════
     private static final List<List<String>> FILTER_SETS = List.of(
 
-            List.of("MS Skor 2:3", "İY Skor 0:3", "A/U 2.5 Alt", "İY Skor 1:0"),
+            List.of("MS Skor 3:2", "A/U 2.5 Alt", "MS 2", "ÇŞ X2", "İY Skor 0:2"
+            ),
 
-            List.of("A/U 2.5 Alt", "KG Hayır", "A/U 0.5 Alt", "A/U 1.5 Üst", "İY 1"),
-
-            List.of("A/U 2.5 Alt", "A/U 0.5 Alt", "KG Evet", "İY ÇŞ X2"),
-
-            List.of("HT/FT 2/X", "MS X", "İY Skor 1:2", "MS Skor 2:3", "MS 2"),
-
-            List.of("ÇŞ 12", "MS Skor 2:4", "MS Skor 1:2", "İY A/U 0.5 Üst", "A/U 2.5 Üst")
-
-    );
+            List.of("MS Skor 0:1", "MS 1", "HT/FT 1/1", "HT/FT 2/2", "MS Skor 2:1"
+            ));
 
     // ─── kolon tanımları ────────────────────────────────────────────────────
     static class ColumnDef {

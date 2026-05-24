@@ -137,6 +137,25 @@ public class Bet365DailyAutoAnalyzer {
             String display = "İY Skor " + sc;
             ALL_COLS.add(new ColumnDef(sqlCol, display, "Correct score|1st Half|" + sc));
         }
+
+        // ---- EK SKORLAR (yeni filtre desenleri için gerekli) ----
+        // FT extra scores used in new patterns
+        String[] extraFtScores = {"3:4", "1:4", "2:3", "2:4"};
+        for (String sc : extraFtScores) {
+            String sqlCol = "ft_score_" + sc.replace(":", "_") + "_a";
+            String display = "MS Skor " + sc;
+            // Tekrar eklenmesini önle
+            boolean exists = ALL_COLS.stream().anyMatch(c -> c.displayName.equals(display));
+            if (!exists) ALL_COLS.add(new ColumnDef(sqlCol, display, "Correct score|Full Time|" + sc));
+        }
+        // HT extra scores used in new patterns
+        String[] extraHtScores = {"0:2", "0:3", "2:2", "3:2"};
+        for (String sc : extraHtScores) {
+            String sqlCol = "first_score_" + sc.replace(":", "_") + "_a";
+            String display = "İY Skor " + sc;
+            boolean exists = ALL_COLS.stream().anyMatch(c -> c.displayName.equals(display));
+            if (!exists) ALL_COLS.add(new ColumnDef(sqlCol, display, "Correct score|1st Half|" + sc));
+        }
     }
 
     private static final HttpClient HTTP_CLIENT = HttpClient.newBuilder()
@@ -439,7 +458,6 @@ public class Bet365DailyAutoAnalyzer {
         System.out.println("   Aktif filtreler: " + getFilterNames(activeFilters));
         System.out.println("   Sonuç: " + results.size() + " maç\n");
 
-        // Hedef aralık 1-2 maç ise hemen dur
         if (results.size() >= 1 && results.size() <= 2) {
             printResultsIfInRange(results, activeFilters, match, "Yöntem 1");
             return;
@@ -459,7 +477,6 @@ public class Bet365DailyAutoAnalyzer {
             activeFilters.add(extraCol);
             List<MatchResult> newResults = querySQL(match, activeFilters);
 
-            // Eğer sonuç 0'a düşerse filtreyi atla
             if (newResults.isEmpty()) {
                 activeFilters.remove(activeFilters.size() - 1);
                 System.out.println("🔍 AŞAMA " + stage + ": +" + extraCol.displayName
@@ -661,14 +678,109 @@ public class Bet365DailyAutoAnalyzer {
         }
 
         System.out.println("═══════════════════════════════════════════════════════════════");
-        System.out.println("🤖 4 ANALİZ YÖNTEMİ İLE OTOMATİK ANALİZ BAŞLIYOR: " + todayMatches.size() + " maç");
+        System.out.println("🤖 9 ANALİZ YÖNTEMİ İLE OTOMATİK ANALİZ BAŞLIYOR: " + todayMatches.size() + " maç");
         System.out.println("═══════════════════════════════════════════════════════════════\n");
 
         for (MatchInfo match : todayMatches) {
             System.out.println("\n\n⚽ " + match.home + " vs " + match.away);
-            // Yöntem 1: Adaptif
+
+            // ── YÖNTEM 1: Orijinal adaptif filtreleme ───────────────────────
             analyzeMatchAdaptive(match);
 
+            // ── YÖNTEM 2: MS Skor 3:2 odaklı desen ─────────────────────────
+            analyzeWithSequentialPattern(match,
+                    List.of(
+                            "MS Skor 3:2",
+                            "A/U 2.5 Alt",
+                            "MS 2",
+                            "ÇŞ X2",
+                            "İY Skor 0:2"
+                    ),
+                    "🟠 YÖNTEM 2 [MS Skor 3:2 / A/U 2.5 Alt / MS 2 / ÇŞ X2 / İY Skor 0:2]"
+            );
+
+            // ── YÖNTEM 3: HT/FT çift skor odaklı desen ─────────────────────
+            analyzeWithSequentialPattern(match,
+                    List.of(
+                            "MS Skor 0:1",
+                            "MS 1",
+                            "HT/FT 1/1",
+                            "HT/FT 2/2",
+                            "MS Skor 2:1"
+                    ),
+                    "🟡 YÖNTEM 3 [MS Skor 0:1 / MS 1 / HT/FT 1-1 / HT/FT 2-2 / MS Skor 2:1]"
+            );
+
+            // ── YÖNTEM 4: İY Skor 1:1 / 2Y yüksek gol deseni ───────────────
+            analyzeWithSequentialPattern(match,
+                    List.of(
+                            "İY Skor 1:1",
+                            "2Y A/U 2.5 Üst",
+                            "İY ÇŞ 12",
+                            "İY Skor 0:3",
+                            "İY A/U 1.5 Alt",
+                            "MS 2"
+                    ),
+                    "🟢 YÖNTEM 4 [İY Skor 1:1 / 2Y A/U 2.5 Üst / İY ÇŞ 12 / İY Skor 0:3 / İY A/U 1.5 Alt / MS 2]"
+            );
+
+            // ── YÖNTEM 5: Yüksek oran karma desen ───────────────────────────
+            analyzeWithSequentialPattern(match,
+                    List.of(
+                            "MS 2",
+                            "İY X",
+                            "2Y A/U 0.5 Alt",
+                            "MS Skor 3:4",
+                            "HT/FT X/1",
+                            "İY A/U 2.5 Alt",
+                            "MS Skor 0:3",
+                            "A/U 0.5 Alt",
+                            "KG Hayır"
+                    ),
+                    "🔴 YÖNTEM 5 [MS 2 / İY X / 2Y A/U 0.5 Alt / MS Skor 3:4 / HT/FT X/1 / ...]"
+            );
+
+            // ── YÖNTEM 6: İY 2 / MS X / yüksek gol skoru deseni ────────────
+            analyzeWithSequentialPattern(match,
+                    List.of(
+                            "İY 2",
+                            "MS X",
+                            "MS Skor 0:4",
+                            "ÇŞ X2",
+                            "A/U 5.5 Üst",
+                            "A/U 2.5 Alt",
+                            "İY Skor 3:2"
+                    ),
+                    "🟣 YÖNTEM 6 [İY 2 / MS X / MS Skor 0:4 / ÇŞ X2 / A/U 5.5 Üst / A/U 2.5 Alt / İY Skor 3:2]"
+            );
+
+            // ── YÖNTEM 7: A/U 2.5 Üst ağırlıklı desen (babaaatt) ───────────
+            analyzeWithSequentialPattern(match,
+                    List.of(
+                            "A/U 2.5 Üst",
+                            "İY ÇŞ 12",
+                            "MS Skor 2:3",
+                            "MS Skor 1:4",
+                            "İY Skor 0:3",
+                            "İY Skor 2:2",
+                            "İY KG Evet"
+                    ),
+                    "⚪ YÖNTEM 7 [A/U 2.5 Üst / İY ÇŞ 12 / MS Skor 2:3 / MS Skor 1:4 / İY Skor 0:3 / İY Skor 2:2 / İY KG Evet]"
+            );
+
+            // ── YÖNTEM 8: İY Skor 3:2 / KG Hayır / MS skor serisi ──────────
+            analyzeWithSequentialPattern(match,
+                    List.of(
+                            "İY Skor 3:2",
+                            "İY KG Hayır",
+                            "MS Skor 2:1",
+                            "MS Skor 3:4",
+                            "MS Skor 3:1",
+                            "KG Hayır",
+                            "2Y 2"
+                    ),
+                    "🔵 YÖNTEM 8 [İY Skor 3:2 / İY KG Hayır / MS Skor 2:1 / MS Skor 3:4 / MS Skor 3:1 / KG Hayır / 2Y 2]"
+            );
         }
 
         System.out.println("═══════════════════════════════════════════════════════════════");
@@ -679,8 +791,6 @@ public class Bet365DailyAutoAnalyzer {
     public static void main(String[] args) {
         Bet365DailyAutoAnalyzer analyzer = new Bet365DailyAutoAnalyzer();
         analyzer.run();
+        try { analyzer.conn.close(); } catch (Exception ignored) {}
     }
-
-
-
 }
