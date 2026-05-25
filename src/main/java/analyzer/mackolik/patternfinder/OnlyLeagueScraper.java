@@ -12,10 +12,8 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
-import java.util.Set;
 
 public class OnlyLeagueScraper {
 
@@ -24,7 +22,7 @@ public class OnlyLeagueScraper {
     private static final String BASE_URL =
             "https://arsiv.mackolik.com/Team/Default.aspx?id=%d&season=%s";
 
-    private static final String CURRENT_SEASON = "2025/2026";
+    private static final String CURRENT_SEASON = "2026/2027";
 
     // ═══════════════════════════════════════════════════════════════════════
     //  HTTP
@@ -67,7 +65,7 @@ public class OnlyLeagueScraper {
     }
 
     // ═══════════════════════════════════════════════════════════════════════
-    //  Mevcut sezon — N maçlık pattern çıkar (son maç "V" olabilir)
+    //  Mevcut sezon — N maçlık pattern çıkar (son maç "v" olabilir)
     // ═══════════════════════════════════════════════════════════════════════
 
     public static MatchPattern findCurrentSeasonPattern(
@@ -93,18 +91,23 @@ public class OnlyLeagueScraper {
             if (title != null) teamName = title.text().split("-")[0].trim();
         } catch (Exception ignored) {}
 
+        // ── SADECE LİG MAÇLARINI TOPLA ──────────────────────────────────────
         List<String> scores    = new ArrayList<>();
         List<String> homeTeams = new ArrayList<>();
         List<String> awayTeams = new ArrayList<>();
-        List<Boolean> played   = new ArrayList<>();
 
         boolean collecting = false;
 
         for (Element row : tableBody.select("tr")) {
             if (row.hasClass("competition")) {
+                if (collecting) {
+                    break;
+                }
                 Element a = row.selectFirst("a");
                 String compName = a != null ? a.text() : row.text();
-                collecting = isLeagueCompetition(compName);
+                if (isLeagueCompetition(compName)) {
+                    collecting = true;
+                }
                 continue;
             }
             if (!collecting) continue;
@@ -116,36 +119,21 @@ public class OnlyLeagueScraper {
 
             Element scoreEl = row.selectFirst("td:nth-child(5) b a");
             String score = "";
-            boolean isPlayed = false;
-            boolean isFuture = row.hasAttr("itemprop")
-                    && row.attr("itemprop").equals("sportsevent");
-
             if (scoreEl != null) {
                 score = scoreEl.text().trim();
-                if (!score.equalsIgnoreCase("v")
-                        && !score.toLowerCase().contains("ert")
-                        && !isFuture) {
-                    isPlayed = true;
-                }
             } else {
                 Element scoreTd = row.selectFirst("td:nth-child(5)");
                 if (scoreTd != null) {
                     score = scoreTd.text().trim();
-                    if (score.contains("-") && !score.equals("-")
-                            && !score.equalsIgnoreCase("v")
-                            && !score.toLowerCase().contains("ert")
-                            && !isFuture) {
-                        isPlayed = true;
-                    }
                 }
             }
 
             homeTeams.add(homeEl.text().trim().replaceAll("&nbsp;", ""));
             awayTeams.add(awayEl.text().trim().replaceAll("&nbsp;", ""));
             scores.add(score);
-            played.add(isPlayed || score.equalsIgnoreCase("v"));
         }
 
+        // ── SON N MAÇI AL (bitmiş veya "v" fark etmez) ──────────────────
         if (scores.size() < patternSize) {
             throw new RuntimeException(
                     String.format("En az %d maç bulunamadı (takım: %d, bulunan: %d)",
@@ -180,14 +168,20 @@ public class OnlyLeagueScraper {
 
         Document doc = Jsoup.parse(html);
 
+        // ── SADECE LİG MAÇLARINI AL ──────────────────────────────────────────
         List<Element> leagueMatches = new ArrayList<>();
         boolean collecting = false;
 
         for (Element row : doc.select("table tbody tr")) {
             if (row.hasClass("competition")) {
+                if (collecting) {
+                    break;
+                }
                 Element a = row.selectFirst("a");
                 String compName = a != null ? a.text() : row.text();
-                collecting = isLeagueCompetition(compName);
+                if (isLeagueCompetition(compName)) {
+                    collecting = true;
+                }
                 continue;
             }
             if (collecting && row.selectFirst("td:nth-child(5) b a") != null)
@@ -221,7 +215,7 @@ public class OnlyLeagueScraper {
             List<ParsedMatch> firstNMinus1Window = window.subList(0, windowSize - 1);
 
             boolean firstPartOk = false;
-            // Tüm permütasyonları dene (max 4! = 24 kombinasyon, performans sorun değil)
+            // Tüm permütasyonları dene (max 4! = 24 kombinasyon)
             List<List<MatchPattern.Match>> permutations = generatePermutations(firstNMinus1Pattern);
             for (List<MatchPattern.Match> perm : permutations) {
                 boolean match = true;
