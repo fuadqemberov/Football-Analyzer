@@ -12,12 +12,335 @@ public class Bet365FilterAnalyzer {
     //     Kolon isimleri ALL_ODDS_COLS'daki displayName ile birebir eşleşmeli
     // ═══════════════════════════════════════════════════════════════════════
     private static final List<List<String>> FILTER_SETS = List.of(
-
-            List.of("MS Skor 3:2", "A/U 2.5 Alt", "MS 2", "ÇŞ X2", "İY Skor 0:2"
-            ),
-
-            List.of("MS Skor 0:1", "MS 1", "HT/FT 1/1", "HT/FT 2/2", "MS Skor 2:1"
-            ));
+            // RUN 2798
+            List.of("A/U 5.5 Alt", "HT/FT 1/X", "A/U 2.5 Alt", "A/U 0.5 Üst", "MS Skor 3:3", "2Y A/U 1.5 Alt", "A/U 3.5 Üst"),
+            // RUN 3008
+            List.of("MS Skor 4:4", "İY Skor 2:3", "2Y 1", "A/U 5.5 Üst", "2Y A/U 1.5 Alt", "İY ÇŞ X2", "KG Hayır", "İY 2", "İY 1", "MS Skor 0:2", "MS Skor 1:1"),
+            // RUN 3536
+            List.of("İY Skor 0:1", "2Y 1", "MS Skor 0:3", "A/U 2.5 Üst", "MS Skor 2:2", "İY ÇŞ X2", "MS Skor 1:2", "İY Skor 3:0"),
+            // RUN 4550
+            List.of("MS Skor 2:1", "HT/FT 2/X", "İY Skor 2:1", "İY KG Evet", "MS Skor 4:1", "MS Skor 3:1", "MS Skor 4:4"),
+            // RUN 5010
+            List.of("MS Skor 2:3", "İY Skor 2:1", "İY KG Evet", "MS Skor 2:4", "HT/FT X/X"),
+            // RUN 5895
+            List.of("İY Skor 2:3", "MS Skor 4:4", "MS Skor 3:1", "İY Skor 0:3", "MS Skor 4:2", "MS Skor 3:2", "A/U 5.5 Alt"),
+            // RUN 6667
+            List.of("HT/FT 1/X", "2Y A/U 1.5 Üst", "HT/FT 2/1", "2Y 1", "KG Hayır", "MS Skor 1:1", "A/U 5.5 Alt"),
+            // RUN 7131
+            List.of("A/U 1.5 Alt", "İY Skor 2:2", "A/U 4.5 Alt", "HT/FT 1/X", "2Y A/U 1.5 Üst", "İY A/U 1.5 Üst", "A/U 4.5 Üst", "İY A/U 2.5 Üst", "A/U 2.5 Alt", "İY A/U 0.5 Üst", "İY A/U 2.5 Alt", "2Y A/U 0.5 Alt", "MS Skor 3:3"),
+            // RUN 7330
+            List.of("MS Skor 0:1", "MS Skor 0:2", "MS 2", "İY Skor 2:3", "2Y KG Hayır", "MS Skor 4:4"),
+            // RUN 7840
+            List.of("İY 2", "A/U 5.5 Alt", "HT/FT 2/X", "İY Skor 2:3", "MS Skor 1:3", "İY Skor 2:0", "A/U 3.5 Üst", "MS Skor 4:3", "İY Skor 3:0"),
+            // RUN 8516
+            List.of("A/U 0.5 Alt", "MS Skor 1:1", "2Y A/U 2.5 Alt", "MS Skor 3:1", "İY ÇŞ 1X", "İY Skor 3:2", "MS Skor 1:3", "İY Skor 2:0", "İY A/U 2.5 Alt"),
+            // RUN 8887
+            List.of("A/U 0.5 Alt", "İY A/U 2.5 Alt", "MS Skor 3:2", "2Y A/U 2.5 Üst", "HT/FT 1/2", "MS Skor 3:4", "2Y A/U 1.5 Üst"),
+            // RUN 9271
+            List.of("MS Skor 3:2", "A/U 1.5 Üst", "MS Skor 4:4", "İY A/U 2.5 Üst", "2Y A/U 0.5 Üst", "İY Skor 2:3", "İY Skor 3:0"),
+            // RUN 10163
+            List.of("ÇŞ 12", "İY 2", "İY A/U 0.5 Alt", "MS 2", "MS Skor 1:3", "MS Skor 1:4"),
+            // RUN 11282
+            List.of("2Y 1", "2Y A/U 2.5 Alt", "İY Skor 3:2", "MS Skor 4:4", "A/U 0.5 Üst", "KG Hayır", "İY Skor 2:1", "HT/FT X/2", "2Y A/U 1.5 Alt"),
+            // RUN 11394
+            List.of("İY 2", "MS Skor 4:3", "2Y A/U 1.5 Alt", "İY ÇŞ 1X", "İY Skor 2:0", "MS Skor 4:4", "2Y A/U 2.5 Alt"),
+            // RUN 11689
+            List.of("İY A/U 2.5 Üst", "KG Evet", "MS Skor 1:1", "MS Skor 3:3", "2Y 1", "MS Skor 0:2", "2Y A/U 1.5 Alt", "HT/FT X/2"),
+            // RUN 11719
+            List.of("İY Skor 2:0", "MS Skor 1:2", "A/U 4.5 Alt", "İY Skor 3:2", "ÇŞ 1X", "MS Skor 2:3", "MS Skor 4:0"),
+            // RUN 12567
+            List.of("İY A/U 0.5 Alt", "İY Skor 3:2", "MS Skor 3:2", "A/U 0.5 Alt", "MS 2", "İY Skor 2:0", "İY A/U 2.5 Alt"),
+            // RUN 13285
+            List.of("MS Skor 4:4", "İY Skor 0:3", "A/U 4.5 Üst", "MS Skor 3:2", "İY A/U 0.5 Üst", "A/U 5.5 Alt"),
+            // RUN 15307
+            List.of("A/U 1.5 Üst", "MS Skor 4:4", "MS Skor 2:4", "İY Skor 3:0", "HT/FT 2/1", "HT/FT 1/2", "A/U 4.5 Üst", "2Y A/U 0.5 Alt", "İY 1", "MS Skor 4:3"),
+            // RUN 15685
+            List.of("2Y X", "İY X", "A/U 0.5 Alt", "MS Skor 1:2", "İY 2", "HT/FT 1/X", "İY Skor 2:1", "MS Skor 0:2", "MS Skor 3:0"),
+            // RUN 16177
+            List.of("2Y KG Hayır", "İY ÇŞ X2", "İY Skor 1:0", "MS Skor 3:1", "2Y 2"),
+            // RUN 16743
+            List.of("A/U 5.5 Alt", "HT/FT X/2", "HT/FT 2/X", "A/U 4.5 Üst", "İY Skor 0:2"),
+            // RUN 16927
+            List.of("KG Evet", "HT/FT X/2", "MS Skor 3:2", "MS Skor 4:1"),
+            // RUN 17535
+            List.of("2Y A/U 2.5 Üst", "A/U 4.5 Alt", "A/U 5.5 Alt", "İY A/U 2.5 Üst", "A/U 2.5 Alt", "ÇŞ 12", "A/U 1.5 Alt", "A/U 3.5 Alt", "İY A/U 0.5 Üst", "İY ÇŞ 12"),
+            // RUN 18777
+            List.of("2Y A/U 1.5 Üst", "MS Skor 3:3", "KG Evet", "HT/FT X/2", "MS Skor 0:2", "İY Skor 2:1", "İY A/U 0.5 Üst", "A/U 0.5 Üst", "İY KG Evet", "A/U 4.5 Üst", "İY Skor 2:3", "İY A/U 2.5 Alt", "İY 2"),
+            // RUN 19233
+            List.of("İY Skor 3:0", "MS Skor 3:2", "İY A/U 0.5 Üst", "MS Skor 1:2", "2Y A/U 0.5 Üst", "A/U 3.5 Üst", "MS Skor 3:3"),
+            // RUN 20319
+            List.of("İY ÇŞ X2", "İY KG Evet", "2Y A/U 1.5 Üst", "İY A/U 0.5 Alt", "İY Skor 1:1", "A/U 5.5 Alt", "2Y A/U 0.5 Alt", "A/U 0.5 Üst"),
+            // RUN 21035
+            List.of("İY Skor 3:1", "2Y A/U 2.5 Üst", "İY Skor 2:1", "A/U 2.5 Üst", "İY X", "MS Skor 1:4"),
+            // RUN 23219
+            List.of("MS Skor 0:4", "İY Skor 0:3", "HT/FT 1/X", "MS Skor 4:1", "HT/FT 1/2", "MS 2", "MS Skor 3:1", "İY Skor 1:1"),
+            // RUN 23635
+            List.of("MS Skor 0:2", "İY Skor 2:0", "ÇŞ 12", "İY ÇŞ 12", "2Y X", "MS Skor 1:2", "MS 1", "A/U 0.5 Alt"),
+            // RUN 23897
+            List.of("HT/FT X/2", "A/U 3.5 Üst", "A/U 4.5 Üst", "İY Skor 2:3", "MS Skor 4:4", "İY 2", "2Y A/U 2.5 Alt", "MS Skor 4:2", "2Y A/U 0.5 Üst"),
+            // RUN 25889
+            List.of("ÇŞ 12", "A/U 5.5 Alt", "MS Skor 1:1", "İY A/U 2.5 Üst", "İY Skor 2:2"),
+            // RUN 26225
+            List.of("2Y A/U 1.5 Alt", "İY Skor 2:2", "KG Evet", "A/U 3.5 Üst", "İY Skor 2:3", "A/U 0.5 Üst", "MS Skor 2:2", "2Y A/U 0.5 Üst", "İY Skor 0:2", "İY 2"),
+            // RUN 26536
+            List.of("MS Skor 0:3", "ÇŞ 12", "MS Skor 4:1", "A/U 5.5 Üst"),
+            // RUN 27889
+            List.of("MS Skor 3:3", "A/U 4.5 Alt", "2Y A/U 2.5 Alt", "2Y A/U 2.5 Üst", "A/U 2.5 Üst", "A/U 1.5 Üst", "A/U 5.5 Alt", "A/U 4.5 Üst", "A/U 0.5 Üst"),
+            // RUN 28399
+            List.of("2Y A/U 1.5 Üst", "KG Hayır", "İY ÇŞ X2", "İY Skor 2:2", "2Y 1", "2Y A/U 2.5 Alt", "MS Skor 4:4", "İY Skor 2:0", "İY A/U 2.5 Alt", "İY 1", "MS Skor 3:3", "İY Skor 1:1", "MS Skor 1:1"),
+            // RUN 28516
+            List.of("MS Skor 4:4", "İY Skor 2:1", "İY KG Hayır", "HT/FT 2/X", "MS Skor 2:1", "MS Skor 4:1"),
+            // RUN 29076
+            List.of("2Y A/U 1.5 Üst", "A/U 3.5 Üst", "MS Skor 3:2", "KG Hayır"),
+            // RUN 29354
+            List.of("MS Skor 4:1", "A/U 1.5 Üst", "MS Skor 4:4", "A/U 5.5 Alt", "MS Skor 4:3"),
+            // RUN 30060
+            List.of("İY A/U 0.5 Üst", "İY Skor 0:3", "A/U 0.5 Alt", "İY X", "A/U 5.5 Üst", "A/U 4.5 Alt", "İY A/U 2.5 Alt", "MS 1", "MS Skor 0:1"),
+            // RUN 30355
+            List.of("MS Skor 0:1", "A/U 5.5 Alt", "MS Skor 3:0", "İY A/U 2.5 Alt", "İY 2", "İY A/U 0.5 Üst", "İY Skor 2:1"),
+            // RUN 30564
+            List.of("İY ÇŞ 1X", "HT/FT 2/1", "A/U 4.5 Üst", "2Y A/U 1.5 Alt", "İY Skor 1:3", "İY 1", "İY Skor 0:2", "İY A/U 0.5 Üst", "MS Skor 2:3", "2Y A/U 1.5 Üst", "İY Skor 2:3", "İY Skor 3:2", "KG Evet", "İY A/U 2.5 Üst", "A/U 0.5 Üst", "A/U 5.5 Üst", "İY Skor 1:1"),
+            // RUN 31380
+            List.of("İY A/U 0.5 Alt", "A/U 5.5 Alt", "İY 2", "MS Skor 3:2"),
+            // RUN 31588
+            List.of("MS Skor 4:3", "İY Skor 2:0", "A/U 1.5 Üst", "İY 2", "İY A/U 2.5 Üst", "A/U 4.5 Üst", "İY ÇŞ 1X"),
+            // RUN 32758
+            List.of("MS Skor 0:4", "MS 2", "İY Skor 2:1", "ÇŞ 12", "İY Skor 2:0"),
+            // RUN 32875
+            List.of("MS Skor 2:3", "MS 1", "MS Skor 0:1", "A/U 5.5 Alt", "İY Skor 2:2", "MS Skor 1:2", "İY Skor 2:0"),
+            // RUN 33983
+            List.of("İY Skor 2:3", "İY Skor 1:2", "İY A/U 1.5 Alt", "İY ÇŞ X2", "İY KG Evet"),
+            // RUN 34177
+            List.of("İY 2", "ÇŞ 1X", "A/U 4.5 Alt", "İY A/U 2.5 Üst", "İY Skor 2:2", "İY A/U 0.5 Üst", "İY Skor 2:0", "İY Skor 0:2", "İY X", "HT/FT 1/2", "ÇŞ 12"),
+            // RUN 35104
+            List.of("İY KG Evet", "İY Skor 2:0", "HT/FT 1/2", "MS Skor 1:1", "HT/FT X/X", "İY Skor 2:2", "MS Skor 2:4"),
+            // RUN 35595
+            List.of("İY Skor 3:1", "İY X", "MS Skor 0:4", "2Y A/U 0.5 Alt", "İY ÇŞ 12", "MS Skor 0:1", "A/U 2.5 Üst"),
+            // RUN 36049
+            List.of("İY Skor 0:3", "İY Skor 2:0", "A/U 5.5 Alt", "MS Skor 4:2", "MS Skor 4:3", "İY Skor 2:3", "MS Skor 0:2"),
+            // RUN 36188
+            List.of("MS Skor 3:3", "MS Skor 2:2", "MS Skor 3:2", "2Y A/U 0.5 Üst"),
+            // RUN 37727
+            List.of("İY A/U 2.5 Alt", "İY Skor 3:1", "2Y A/U 1.5 Üst", "MS Skor 0:3", "İY Skor 1:2"),
+            // RUN 38583
+            List.of("A/U 0.5 Alt", "A/U 2.5 Alt", "İY A/U 2.5 Alt", "İY X", "A/U 4.5 Alt", "İY A/U 1.5 Alt", "İY A/U 0.5 Üst", "2Y A/U 1.5 Alt", "2Y A/U 2.5 Alt", "A/U 3.5 Alt", "İY ÇŞ 12", "HT/FT 1/X", "ÇŞ 12"),
+            // RUN 38873
+            List.of("İY A/U 1.5 Alt", "A/U 3.5 Alt", "MS Skor 2:3", "MS Skor 1:3", "HT/FT 2/1", "İY Skor 2:0", "İY ÇŞ 12", "İY Skor 2:2"),
+            // RUN 38875
+            List.of("MS Skor 0:2", "MS 1", "MS Skor 3:2", "KG Hayır", "MS Skor 1:4"),
+            // RUN 38958
+            List.of("MS Skor 4:4", "MS Skor 3:2", "HT/FT 2/X", "İY Skor 2:2"),
+            // RUN 39627
+            List.of("İY Skor 1:3", "İY Skor 2:2", "ÇŞ 12", "MS Skor 2:4", "MS 2"),
+            // RUN 40888
+            List.of("İY A/U 0.5 Alt", "MS Skor 0:2", "MS Skor 4:0", "MS 1", "2Y X", "MS Skor 1:2", "MS Skor 3:0", "A/U 5.5 Alt", "İY Skor 0:2", "ÇŞ 12"),
+            // RUN 41186
+            List.of("İY Skor 2:0", "ÇŞ 12", "MS 1", "2Y X", "İY ÇŞ 12", "İY A/U 2.5 Alt", "İY Skor 3:0", "İY 2", "MS Skor 0:1"),
+            // RUN 42153
+            List.of("MS Skor 1:1", "MS Skor 4:2", "MS Skor 4:4", "İY Skor 2:3", "İY A/U 2.5 Üst", "MS Skor 3:1", "İY Skor 0:3", "A/U 4.5 Üst"),
+            // RUN 42172
+            List.of("MS Skor 0:4", "MS 2", "İY A/U 0.5 Alt", "HT/FT 2/2", "A/U 2.5 Üst", "MS Skor 4:3", "2Y A/U 1.5 Alt", "2Y A/U 2.5 Üst", "HT/FT 2/1", "İY ÇŞ 12", "İY ÇŞ X2", "MS Skor 1:4"),
+            // RUN 43866
+            List.of("MS Skor 4:3", "MS Skor 1:3", "MS Skor 1:1", "İY Skor 0:3", "MS Skor 4:4", "MS Skor 2:4", "İY 1", "HT/FT 1/2", "İY Skor 2:3"),
+            // RUN 44488
+            List.of("İY Skor 0:2", "İY A/U 2.5 Üst", "MS Skor 4:1", "MS Skor 2:2", "İY Skor 2:0", "İY Skor 3:1", "MS Skor 0:1"),
+            // RUN 44738
+            List.of("HT/FT 1/X", "A/U 2.5 Alt", "İY A/U 1.5 Üst", "A/U 1.5 Üst", "2Y A/U 0.5 Alt", "İY A/U 0.5 Üst", "İY A/U 0.5 Alt", "A/U 4.5 Alt", "ÇŞ 12"),
+            // RUN 44846
+            List.of("İY A/U 0.5 Üst", "ÇŞ 12", "MS Skor 2:4", "HT/FT 2/2", "ÇŞ 1X", "İY Skor 0:3"),
+            // RUN 44969
+            List.of("MS Skor 2:3", "İY Skor 0:2", "HT/FT X/X", "2Y X", "İY 2"),
+            // RUN 45281
+            List.of("MS 2", "MS 1", "A/U 5.5 Alt", "HT/FT 2/1", "İY Skor 0:2", "İY 2"),
+            // RUN 45508
+            List.of("MS Skor 3:2", "İY Skor 2:2", "ÇŞ 12", "İY Skor 2:3", "İY Skor 1:3", "HT/FT 1/X", "ÇŞ 1X"),
+            // RUN 46179
+            List.of("A/U 4.5 Üst", "MS Skor 3:2", "İY A/U 2.5 Alt", "MS Skor 1:3", "HT/FT 1/2", "MS Skor 3:4", "A/U 1.5 Üst"),
+            // RUN 46545
+            List.of("İY ÇŞ X2", "İY Skor 1:2", "İY Skor 1:0", "İY A/U 1.5 Alt", "İY Skor 1:3", "İY Skor 3:1"),
+            // RUN 47142
+            List.of("İY Skor 1:2", "MS Skor 2:4", "İY Skor 1:3", "MS Skor 1:2", "İY Skor 1:1"),
+            // RUN 48122
+            List.of("MS Skor 4:4", "İY ÇŞ 1X", "HT/FT 2/X", "İY A/U 2.5 Üst", "2Y A/U 1.5 Alt", "A/U 1.5 Üst", "2Y A/U 0.5 Üst", "MS Skor 4:3"),
+            // RUN 48607
+            List.of("HT/FT 1/1", "MS Skor 1:3", "MS Skor 2:0", "İY Skor 2:1", "MS Skor 2:2"),
+            // RUN 49609
+            List.of("İY A/U 0.5 Alt", "HT/FT 1/2", "İY Skor 2:3", "İY A/U 1.5 Üst", "İY Skor 1:2", "İY Skor 3:2", "İY ÇŞ X2"),
+            // RUN 50671
+            List.of("A/U 0.5 Alt", "A/U 5.5 Alt", "İY 2", "HT/FT X/2", "2Y A/U 2.5 Üst", "HT/FT 2/X"),
+            // RUN 50836
+            List.of("İY Skor 3:0", "A/U 2.5 Alt", "MS Skor 4:4", "MS Skor 3:1", "2Y A/U 0.5 Üst", "İY A/U 2.5 Alt", "İY Skor 3:2", "A/U 4.5 Üst", "MS Skor 0:2", "HT/FT X/2"),
+            // RUN 51297
+            List.of("İY Skor 0:3", "MS Skor 1:3", "HT/FT X/2", "İY A/U 2.5 Üst", "MS Skor 4:2", "İY A/U 0.5 Üst", "MS Skor 2:3", "A/U 5.5 Alt"),
+            // RUN 51740
+            List.of("HT/FT 1/2", "İY Skor 1:2", "İY ÇŞ X2", "İY X", "MS Skor 0:1", "ÇŞ X2", "İY ÇŞ 12", "İY Skor 2:2", "İY Skor 3:0", "İY Skor 2:1", "MS Skor 3:1"),
+            // RUN 51922
+            List.of("İY A/U 1.5 Üst", "A/U 2.5 Alt", "A/U 2.5 Üst", "HT/FT 1/X", "2Y A/U 1.5 Alt", "2Y A/U 2.5 Üst", "A/U 3.5 Alt", "2Y A/U 2.5 Alt", "İY Skor 2:2", "İY A/U 2.5 Alt", "2Y A/U 0.5 Üst", "İY A/U 1.5 Alt", "A/U 4.5 Üst", "A/U 0.5 Alt", "A/U 1.5 Alt", "A/U 3.5 Üst", "2Y A/U 1.5 Üst", "ÇŞ 12"),
+            // RUN 54249
+            List.of("HT/FT 1/1", "MS Skor 1:2", "HT/FT 2/2", "MS Skor 3:4"),
+            // RUN 54763
+            List.of("İY Skor 2:0", "MS Skor 4:4", "A/U 1.5 Üst", "MS Skor 4:2", "MS Skor 0:2", "MS Skor 3:4", "MS 2"),
+            // RUN 54912
+            List.of("İY Skor 0:3", "2Y A/U 2.5 Üst", "MS Skor 3:1", "HT/FT 2/X", "İY A/U 0.5 Üst", "2Y A/U 1.5 Alt", "2Y A/U 0.5 Üst", "İY X", "MS Skor 4:3"),
+            // RUN 54946
+            List.of("İY Skor 1:1", "A/U 5.5 Üst", "2Y A/U 1.5 Alt", "2Y A/U 0.5 Alt", "İY KG Hayır", "İY Skor 0:2", "MS Skor 1:1", "KG Evet", "HT/FT 1/2", "İY 2", "2Y A/U 2.5 Üst"),
+            // RUN 55410
+            List.of("KG Hayır", "MS Skor 1:2", "MS Skor 2:2", "A/U 1.5 Üst", "A/U 0.5 Alt", "İY Skor 1:1", "MS Skor 4:4", "2Y A/U 0.5 Üst", "İY 2", "2Y A/U 0.5 Alt", "MS Skor 4:1"),
+            // RUN 55603
+            List.of("HT/FT 1/X", "2Y A/U 1.5 Üst", "İY KG Evet", "İY 1", "MS Skor 4:4", "İY ÇŞ 12", "2Y A/U 0.5 Alt", "A/U 0.5 Üst", "MS Skor 2:2", "İY Skor 1:1", "2Y 1", "KG Evet"),
+            // RUN 55654
+            List.of("HT/FT X/2", "İY Skor 1:2", "A/U 4.5 Üst", "2Y A/U 2.5 Üst", "İY X", "2Y A/U 1.5 Üst", "MS Skor 2:2"),
+            // RUN 56824
+            List.of("İY A/U 1.5 Alt", "İY Skor 1:2", "HT/FT 2/1", "İY ÇŞ X2", "İY A/U 1.5 Üst", "İY KG Evet"),
+            // RUN 57542
+            List.of("MS Skor 2:4", "ÇŞ 12", "MS 2", "MS Skor 3:4"),
+            // RUN 57796
+            List.of("İY Skor 1:2", "MS Skor 3:2", "İY Skor 3:0"),
+            // RUN 57990
+            List.of("İY ÇŞ 1X", "MS Skor 1:3", "İY 2", "İY Skor 1:1", "MS Skor 3:0", "İY Skor 3:0", "İY ÇŞ X2"),
+            // RUN 59080
+            List.of("İY Skor 3:1", "KG Hayır", "HT/FT 2/X", "İY Skor 1:0", "MS Skor 4:1"),
+            // RUN 59131
+            List.of("MS 1", "İY Skor 3:2", "ÇŞ 1X", "MS Skor 3:2", "İY Skor 3:0", "İY ÇŞ 1X"),
+            // RUN 59348
+            List.of("İY Skor 0:1", "İY A/U 0.5 Üst", "MS Skor 3:2", "2Y 2"),
+            // RUN 59955
+            List.of("MS Skor 3:3", "MS Skor 2:2", "KG Hayır", "2Y A/U 2.5 Alt", "2Y A/U 1.5 Alt", "İY Skor 1:1", "İY Skor 3:2", "İY 1", "A/U 0.5 Üst"),
+            // RUN 60036
+            List.of("2Y A/U 1.5 Alt", "İY Skor 1:2", "MS Skor 0:3", "A/U 5.5 Üst", "A/U 3.5 Üst", "İY Skor 3:2", "MS Skor 2:3", "İY ÇŞ X2"),
+            // RUN 61115
+            List.of("A/U 4.5 Alt", "İY A/U 0.5 Üst", "İY Skor 1:1", "MS Skor 3:0", "HT/FT 2/1", "MS Skor 0:1", "İY Skor 2:0"),
+            // RUN 61448
+            List.of("MS 1", "MS Skor 2:0", "ÇŞ 1X", "İY Skor 0:3"),
+            // RUN 61781
+            List.of("İY A/U 1.5 Üst", "İY Skor 1:0", "İY 1", "İY Skor 3:0", "İY A/U 0.5 Üst", "2Y KG Evet"),
+            // RUN 62128
+            List.of("2Y A/U 2.5 Üst", "MS Skor 3:2", "İY A/U 2.5 Üst", "2Y A/U 1.5 Üst", "A/U 0.5 Alt", "HT/FT 2/X", "HT/FT 1/2", "MS Skor 0:2", "İY A/U 0.5 Üst", "A/U 4.5 Üst", "İY ÇŞ 12", "2Y A/U 1.5 Alt", "MS Skor 3:4"),
+            // RUN 62674
+            List.of("İY 1", "A/U 0.5 Üst", "İY Skor 3:1", "İY ÇŞ X2", "A/U 3.5 Üst", "HT/FT 2/1", "İY A/U 0.5 Alt", "HT/FT X/2", "2Y A/U 1.5 Üst", "2Y A/U 0.5 Alt", "2Y A/U 2.5 Alt", "2Y A/U 0.5 Üst", "İY Skor 1:1"),
+            // RUN 63640
+            List.of("2Y A/U 2.5 Üst", "A/U 3.5 Alt", "A/U 2.5 Alt", "2Y A/U 1.5 Alt", "İY A/U 1.5 Üst", "A/U 0.5 Alt", "İY ÇŞ 12", "İY A/U 0.5 Üst", "A/U 4.5 Alt", "HT/FT 1/X", "İY X", "2Y A/U 0.5 Alt", "İY A/U 2.5 Üst", "İY A/U 2.5 Alt", "MS Skor 3:3"),
+            // RUN 63728
+            List.of("2Y 1", "İY 1", "2Y KG Hayır", "İY A/U 1.5 Alt"),
+            // RUN 64586
+            List.of("İY A/U 0.5 Alt", "A/U 5.5 Alt", "HT/FT X/2", "KG Evet", "A/U 0.5 Üst", "İY Skor 2:2", "2Y A/U 1.5 Alt", "A/U 3.5 Üst", "A/U 5.5 Üst", "İY A/U 0.5 Üst", "İY Skor 2:3", "İY Skor 3:1", "İY ÇŞ 12", "İY KG Evet", "2Y A/U 2.5 Üst", "İY Skor 3:0", "İY Skor 3:2", "İY Skor 1:1"),
+            // RUN 64836
+            List.of("İY Skor 2:3", "İY Skor 2:0", "İY Skor 3:1", "MS Skor 4:1", "2Y KG Hayır"),
+            // RUN 65546
+            List.of("İY Skor 1:2", "İY A/U 1.5 Alt", "İY 1"),
+            // RUN 65583
+            List.of("İY KG Evet", "HT/FT 2/X", "MS Skor 2:1", "İY Skor 2:1", "MS Skor 4:4", "MS Skor 4:1"),
+            // RUN 66727
+            List.of("2Y A/U 1.5 Üst", "2Y A/U 1.5 Alt", "İY 2", "A/U 0.5 Üst", "İY Skor 2:1", "İY Skor 3:2", "İY A/U 0.5 Üst", "MS Skor 1:1"),
+            // RUN 66866
+            List.of("2Y 1", "İY Skor 2:0", "MS Skor 3:3", "A/U 5.5 Üst", "A/U 3.5 Üst", "MS Skor 1:1", "İY Skor 0:2", "İY KG Hayır", "2Y A/U 1.5 Alt", "KG Hayır"),
+            // RUN 67491
+            List.of("İY Skor 2:1", "İY Skor 0:3", "A/U 4.5 Üst", "İY A/U 0.5 Üst", "2Y A/U 1.5 Alt", "İY X", "MS Skor 3:3", "2Y A/U 1.5 Üst", "MS Skor 1:2", "İY Skor 1:1"),
+            // RUN 67870
+            List.of("MS Skor 2:3", "MS Skor 3:2", "MS Skor 0:4", "KG Evet"),
+            // RUN 68589
+            List.of("İY Skor 2:0", "HT/FT 2/X", "MS Skor 4:1", "2Y KG Evet"),
+            // RUN 68829
+            List.of("MS Skor 4:2", "2Y A/U 0.5 Üst", "HT/FT X/2", "İY Skor 0:3", "A/U 3.5 Üst"),
+            // RUN 69983
+            List.of("MS Skor 1:3", "MS Skor 4:1", "İY 2", "HT/FT 2/X", "A/U 5.5 Alt", "İY Skor 0:2", "A/U 3.5 Üst"),
+            // RUN 71990
+            List.of("A/U 0.5 Üst", "İY Skor 2:2", "İY Skor 3:0", "MS Skor 2:3", "KG Hayır", "İY 2", "MS Skor 4:4", "KG Evet", "2Y A/U 1.5 Üst"),
+            // RUN 72078
+            List.of("A/U 3.5 Üst", "HT/FT X/2", "MS Skor 3:1", "HT/FT 2/X", "İY A/U 0.5 Üst", "2Y A/U 0.5 Üst", "İY A/U 0.5 Alt", "İY A/U 2.5 Alt", "İY A/U 2.5 Üst", "MS Skor 4:2", "İY Skor 0:3"),
+            // RUN 72278
+            List.of("MS Skor 0:4", "HT/FT 1/1", "A/U 3.5 Üst", "MS Skor 1:1"),
+            // RUN 72536
+            List.of("İY A/U 2.5 Alt", "2Y A/U 2.5 Alt", "A/U 1.5 Üst", "İY Skor 3:0", "HT/FT 2/X", "İY Skor 2:3", "MS Skor 4:4"),
+            // RUN 72563
+            List.of("İY Skor 0:2", "MS Skor 4:4", "HT/FT 2/X", "A/U 4.5 Üst", "A/U 5.5 Alt"),
+            // RUN 72615
+            List.of("İY Skor 2:0", "A/U 1.5 Üst", "İY Skor 3:1", "İY 1", "A/U 3.5 Alt", "MS Skor 3:3", "KG Evet", "İY Skor 1:0"),
+            // RUN 72638
+            List.of("HT/FT 2/X", "İY A/U 2.5 Üst", "İY X", "MS Skor 3:4", "2Y A/U 2.5 Alt", "İY Skor 3:2", "A/U 3.5 Üst", "2Y A/U 1.5 Alt", "A/U 5.5 Alt"),
+            // RUN 72743
+            List.of("MS Skor 4:1", "MS Skor 2:1", "İY Skor 3:1", "İY Skor 2:0", "2Y KG Hayır"),
+            // RUN 72824
+            List.of("MS Skor 3:3", "2Y X", "İY Skor 3:2", "MS Skor 1:3", "A/U 4.5 Alt", "İY A/U 0.5 Üst", "MS Skor 0:2", "İY Skor 1:1", "A/U 5.5 Üst", "MS Skor 1:2", "İY X", "2Y A/U 0.5 Alt"),
+            // RUN 73708
+            List.of("MS Skor 1:3", "İY Skor 1:1", "MS Skor 2:1", "İY Skor 1:3", "A/U 0.5 Üst", "İY ÇŞ 1X"),
+            // RUN 74371
+            List.of("A/U 2.5 Üst", "A/U 2.5 Alt", "MS Skor 3:3", "HT/FT 1/X", "A/U 3.5 Alt", "A/U 1.5 Alt", "A/U 0.5 Üst", "İY A/U 2.5 Üst"),
+            // RUN 75025
+            List.of("İY ÇŞ X2", "A/U 3.5 Üst", "İY Skor 1:2", "MS Skor 0:2", "MS Skor 1:1", "2Y A/U 2.5 Üst", "2Y X"),
+            // RUN 75133
+            List.of("İY X", "A/U 1.5 Üst", "ÇŞ 12", "A/U 1.5 Alt", "A/U 5.5 Alt", "İY A/U 1.5 Üst", "HT/FT 1/X"),
+            // RUN 75633
+            List.of("İY Skor 3:0", "İY Skor 2:1", "İY 1", "ÇŞ 12", "İY ÇŞ X2", "İY Skor 2:0", "2Y 1"),
+            // RUN 77931
+            List.of("İY A/U 1.5 Üst", "İY Skor 3:2", "2Y 1", "İY 1", "İY ÇŞ X2", "2Y KG Hayır"),
+            // RUN 78298
+            List.of("MS Skor 3:3", "MS Skor 0:4", "İY ÇŞ X2", "MS Skor 1:2", "İY Skor 2:2", "2Y 1", "İY A/U 0.5 Üst", "MS Skor 0:2", "MS 2"),
+            // RUN 79058
+            List.of("İY 1", "ÇŞ 12", "İY Skor 2:2", "ÇŞ 1X", "MS Skor 0:4"),
+            // RUN 79979
+            List.of("İY ÇŞ X2", "A/U 4.5 Üst", "MS Skor 2:4", "MS Skor 4:3", "A/U 2.5 Üst", "A/U 5.5 Üst"),
+            // RUN 81146
+            List.of("2Y A/U 1.5 Üst", "2Y A/U 1.5 Alt", "MS Skor 1:1", "İY A/U 0.5 Alt", "HT/FT X/2", "2Y A/U 2.5 Üst", "2Y 1", "İY ÇŞ X2"),
+            // RUN 81171
+            List.of("HT/FT 2/X", "İY A/U 2.5 Alt", "MS Skor 1:3", "2Y A/U 1.5 Üst", "MS Skor 3:2", "İY Skor 3:2", "A/U 3.5 Üst", "İY ÇŞ 12", "İY Skor 2:0", "MS Skor 3:4"),
+            // RUN 81532
+            List.of("MS Skor 1:2", "A/U 4.5 Alt", "2Y X", "A/U 5.5 Üst", "İY Skor 2:1", "A/U 4.5 Üst"),
+            // RUN 82499
+            List.of("İY Skor 1:2", "MS Skor 0:1", "MS Skor 1:2", "ÇŞ 12", "MS Skor 0:2", "İY ÇŞ 12", "MS Skor 4:1", "İY X", "MS Skor 0:3"),
+            // RUN 83719
+            List.of("İY ÇŞ 12", "MS Skor 0:4", "MS Skor 0:3", "2Y 2", "KG Evet"),
+            // RUN 84307
+            List.of("İY ÇŞ X2", "2Y A/U 1.5 Üst", "MS Skor 1:1", "A/U 5.5 Üst", "İY 1", "2Y 1", "İY Skor 2:3", "HT/FT 2/1", "KG Evet"),
+            // RUN 86308
+            List.of("İY A/U 2.5 Üst", "A/U 5.5 Alt", "A/U 3.5 Üst", "A/U 1.5 Üst", "HT/FT 2/X", "MS Skor 0:1", "İY A/U 2.5 Alt", "MS Skor 0:2"),
+            // RUN 86864
+            List.of("2Y A/U 2.5 Alt", "HT/FT 1/2", "MS Skor 3:4", "MS Skor 4:3", "A/U 0.5 Alt", "A/U 5.5 Alt", "MS Skor 3:2"),
+            // RUN 87280
+            List.of("İY Skor 3:2", "İY KG Hayır", "MS Skor 3:3", "İY 2", "2Y A/U 1.5 Alt", "2Y A/U 0.5 Üst", "İY ÇŞ 1X", "İY Skor 3:0", "MS Skor 2:2", "MS Skor 1:1", "İY A/U 2.5 Üst", "2Y A/U 2.5 Alt", "İY Skor 2:1", "A/U 0.5 Üst"),
+            // RUN 87834
+            List.of("İY A/U 1.5 Üst", "A/U 2.5 Üst", "A/U 4.5 Alt", "İY X", "İY A/U 2.5 Alt", "İY A/U 2.5 Üst", "2Y A/U 0.5 Üst", "İY A/U 1.5 Alt", "2Y A/U 1.5 Üst", "HT/FT 1/X", "ÇŞ 12"),
+            // RUN 87876
+            List.of("HT/FT 1/X", "A/U 3.5 Alt", "İY A/U 1.5 Alt", "2Y A/U 2.5 Alt", "A/U 2.5 Alt", "2Y A/U 1.5 Alt", "A/U 4.5 Üst", "İY A/U 1.5 Üst", "İY A/U 2.5 Üst", "2Y A/U 0.5 Üst", "İY A/U 0.5 Alt", "A/U 3.5 Üst", "A/U 4.5 Alt", "ÇŞ 12"),
+            // RUN 88574
+            List.of("İY Skor 0:2", "İY KG Evet", "A/U 3.5 Üst", "İY Skor 3:1", "İY 1", "2Y A/U 1.5 Alt", "KG Evet", "İY A/U 2.5 Üst", "İY 2", "MS Skor 0:2", "2Y A/U 2.5 Üst", "HT/FT 2/1", "A/U 0.5 Üst"),
+            // RUN 88582
+            List.of("MS Skor 1:3", "A/U 4.5 Alt", "MS Skor 0:2", "İY Skor 3:2", "MS Skor 3:2", "MS Skor 3:3"),
+            // RUN 88771
+            List.of("A/U 4.5 Üst", "MS Skor 1:4", "HT/FT 2/1", "A/U 3.5 Üst", "İY ÇŞ X2", "MS Skor 4:3", "A/U 2.5 Üst", "A/U 5.5 Üst"),
+            // RUN 89371
+            List.of("İY A/U 0.5 Alt", "MS Skor 1:1", "A/U 5.5 Alt", "ÇŞ 12", "MS Skor 3:3", "A/U 5.5 Üst", "İY A/U 2.5 Üst"),
+            // RUN 90213
+            List.of("HT/FT 1/X", "A/U 1.5 Üst", "İY A/U 2.5 Alt", "A/U 2.5 Alt", "İY A/U 1.5 Alt", "A/U 5.5 Alt", "İY A/U 1.5 Üst", "2Y A/U 2.5 Alt", "İY A/U 2.5 Üst", "A/U 3.5 Üst", "A/U 4.5 Üst", "2Y A/U 2.5 Üst", "A/U 1.5 Alt", "MS Skor 3:3"),
+            // RUN 90476
+            List.of("HT/FT 2/X", "İY ÇŞ 12", "İY Skor 0:3", "A/U 2.5 Üst", "A/U 3.5 Üst"),
+            // RUN 91407
+            List.of("A/U 0.5 Üst", "İY Skor 3:0", "İY Skor 2:2", "2Y 1", "2Y A/U 1.5 Alt", "İY Skor 2:0", "MS Skor 2:3", "HT/FT 1/X", "İY A/U 2.5 Alt"),
+            // RUN 92370
+            List.of("İY Skor 1:2", "2Y A/U 1.5 Alt", "MS Skor 0:3", "A/U 4.5 Alt"),
+            // RUN 92491
+            List.of("İY Skor 0:2", "2Y X", "MS Skor 4:4", "A/U 0.5 Alt", "HT/FT X/X"),
+            // RUN 92606
+            List.of("İY Skor 1:2", "A/U 0.5 Üst", "MS Skor 2:3", "2Y A/U 1.5 Alt", "MS Skor 0:3"),
+            // RUN 93319
+            List.of("İY ÇŞ 12", "İY A/U 1.5 Alt", "İY X", "A/U 3.5 Alt", "A/U 2.5 Üst", "2Y A/U 0.5 Üst", "İY A/U 0.5 Üst", "A/U 4.5 Üst", "ÇŞ 12"),
+            // RUN 93601
+            List.of("İY Skor 0:2", "A/U 5.5 Alt", "2Y A/U 0.5 Alt", "HT/FT 1/X", "İY Skor 2:0", "İY 2", "MS Skor 0:2", "2Y A/U 1.5 Üst", "A/U 0.5 Üst", "HT/FT X/2", "İY A/U 2.5 Üst"),
+            // RUN 94207
+            List.of("A/U 5.5 Alt", "MS Skor 4:4", "MS Skor 4:2", "İY Skor 0:3", "MS Skor 2:3"),
+            // RUN 96972
+            List.of("İY Skor 0:3", "A/U 2.5 Üst", "İY A/U 2.5 Üst", "MS Skor 1:1", "MS Skor 0:1", "MS Skor 4:4"),
+            // RUN 97178
+            List.of("MS Skor 3:1", "2Y A/U 1.5 Alt", "İY Skor 1:0", "MS Skor 3:4", "MS Skor 0:1", "A/U 4.5 Alt"),
+            // RUN 97254
+            List.of("A/U 3.5 Alt", "2Y A/U 0.5 Üst", "İY A/U 1.5 Üst", "İY X", "2Y A/U 2.5 Alt", "İY A/U 0.5 Üst", "A/U 4.5 Üst", "İY A/U 0.5 Alt", "İY ÇŞ 12", "HT/FT 1/X", "A/U 1.5 Üst", "A/U 2.5 Üst", "İY Skor 2:2", "A/U 5.5 Alt", "MS Skor 3:3"),
+            // RUN 98025
+            List.of("A/U 0.5 Alt", "İY Skor 0:3", "2Y A/U 1.5 Alt", "İY X", "MS Skor 1:3", "HT/FT 2/X", "İY 2", "MS Skor 4:4", "İY Skor 2:0", "2Y A/U 0.5 Üst", "2Y A/U 2.5 Alt"),
+            // RUN 99264
+            List.of("İY 1", "MS Skor 0:2", "İY A/U 1.5 Alt", "İY Skor 1:2"),
+            // RUN 99419
+            List.of("İY Skor 1:2", "2Y KG Hayır", "İY Skor 3:0", "İY ÇŞ X2", "İY A/U 0.5 Üst", "2Y 1")
+    );
 
     // ─── kolon tanımları ────────────────────────────────────────────────────
     static class ColumnDef {

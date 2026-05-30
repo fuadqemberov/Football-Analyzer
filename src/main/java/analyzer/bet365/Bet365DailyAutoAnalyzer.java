@@ -665,7 +665,7 @@ public class Bet365DailyAutoAnalyzer {
         return s;
     }
 
-    // ==================== ANA ÇALIŞTIRICI ====================
+    // ==================== ANA ÇALIŞTIRICI (GÜNCELLENMİŞ) ====================
     public void run() {
         List<MatchInfo> todayMatches = scrapeTodayMatches();
 
@@ -675,147 +675,23 @@ public class Bet365DailyAutoAnalyzer {
         }
 
         System.out.println("═══════════════════════════════════════════════════════════════");
-        System.out.println("🤖 11 ANALİZ YÖNTEMİ İLE OTOMATİK ANALİZ BAŞLIYOR: " + todayMatches.size() + " maç");
+        System.out.println("🤖 1 ANALİZ YÖNTEMİ İLE OTOMATİK ANALİZ BAŞLIYOR: " + todayMatches.size() + " maç");
         System.out.println("═══════════════════════════════════════════════════════════════\n");
 
         for (MatchInfo match : todayMatches) {
             System.out.println("\n\n⚽ " + match.home + " vs " + match.away);
 
-            // ── YÖNTEM 1: Orijinal adaptif filtreleme ───────────────────────
-            analyzeMatchAdaptive(match);
 
-            // ── YÖNTEM 2: MS Skor 3:2 odaklı desen ─────────────────────────
+            // ── YENİ FİLTRE SETLERİ ───────────────────────────────────────
+            // YÖNTEM 2: Kolon seti 1
             analyzeWithSequentialPattern(match,
                     List.of(
-                            "MS Skor 3:2",
-                            "A/U 2.5 Alt",
-                            "MS 2",
-                            "ÇŞ X2",
-                            "İY Skor 0:2"
+                            "MS Skor 4:4", "HT/FT 2/2", "İY Skor 1:3",
+                            "MS Skor 4:0", "HT/FT 1/X"
                     ),
-                    "🟠 YÖNTEM 2 [MS Skor 3:2 / A/U 2.5 Alt / MS 2 / ÇŞ X2 / İY Skor 0:2]"
+                    "🔵 YÖNTEM 2 [Kolon Seti 1]"
             );
 
-            // ── YÖNTEM 3: HT/FT çift skor odaklı desen ─────────────────────
-            analyzeWithSequentialPattern(match,
-                    List.of(
-                            "MS Skor 0:1",
-                            "MS 1",
-                            "HT/FT 1/1",
-                            "HT/FT 2/2",
-                            "MS Skor 2:1"
-                    ),
-                    "🟡 YÖNTEM 3 [MS Skor 0:1 / MS 1 / HT/FT 1-1 / HT/FT 2-2 / MS Skor 2:1]"
-            );
-
-            // ── YÖNTEM 4: İY Skor 1:1 / 2Y yüksek gol deseni ───────────────
-            analyzeWithSequentialPattern(match,
-                    List.of(
-                            "İY Skor 1:1",
-                            "2Y A/U 2.5 Üst",
-                            "İY ÇŞ 12",
-                            "İY Skor 0:3",
-                            "İY A/U 1.5 Alt",
-                            "MS 2"
-                    ),
-                    "🟢 YÖNTEM 4 [İY Skor 1:1 / 2Y A/U 2.5 Üst / İY ÇŞ 12 / İY Skor 0:3 / İY A/U 1.5 Alt / MS 2]"
-            );
-
-            // ── YÖNTEM 5: Yüksek oran karma desen ───────────────────────────
-            analyzeWithSequentialPattern(match,
-                    List.of(
-                            "MS 2",
-                            "İY X",
-                            "2Y A/U 0.5 Alt",
-                            "MS Skor 3:4",
-                            "HT/FT X/1",
-                            "İY A/U 2.5 Alt",
-                            "MS Skor 0:3",
-                            "A/U 0.5 Alt",
-                            "KG Hayır"
-                    ),
-                    "🔴 YÖNTEM 5 [MS 2 / İY X / 2Y A/U 0.5 Alt / MS Skor 3:4 / HT/FT X/1 / ...]"
-            );
-
-            // ── YÖNTEM 6: İY 2 / MS X / yüksek gol skoru deseni ────────────
-            analyzeWithSequentialPattern(match,
-                    List.of(
-                            "İY 2",
-                            "MS X",
-                            "MS Skor 0:4",
-                            "ÇŞ X2",
-                            "A/U 5.5 Üst",
-                            "A/U 2.5 Alt",
-                            "İY Skor 3:2"
-                    ),
-                    "🟣 YÖNTEM 6 [İY 2 / MS X / MS Skor 0:4 / ÇŞ X2 / A/U 5.5 Üst / A/U 2.5 Alt / İY Skor 3:2]"
-            );
-
-            // ── YÖNTEM 7: A/U 2.5 Üst ağırlıklı desen (babaaatt) ───────────
-            analyzeWithSequentialPattern(match,
-                    List.of(
-                            "A/U 2.5 Üst",
-                            "İY ÇŞ 12",
-                            "MS Skor 2:3",
-                            "MS Skor 1:4",
-                            "İY Skor 0:3",
-                            "İY Skor 2:2",
-                            "İY KG Evet"
-                    ),
-                    "⚪ YÖNTEM 7 [A/U 2.5 Üst / İY ÇŞ 12 / MS Skor 2:3 / MS Skor 1:4 / İY Skor 0:3 / İY Skor 2:2 / İY KG Evet]"
-            );
-
-            // ── YÖNTEM 8: İY Skor 3:2 / KG Hayır / MS skor serisi ──────────
-            analyzeWithSequentialPattern(match,
-                    List.of(
-                            "İY Skor 3:2",
-                            "İY KG Hayır",
-                            "MS Skor 2:1",
-                            "MS Skor 3:4",
-                            "MS Skor 3:1",
-                            "KG Hayır",
-                            "2Y 2"
-                    ),
-                    "🔵 YÖNTEM 8 [İY Skor 3:2 / İY KG Hayır / MS Skor 2:1 / MS Skor 3:4 / MS Skor 3:1 / KG Hayır / 2Y 2]"
-            );
-
-            // ── YÖNTEM 9: YENİ EKLENEN İLK YARI 0-0/0-1 SÜRPRİZ DESENİ 1 ──────────
-            analyzeWithSequentialPattern(match,
-                    List.of(
-                            "MS Skor 1:3",
-                            "MS 2",
-                            "İY Skor 1:2",
-                            "İY A/U 2.5 Üst",
-                            "A/U 5.5 Üst",
-                            "2Y A/U 2.5 Üst"
-                    ),
-                    "🟤 YÖNTEM 9 [MS Skor 1:3 / MS 2 / İY Skor 1:2 / İY A/U 2.5 Üst / A/U 5.5 Üst / 2Y A/U 2.5 Üst]"
-            );
-
-            // ── YÖNTEM 10: YENİ EKLENEN İLK YARI 0-0/0-1 SÜRPRİZ DESENİ 2 ──────────
-            analyzeWithSequentialPattern(match,
-                    List.of(
-                            "2Y KG Evet",
-                            "MS 2",
-                            "2Y A/U 2.5 Alt",
-                            "HT/FT 2/1",
-                            "MS Skor 1:2",
-                            "İY A/U 2.5 Alt"
-                    ),
-                    "⚫ YÖNTEM 10 [2Y KG Evet / MS 2 / 2Y A/U 2.5 Alt / HT/FT 2/1 / MS Skor 1:2 / İY A/U 2.5 Alt]"
-            );
-
-            // ── YÖNTEM 11: YENİ EKLENEN İLK YARI 0-0/0-1 SÜRPRİZ DESENİ 3 ──────────
-            analyzeWithSequentialPattern(match,
-                    List.of(
-                            "2Y 1",
-                            "MS 2",
-                            "A/U 4.5 Alt",
-                            "2Y 2",
-                            "2Y KG Evet"
-                    ),
-                    "🔴 YÖNTEM 11 [2Y 1 / MS 2 / A/U 4.5 Alt / 2Y 2 / 2Y KG Evet]"
-            );
         }
 
         System.out.println("═══════════════════════════════════════════════════════════════");

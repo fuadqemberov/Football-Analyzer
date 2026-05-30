@@ -6,7 +6,7 @@ import java.util.stream.Collectors;
 
 public class Bet365FilterHunt {
 
-    private static final int RUNS = 1000;
+    private static final int RUNS = 100;
 
     private Connection conn;
     private List<MatchRecord> allRecords = new ArrayList<>();
@@ -14,15 +14,18 @@ public class Bet365FilterHunt {
     // Sütun indeksi: col -> oddsCode -> sorted matchIndices
     private Map<Integer, Map<Integer, int[]>> colIndex;
 
+    // =========================================================
+    // MatchRecord
+    // =========================================================
     static class MatchRecord {
         String league, date, homeTeam, awayTeam, id;
         int htHome, htAway, ftHome, ftAway;
-        int[] oddsCode;
+        int[]   oddsCode;
         short[] oddsValue;
-        BitSet oddsValid;
+        BitSet  oddsValid;
 
         MatchRecord(int size) {
-            oddsCode = new int[size];
+            oddsCode  = new int[size];
             oddsValue = new short[size];
             oddsValid = new BitSet(size);
         }
@@ -33,8 +36,8 @@ public class Bet365FilterHunt {
         @Override
         public String toString() {
             return String.format("%-20s %-12s %-20s %-20s %-8s %-8s",
-                    league != null ? league : "",
-                    date != null ? date : "",
+                    league   != null ? league   : "",
+                    date     != null ? date     : "",
                     homeTeam != null ? homeTeam : "",
                     awayTeam != null ? awayTeam : "",
                     htScore(), ftScore());
@@ -45,6 +48,9 @@ public class Bet365FilterHunt {
         }
     }
 
+    // =========================================================
+    // ColumnDef
+    // =========================================================
     static class ColumnDef {
         final String sqlColumn, displayName;
         ColumnDef(String s, String d) { sqlColumn = s; displayName = d; }
@@ -100,6 +106,9 @@ public class Bet365FilterHunt {
             new ColumnDef("ft_score_2_5_a","MS Skor 2:5")
     );
 
+    // =========================================================
+    // Yardımcı: oran string temizleme
+    // =========================================================
     private static String cleanOddsString(String raw) {
         if (raw == null || raw.isEmpty() || raw.equals("-")) return null;
         String s = raw.trim()
@@ -111,11 +120,62 @@ public class Bet365FilterHunt {
         return s;
     }
 
+    // =========================================================
+    // Yardımcı: kimin kazandığını sembolik olarak döndür
+    // =========================================================
+    private static String winner(int home, int away) {
+        if (home < 0 || away < 0) return null;
+        if (home > away) return "1";
+        if (home == away) return "X";
+        return "2";
+    }
+
+    // =========================================================
+    // Eşdeğer HT/FT semboller listesi
+    //
+    //  Kural 1 — Comeback:
+    //    1/2  ↔  2/1   (HT önde olan FT'de kaybeder, tam ters)
+    //
+    //  Kural 2 — Beraberlikle biten yarı + farklı galipler:
+    //    1/X  ↔  2/X   (her iki takım da HT önde, FT berabere)
+    //
+    // Dönen liste: hedef sembolün "eşdeğer" kabul edilen diğer semboller.
+    // =========================================================
+    private static List<String> equivalentSymbols(MatchRecord m) {
+        String ht = winner(m.htHome, m.htAway);
+        String ft = winner(m.ftHome, m.ftAway);
+        List<String> eq = new ArrayList<>();
+        if (ht == null || ft == null) return eq;
+
+        String self = ht + "/" + ft;
+
+        // Kural 1: Comeback çifti
+        if (self.equals("1/2")) eq.add("2/1");
+        if (self.equals("2/1")) eq.add("1/2");
+
+        // Kural 2: 1/X ↔ 2/X
+        if (self.equals("1/X")) eq.add("2/X");
+        if (self.equals("2/X")) eq.add("1/X");
+
+        return eq; // boş olabilir (eşdeğeri olmayan kombinasyonlar için)
+    }
+
+    // pool maçı için sembolik HT/FT üret (karşılaştırmada kullanılır)
+    private static String symbolicHtFt(MatchRecord m) {
+        String ht = winner(m.htHome, m.htAway);
+        String ft = winner(m.ftHome, m.ftAway);
+        if (ht == null || ft == null) return null;
+        return ht + "/" + ft;
+    }
+
+    // =========================================================
+    // Veri yükleme ve indeks kurma
+    // =========================================================
     private void loadDataAndBuildIndex() throws SQLException {
         System.out.println("📊 Veritabanından veriler yükleniyor ve indeks kuruluyor...");
         int cols = ALL_ODDS_COLS.size();
 
-        List<Map<String, Integer>> stringToCode = new ArrayList<>(cols);
+        List<Map<String, Integer>>       stringToCode   = new ArrayList<>(cols);
         List<Map<Integer, List<Integer>>> codeToIndices = new ArrayList<>(cols);
         for (int c = 0; c < cols; c++) {
             stringToCode.add(new HashMap<>());
@@ -140,21 +200,26 @@ public class Bet365FilterHunt {
                     rec.awayTeam = rs.getString("away_team");
                     rec.id       = rs.getString("id");
                     rec.htHome = rec.htAway = rec.ftHome = rec.ftAway = -1;
+
                     String ht = rs.getString("ht_iy");
                     if (ht != null && ht.contains("-")) {
                         String[] p = ht.split("-", 2);
-                        try { rec.htHome = Integer.parseInt(p[0].trim()); rec.htAway = Integer.parseInt(p[1].trim()); }
-                        catch (Exception ignored) {}
+                        try {
+                            rec.htHome = Integer.parseInt(p[0].trim());
+                            rec.htAway = Integer.parseInt(p[1].trim());
+                        } catch (Exception ignored) {}
                     }
                     String ft = rs.getString("ft_ms");
                     if (ft != null && ft.contains("-")) {
                         String[] p = ft.split("-", 2);
-                        try { rec.ftHome = Integer.parseInt(p[0].trim()); rec.ftAway = Integer.parseInt(p[1].trim()); }
-                        catch (Exception ignored) {}
+                        try {
+                            rec.ftHome = Integer.parseInt(p[0].trim());
+                            rec.ftAway = Integer.parseInt(p[1].trim());
+                        } catch (Exception ignored) {}
                     }
 
                     for (int c = 0; c < cols; c++) {
-                        String raw = rs.getString(ALL_ODDS_COLS.get(c).sqlColumn);
+                        String raw   = rs.getString(ALL_ODDS_COLS.get(c).sqlColumn);
                         String clean = cleanOddsString(raw);
                         if (clean != null) {
                             try {
@@ -162,7 +227,7 @@ public class Bet365FilterHunt {
                                 if (d > 0.0) {
                                     rec.oddsValid.set(c);
                                     rec.oddsValue[c] = (short) Math.round(d * 100);
-                                    Map<String, Integer> stc = stringToCode.get(c);
+                                    Map<String, Integer> stc  = stringToCode.get(c);
                                     Integer code = stc.get(clean);
                                     if (code == null) {
                                         code = stc.size();
@@ -178,7 +243,8 @@ public class Bet365FilterHunt {
 
                     allRecords.add(rec);
                     idx++;
-                    if (idx % 100000 == 0) System.out.printf("  %d kayıt yüklendi...%n", idx);
+                    if (idx % 100_000 == 0)
+                        System.out.printf("  %d kayıt yüklendi...%n", idx);
                 }
             }
         }
@@ -197,13 +263,16 @@ public class Bet365FilterHunt {
         System.out.println("✅ İndeks hazır.");
     }
 
+    // =========================================================
+    // Sorted-array kesişimi — O(n+m)
+    // =========================================================
     private int[] intersect(int[] a, int[] b) {
         int[] res = new int[Math.min(a.length, b.length)];
         int i = 0, j = 0, k = 0;
         while (i < a.length && j < b.length) {
-            if (a[i] == b[j]) { res[k++] = a[i++]; j++; }
-            else if (a[i] < b[j]) i++;
-            else j++;
+            if      (a[i] == b[j]) { res[k++] = a[i++]; j++; }
+            else if (a[i] <  b[j])   i++;
+            else                      j++;
         }
         return Arrays.copyOf(res, k);
     }
@@ -217,10 +286,15 @@ public class Bet365FilterHunt {
         return res;
     }
 
+    // =========================================================
+    // Ana hunt metodu
+    // =========================================================
     public void hunt() throws Exception {
         List<MatchRecord> valid = allRecords.stream()
-                .filter(m -> m.ftHome >= 0 && m.ftAway >= 0 && m.htHome >= 0 && m.htAway >= 0)
+                .filter(m -> m.ftHome >= 0 && m.ftAway >= 0
+                        && m.htHome >= 0 && m.htAway >= 0)
                 .collect(Collectors.toList());
+
         if (valid.size() < 2) {
             System.out.println("❌ Yeterli maç yok.");
             return;
@@ -230,28 +304,40 @@ public class Bet365FilterHunt {
         MatchRecord target = null;
         while (target == null) {
             System.out.print("Hedef maçın veritabanı ID'sini girin: ");
-            String targetId = scanner.nextLine().trim();
-            final String searchId = targetId;
+            String inputId = scanner.nextLine().trim();
             target = valid.stream()
-                    .filter(m -> m.id != null && m.id.equals(searchId))
+                    .filter(m -> m.id != null && m.id.equals(inputId))
                     .findFirst()
                     .orElse(null);
-            if (target == null) {
+            if (target == null)
                 System.out.println("⚠️  Bu ID'ye sahip geçerli bir maç bulunamadı. Tekrar deneyin.");
-            }
         }
-        final String targetId = target.id;
-        int targetGlobalIdx = allRecords.indexOf(target);
 
-        System.out.println("\n🆕 Hedef Oyun: " + target.homeTeam + " vs " + target.awayTeam);
-        System.out.println("   FT Score: " + target.ftScore() + " | HT Score: " + target.htScore());
+        final String targetId        = target.id;
+        final int    targetGlobalIdx = allRecords.indexOf(target);
+
+        // --- Hedef bilgileri ---
+        final String       targetFtScore      = target.ftScore();        // ör: "2-1"
+        final String       targetSymbolicHtFt = symbolicHtFt(target);   // ör: "1/2"
+        final List<String> eqSymbols          = equivalentSymbols(target); // ör: ["2/1"] veya ["2/X"] vb.
+
+        System.out.println("\n🆕 Hedef Oyun : " + target.homeTeam + " vs " + target.awayTeam);
+        System.out.println("   FT Score   : " + target.ftScore()  + " | HT Score: " + target.htScore());
+        System.out.println("   HT/FT      : " + (targetSymbolicHtFt != null ? targetSymbolicHtFt : "?"));
+        if (!eqSymbols.isEmpty())
+            System.out.println("   Eşdeğer    : " + eqSymbols + " (başarılı sayılır)");
         System.out.println("📊 Toplam geçerli maç sayısı: " + (valid.size() - 1) + "\n");
 
         List<Integer> oddsCols = new ArrayList<>();
         for (int i = 0; i < ALL_ODDS_COLS.size(); i++) oddsCols.add(i);
 
-        List<String> allFtScores = new ArrayList<>();
-        Random rng = new Random();
+        List<String> allFtScores      = new ArrayList<>();
+        Random       rng              = new Random();
+
+        int totalSuccessfulRuns   = 0;
+        int totalCorrectScoreHits = 0;
+        int totalHtFtHits         = 0;
+        int totalEqHits           = 0; // comeback + 1/X↔2/X vb.
 
         for (int run = 1; run <= RUNS; run++) {
             Collections.shuffle(oddsCols, rng);
@@ -273,7 +359,7 @@ public class Bet365FilterHunt {
                     activeCols.add(col);
                 } else {
                     int[] newPool = intersect(currentPool, cand);
-                    // Hedefin tekrar girmemesi için ID filtresi (intersect sonucunda da olmamalı ama garanti)
+                    // Hedef maçın pool'a girmemesini garanti et
                     newPool = Arrays.stream(newPool)
                             .filter(i -> !allRecords.get(i).id.equals(targetId))
                             .toArray();
@@ -283,63 +369,166 @@ public class Bet365FilterHunt {
                 }
 
                 if (currentPool.length >= 2 && currentPool.length <= 3) {
-                    System.out.println("=".repeat(80));
-                    System.out.println("🔁 RUN " + String.format("%02d", run));
-                    System.out.println("✅ " + currentPool.length + " maç bulundu\n");
-                    System.out.println(" 🔍 Kullanılan filtreler (" + activeCols.size() + " adet):");
-                    for (int ac : activeCols) {
-                        double val = target.oddsValue[ac] / 100.0;
-                        System.out.printf("   • %s  =  %.2f%n", ALL_ODDS_COLS.get(ac).displayName, val);
-                    }
-                    System.out.println("\n  " + "-".repeat(80));
-                    for (int idx : currentPool) {
-                        MatchRecord m = allRecords.get(idx);
-                        System.out.println("  " + m.toString());
-                    }
-                    for (int idx : currentPool) {
-                        allFtScores.add(allRecords.get(idx).ftScore());
-                    }
-                    Map<String, Long> freq = Arrays.stream(currentPool)
+
+                    // --- FT skor frekansı ---
+                    Map<String, Long> ftFreq = Arrays.stream(currentPool)
                             .mapToObj(i -> allRecords.get(i).ftScore())
                             .collect(Collectors.groupingBy(s -> s, Collectors.counting()));
-                    Map.Entry<String, Long> most = Collections.max(freq.entrySet(), Map.Entry.comparingByValue());
-                    double conf = (double) most.getValue() / currentPool.length * 100;
-                    System.out.printf("\n 🔮 Bu run tahmini: %s | Güven: %.1f%%%n", most.getKey(), conf);
-                    break;
-                }
-            }
+                    Map.Entry<String, Long> bestFt = Collections.max(
+                            ftFreq.entrySet(), Map.Entry.comparingByValue());
+                    String predictedFt = bestFt.getKey();
 
-            if (currentPool == null || currentPool.length < 2 || currentPool.length > 3) {
-                System.out.println("=".repeat(80));
-                System.out.println("🔁 RUN " + String.format("%02d", run));
-                System.out.println("⚠️  Uygun aralıkta maç bulunamadı (kalan: " +
-                        (currentPool == null ? "?" : currentPool.length) + ")");
+                    // --- HT/FT sembolik frekansı ---
+                    Map<String, Long> htFtFreq = Arrays.stream(currentPool)
+                            .mapToObj(i -> {
+                                String s = symbolicHtFt(allRecords.get(i));
+                                return s != null ? s : "?/?";
+                            })
+                            .collect(Collectors.groupingBy(s -> s, Collectors.counting()));
+                    Map.Entry<String, Long> bestHtFt = Collections.max(
+                            htFtFreq.entrySet(), Map.Entry.comparingByValue());
+                    String predictedHtFt = bestHtFt.getKey();
+
+                    // -----------------------------------------------
+                    // GÜVEN HESABI — sadece %100 olanlar işleme girer
+                    // -----------------------------------------------
+                    // Correct Score: tüm pool aynı FT skorunu taşımalı
+                    boolean allSameFt = ftFreq.size() == 1;
+                    // HT/FT: tüm pool aynı sembolik HT/FT'yi taşımalı
+                    boolean allSameHtFt = htFtFreq.size() == 1;
+
+                    if (!allSameFt && !allSameHtFt) {
+                        // %100 güven yok, bu run'u kaydet ama ekrana çıkarma
+                        for (int pidx : currentPool)
+                            allFtScores.add(allRecords.get(pidx).ftScore());
+                        break;
+                    }
+
+                    // -----------------------------------------------
+                    // BAŞARI KONTROLLERİ (%100 güvenli run'lar)
+                    // -----------------------------------------------
+                    boolean correctScoreHit = allSameFt
+                            && predictedFt.equals(targetFtScore);
+
+                    boolean htFtHit = allSameHtFt
+                            && targetSymbolicHtFt != null
+                            && predictedHtFt.equals(targetSymbolicHtFt);
+
+                    // Eşdeğer sembol hit (comeback: 1/2↔2/1 veya yarı grup: 1/X↔2/X)
+                    boolean eqHit = !htFtHit
+                            && allSameHtFt
+                            && !eqSymbols.isEmpty()
+                            && eqSymbols.contains(predictedHtFt);
+
+                    boolean anyHit = correctScoreHit || htFtHit || eqHit;
+
+                    // Sayaçlar
+                    if (anyHit) {
+                        totalSuccessfulRuns++;
+                        if (correctScoreHit) totalCorrectScoreHits++;
+                        if (htFtHit)         totalHtFtHits++;
+                        if (eqHit)           totalEqHits++;
+                    }
+
+                    // -----------------------------------------------
+                    // EKRAN ÇIKTISI — sadece başarılı %100 run'lar
+                    // -----------------------------------------------
+                    if (anyHit) {
+                        System.out.println("=".repeat(80));
+
+                        StringBuilder header = new StringBuilder();
+                        header.append("🔁 RUN ").append(String.format("%03d", run));
+                        if (correctScoreHit) header.append("  ✅ CORRECT SCORE HIT");
+                        if (htFtHit)         header.append("  ✅ HT/FT HIT");
+                        if (eqHit) {
+                            // Hangi kural tetiklendi?
+                            if (predictedHtFt.equals("2/1") || predictedHtFt.equals("1/2"))
+                                header.append("  🔄 COMEBACK HIT");
+                            else
+                                header.append("  🔄 EŞDEĞer HIT");
+                        }
+                        System.out.println(header);
+                        System.out.println("   Pool: " + currentPool.length + " maç  |  Güven: 100%\n");
+
+                        System.out.println(" 🔍 Kullanılan filtreler (" + activeCols.size() + " adet):");
+                        for (int ac : activeCols) {
+                            double val = target.oddsValue[ac] / 100.0;
+                            System.out.printf("   • %-22s =  %.2f%n",
+                                    ALL_ODDS_COLS.get(ac).displayName, val);
+                        }
+
+                        System.out.println("\n  " + "-".repeat(78));
+                        for (int pidx : currentPool) {
+                            MatchRecord m = allRecords.get(pidx);
+                            String sym = symbolicHtFt(m);
+                            System.out.printf("  %s   HT/FT: %s%n",
+                                    m.toString(), sym != null ? sym : "?/?");
+                        }
+                        System.out.println("  " + "-".repeat(78));
+
+                        if (correctScoreHit)
+                            System.out.printf(" 🎯 Correct Score TUTTU : %s | Güven: 100%%%n", predictedFt);
+                        if (htFtHit)
+                            System.out.printf(" 🎯 HT/FT TUTTU         : %s | Güven: 100%%%n", predictedHtFt);
+                        if (eqHit)
+                            System.out.printf(" 🔄 EŞDEĞer TUTTU       : tahmin=%s ↔ hedef=%s | Güven: 100%%%n",
+                                    predictedHtFt, targetSymbolicHtFt);
+                        System.out.println();
+                    }
+
+                    // FT skorları her zaman istatistik için kaydet
+                    for (int pidx : currentPool)
+                        allFtScores.add(allRecords.get(pidx).ftScore());
+
+                    break; // bu run bitti
+                }
             }
         }
 
+        // =========================================================
+        // YEKUN NƏTİCƏ
+        // =========================================================
         System.out.println("\n" + "=".repeat(80));
         System.out.println("📊 YEKUN NƏTİCƏ — " + RUNS + " RUN\n");
+
+        System.out.println("🏆 BAŞARI ÖZETİ:");
+        System.out.printf("   Başarılı Run Sayısı  : %d / %d  (%.1f%%)%n",
+                totalSuccessfulRuns, RUNS,
+                (double) totalSuccessfulRuns / RUNS * 100);
+        System.out.printf("   ✅ Correct Score Hit : %d run%n", totalCorrectScoreHits);
+        System.out.printf("   ✅ HT/FT Hit         : %d run%n", totalHtFtHits);
+        System.out.printf("   🔄 Eşdeğer Hit       : %d run  (Comeback / 1X↔2X)%n", totalEqHits);
+        System.out.println();
+
         if (!allFtScores.isEmpty()) {
             Map<String, Long> globalFreq = allFtScores.stream()
                     .collect(Collectors.groupingBy(s -> s, Collectors.counting()));
             long total = allFtScores.size();
+
             System.out.println("🏆 SKOR DAĞILIMI:");
             globalFreq.entrySet().stream()
                     .sorted(Map.Entry.<String, Long>comparingByValue().reversed())
                     .forEach(e -> {
-                        long cnt = e.getValue();
+                        long   cnt = e.getValue();
                         double pct = (double) cnt / total * 100;
                         String bar = "█".repeat((int) Math.min(cnt, 40));
-                        System.out.printf("  %-12s %3dx   %5.1f%%   %s%n", e.getKey(), cnt, pct, bar);
+                        System.out.printf("  %-12s %3dx   %5.1f%%   %s%n",
+                                e.getKey(), cnt, pct, bar);
                     });
-            Map.Entry<String, Long> champion = Collections.max(globalFreq.entrySet(), Map.Entry.comparingByValue());
+
+            Map.Entry<String, Long> champion = Collections.max(
+                    globalFreq.entrySet(), Map.Entry.comparingByValue());
             double finalConf = (double) champion.getValue() / total * 100;
-            System.out.printf("\n🔮 FİNAL PROQNOZ: %s | Etibarlılık: %.1f%%%n", champion.getKey(), finalConf);
+            System.out.printf("%n🔮 FİNAL PROQNOZ: %s | Etibarlılıq: %.1f%%%n",
+                    champion.getKey(), finalConf);
         } else {
-            System.out.println("Hiçbir run’da uygun havuz bulunamadı.");
+            System.out.println("Hiçbir run'da uygun havuz bulunamadı.");
         }
     }
 
+    // =========================================================
+    // Constructor — DB bağlantısı + veri yükleme
+    // =========================================================
     public Bet365FilterHunt() {
         try {
             Class.forName("org.postgresql.Driver");
