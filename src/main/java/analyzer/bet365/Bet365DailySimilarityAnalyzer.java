@@ -11,10 +11,7 @@ import java.net.http.HttpResponse;
 import java.sql.*;
 import java.time.Duration;
 import java.time.LocalDate;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.stream.Collectors;
 
 public class Bet365DailySimilarityAnalyzer {
@@ -120,15 +117,19 @@ public class Bet365DailySimilarityAnalyzer {
         Map<String, String> odds = new HashMap<>();
     }
 
-    // Geçmiş maç kaydı (veritabanından gelen)
     static class HistRecord {
         String league, date, homeTeam, awayTeam, id;
         int htHome, htAway, ftHome, ftAway;
         double[] odds;
-
         HistRecord(int size) { odds = new double[size]; }
         String ftScore() { return (ftHome >= 0) ? ftHome + "-" + ftAway : "?-?"; }
         String htScore() { return (htHome >= 0) ? htHome + "-" + htAway : "?-?"; }
+    }
+
+    static class SimilarMatch {
+        String league, date, homeTeam, awayTeam;
+        String htScore, ftScore;
+        double similarityPercent;
     }
 
     // ==================== Veritabanı bağlantısı ====================
@@ -238,15 +239,6 @@ public class Bet365DailySimilarityAnalyzer {
     }
 
     private void fetchOddsForMatch(MatchInfo mi) {
-        // Skor çekme (gerekirse, ama similarity için skor gerekmez, sadece oranlar lazım)
-        String scoreUrl = "https://5.flashscore.ninja/5/x/feed/df_sui_1_" + mi.id;
-        try {
-            HttpRequest req = HttpRequest.newBuilder().uri(URI.create(scoreUrl))
-                    .header("User-Agent", "Mozilla/5.0").header("x-fsign", "SW9D1eZo").GET().build();
-            HttpResponse<String> resp = HTTP_CLIENT.send(req, HttpResponse.BodyHandlers.ofString());
-            // skor ayrıştırma atlanabilir
-        } catch (Exception _) {}
-
         String oddsUrl = String.format(
                 "https://global.ds.lsapp.eu/odds/pq_graphql?_hash=oce&eventId=%s&projectId=5&geoIpCode=AZ&geoIpSubdivisionCode=AZBA",
                 mi.id);
@@ -387,141 +379,195 @@ public class Bet365DailySimilarityAnalyzer {
         return "-";
     }
 
-    // ==================== BENZERLİK ANALİZİ ====================
-    private static final double[] TOLERANCES = {0.00, 0.01};
-    private static final double[] SIMILARITIES = {0.99, 0.97, 0.95};
+    // ==================== 5 FARKLI BENZERLİK METRİĞİ ====================
 
-    private void analyzeMatchSimilarity(MatchInfo match) {
-        System.out.println("\n⚽ " + match.home + " vs " + match.away + " (" + match.date + ")");
-        System.out.println("═══════════════════════════════════════════════════════════════");
+    // 1. Euclidean Distance
+    private double euclideanDistance(double[] a, double[] b) {
+        double sum = 0.0;
+        int n = 0;
+        for (int i = 0; i < a.length; i++) {
+            if (a[i] != 0.0 && b[i] != 0.0 && !Double.isNaN(a[i]) && !Double.isNaN(b[i])) {
+                double diff = a[i] - b[i];
+                sum += diff * diff;
+                n++;
+            }
+        }
+        return (n == 0) ? Double.MAX_VALUE : Math.sqrt(sum);
+    }
 
-        // Günlük maçı HistRecord'a dönüştür (odds dizisi)
+    // 2. Cosine Similarity
+    private double cosineSimilarity(double[] a, double[] b) {
+        double dot = 0.0, normA = 0.0, normB = 0.0;
+        int n = 0;
+        for (int i = 0; i < a.length; i++) {
+            if (a[i] != 0.0 && b[i] != 0.0 && !Double.isNaN(a[i]) && !Double.isNaN(b[i])) {
+                dot += a[i] * b[i];
+                normA += a[i] * a[i];
+                normB += b[i] * b[i];
+                n++;
+            }
+        }
+        if (n == 0 || normA == 0 || normB == 0) return 0.0;
+        return dot / (Math.sqrt(normA) * Math.sqrt(normB));
+    }
+
+    // 3. Pearson Correlation
+    private double pearsonCorrelation(double[] a, double[] b) {
+        List<Double> listA = new ArrayList<>();
+        List<Double> listB = new ArrayList<>();
+        for (int i = 0; i < a.length; i++) {
+            if (a[i] != 0.0 && b[i] != 0.0 && !Double.isNaN(a[i]) && !Double.isNaN(b[i])) {
+                listA.add(a[i]);
+                listB.add(b[i]);
+            }
+        }
+        int n = listA.size();
+        if (n < 2) return 0.0;
+        double meanA = listA.stream().mapToDouble(Double::doubleValue).average().orElse(0.0);
+        double meanB = listB.stream().mapToDouble(Double::doubleValue).average().orElse(0.0);
+        double num = 0.0, denA = 0.0, denB = 0.0;
+        for (int i = 0; i < n; i++) {
+            double da = listA.get(i) - meanA;
+            double db = listB.get(i) - meanB;
+            num += da * db;
+            denA += da * da;
+            denB += db * db;
+        }
+        if (denA == 0 || denB == 0) return 0.0;
+        return num / Math.sqrt(denA * denB);
+    }
+
+    // 4. Manhattan Distance (L1)
+    private double manhattanDistance(double[] a, double[] b) {
+        double sum = 0.0;
+        int n = 0;
+        for (int i = 0; i < a.length; i++) {
+            if (a[i] != 0.0 && b[i] != 0.0 && !Double.isNaN(a[i]) && !Double.isNaN(b[i])) {
+                sum += Math.abs(a[i] - b[i]);
+                n++;
+            }
+        }
+        return (n == 0) ? Double.MAX_VALUE : sum;
+    }
+
+    // 5. Tolerance-based Similarity (original method)
+    private double toleranceSimilarity(double[] target, double[] row, double tol) {
+        int valid = 0, match = 0;
+        for (int i = 0; i < target.length; i++) {
+            double tv = target[i], rv = row[i];
+            if (tv == 0.0 || Double.isNaN(tv) || Double.isNaN(rv)) continue;
+            double relDiff = Math.abs(rv - tv) / tv;
+            valid++;
+            if (relDiff <= tol) match++;
+        }
+        return (valid == 0) ? 0.0 : (double) match / valid;
+    }
+
+    // ==================== ÇOKLU METRİK ANALİZ ====================
+    private void analyzeMatchSimilarityMultiMetric(MatchInfo match) {
+        System.out.println("\n⚽ " + match.home + " vs " + match.away);
+        System.out.println("═══════════════════════════════════════════════════════════");
+
+        // Hedef vektörü oluştur
         HistRecord target = new HistRecord(ALL_COLS.size());
         target.homeTeam = match.home;
         target.awayTeam = match.away;
-        target.id = "today_" + match.id; // tarihî kayıtlarla çakışmasın diye
+        target.id = "today_" + match.id;
         for (int i = 0; i < ALL_COLS.size(); i++) {
             String key = ALL_COLS.get(i).flashscoreKey;
             String val = match.odds.getOrDefault(key, "-");
             target.odds[i] = parseOdds(val);
         }
 
-        List<CombinationResult> allCombinations = new ArrayList<>();
-        for (double tol : TOLERANCES) {
-            for (double sim : SIMILARITIES) {
-                System.out.printf("→ Tolerance: %.1f%% | Similarity: %.1f%%", tol * 100, sim * 100);
-                List<SimilarMatch> matches = findSimilar(target, tol, sim);
-                System.out.printf(" → %d maç bulundu%n", matches.size());
-                if (!matches.isEmpty()) {
-                    allCombinations.add(new CombinationResult(tol, sim, matches));
-                }
+        // Her metrik için en benzer 5 maçı bul (farklı eşiklerle)
+        Map<String, List<SimilarMatch>> metricResults = new LinkedHashMap<>();
+        metricResults.put("Euclidean", findSimilarByMetric(target, "euclidean", 5));
+        metricResults.put("Cosine", findSimilarByMetric(target, "cosine", 5));
+        metricResults.put("Pearson", findSimilarByMetric(target, "pearson", 5));
+        metricResults.put("Manhattan", findSimilarByMetric(target, "manhattan", 5));
+        metricResults.put("Tolerance", findSimilarByMetric(target, "tolerance", 5, 0.02));
+
+        // Sonuçları yazdır
+        for (Map.Entry<String, List<SimilarMatch>> entry : metricResults.entrySet()) {
+            String metric = entry.getKey();
+            List<SimilarMatch> matches = entry.getValue();
+            System.out.printf("\n📐 %s BENZERLİK (En yakın 5 maç):\n", metric);
+            if (matches.isEmpty()) {
+                System.out.println("   Hiçbir benzer maç bulunamadı.");
+                continue;
+            }
+            for (int i = 0; i < matches.size(); i++) {
+                SimilarMatch m = matches.get(i);
+                System.out.printf("   %d. %-12s %-22s %-5s %-5s (skor: %.3f)\n",
+                        i+1, m.date, m.homeTeam + " vs " + m.awayTeam,
+                        m.htScore, m.ftScore, m.similarityPercent);
+            }
+            // En sık görülen final skoru tahmini
+            Map<String, Long> ftCount = matches.stream()
+                    .collect(Collectors.groupingBy(m -> m.ftScore, Collectors.counting()));
+            if (!ftCount.isEmpty()) {
+                String mostCommon = ftCount.entrySet().stream()
+                        .max(Map.Entry.comparingByValue()).get().getKey();
+                long count = ftCount.get(mostCommon);
+                double conf = (double) count / matches.size() * 100;
+                System.out.printf("   🔮 Tahmin (FT): %s (güven: %%.1f%% - %d/%d)\n", mostCommon, conf, count, matches.size());
             }
         }
-
-        printSimilarityResults(allCombinations);
+        System.out.println("───────────────────────────────────────────────────────────");
     }
 
-    private List<SimilarMatch> findSimilar(HistRecord target, double tol, double simThreshold) {
-        List<SimilarMatch> result = new ArrayList<>();
+    private List<SimilarMatch> findSimilarByMetric(HistRecord target, String metric, int topN) {
+        return findSimilarByMetric(target, metric, topN, 0.0);
+    }
+
+    private List<SimilarMatch> findSimilarByMetric(HistRecord target, String metric, int topN, double extraParam) {
+        List<SimilarMatch> candidates = new ArrayList<>();
         double[] tOdds = target.odds;
-        int oddsLen = tOdds.length;
 
         for (HistRecord row : allRecords) {
             if (row.id.equals(target.id)) continue;
-            int valid = 0, match = 0;
-            for (int i = 0; i < oddsLen; i++) {
-                double tv = tOdds[i], rv = row.odds[i];
-                if (tv == 0.0 || Double.isNaN(tv) || Double.isNaN(rv)) continue;
-                double denom = (tv != 0.0) ? tv : 1.0;
-                double relDiff = Math.abs(rv - tv) / denom;
-                valid++;
-                if (!Double.isNaN(relDiff) && relDiff <= tol) match++;
+            double score = 0.0;
+            switch (metric.toLowerCase()) {
+                case "euclidean":
+                    score = -euclideanDistance(tOdds, row.odds);
+                    break;
+                case "cosine":
+                    score = cosineSimilarity(tOdds, row.odds);
+                    break;
+                case "pearson":
+                    score = pearsonCorrelation(tOdds, row.odds);
+                    break;
+                case "manhattan":
+                    score = -manhattanDistance(tOdds, row.odds);
+                    break;
+                case "tolerance":
+                    score = toleranceSimilarity(tOdds, row.odds, extraParam);
+                    break;
+                default: return candidates;
             }
-            if (valid > 0) {
-                double ratio = (double) match / valid;
-                if (ratio >= simThreshold) {
-                    SimilarMatch sm = new SimilarMatch();
-                    sm.league = row.league;
-                    sm.date = row.date;
-                    sm.homeTeam = row.homeTeam;
-                    sm.awayTeam = row.awayTeam;
-                    sm.htScore = row.htScore();
-                    sm.ftScore = row.ftScore();
-                    sm.similarityPercent = ratio * 100.0;
-                    result.add(sm);
-                }
-            }
-        }
-        return result;
-    }
+            if (Double.isNaN(score)) continue;
 
-    private void printSimilarityResults(List<CombinationResult> results) {
-        if (results.isEmpty()) {
-            System.out.println("❌ Hiçbir kombinasyonda yeterli benzerlik bulunamadı.\n");
-            return;
+            // Filtreleme eşikleri (deneysel)
+            if (metric.equals("euclidean") && score > -0.5) continue;
+            if (metric.equals("cosine") && score < 0.7) continue;
+            if (metric.equals("pearson") && score < 0.5) continue;
+            if (metric.equals("manhattan") && score > -2.0) continue;
+            if (metric.equals("tolerance") && score < 0.85) continue;
+
+            SimilarMatch sm = new SimilarMatch();
+            sm.league = row.league;
+            sm.date = row.date;
+            sm.homeTeam = row.homeTeam;
+            sm.awayTeam = row.awayTeam;
+            sm.htScore = row.htScore();
+            sm.ftScore = row.ftScore();
+            sm.similarityPercent = score;
+            candidates.add(sm);
         }
 
-        results.sort((a, b) -> Double.compare(b.similarity, a.similarity));
-        for (CombinationResult res : results) {
-            System.out.printf("%n✅ Tolerance: %.1f%% | Similarity: %.1f%% → %d maç%n",
-                    res.tolerance * 100, res.similarity * 100, res.matches.size());
-            res.matches.stream()
-                    .sorted((m1, m2) -> Double.compare(m2.similarityPercent, m1.similarityPercent))
-                    .limit(10)
-                    .forEach(m -> System.out.printf("   %-25s %-20s %-20s %-5s %-5s  %%%.1f%n",
-                            m.league, m.date, m.homeTeam + " vs " + m.awayTeam,
-                            m.htScore, m.ftScore, m.similarityPercent));
-
-            Map<String, Long> ftCount = res.matches.stream()
-                    .collect(Collectors.groupingBy(m -> m.ftScore, Collectors.counting()));
-            if (!ftCount.isEmpty()) {
-                Map.Entry<String, Long> mostCommon = ftCount.entrySet().stream()
-                        .max(Map.Entry.comparingByValue()).orElse(null);
-                if (mostCommon != null) {
-                    double conf = (double) mostCommon.getValue() / res.matches.size() * 100;
-                    System.out.printf("   🔮 Tahmin (FT Skor): %s | Güven: %%%.1f (%d/%d)%n",
-                            mostCommon.getKey(), conf, mostCommon.getValue(), res.matches.size());
-                }
-            }
-        }
-
-        // En iyi sonuç
-        CombinationResult best = results.get(0);
-        System.out.println("\n🏆 EN İYİ BENZERLİK SONUCU:");
-        System.out.printf("   Tolerance: %.1f%%, Similarity: %.1f%% → %d maç%n",
-                best.tolerance * 100, best.similarity * 100, best.matches.size());
-        best.matches.stream()
-                .sorted((m1, m2) -> Double.compare(m2.similarityPercent, m1.similarityPercent))
-                .limit(12)
-                .forEach(m -> System.out.printf("   %-25s %-20s %-20s %-5s %-5s  %%%.1f%n",
-                        m.league, m.date, m.homeTeam + " vs " + m.awayTeam,
-                        m.htScore, m.ftScore, m.similarityPercent));
-        Map<String, Long> bestFtCount = best.matches.stream()
-                .collect(Collectors.groupingBy(m -> m.ftScore, Collectors.counting()));
-        if (!bestFtCount.isEmpty()) {
-            Map.Entry<String, Long> mostCommon = bestFtCount.entrySet().stream()
-                    .max(Map.Entry.comparingByValue()).orElse(null);
-            if (mostCommon != null) {
-                double conf = (double) mostCommon.getValue() / best.matches.size() * 100;
-                System.out.printf("%n🔮 FİNAL TAHMİN: %s (Güven: %%%.1f)%n", mostCommon.getKey(), conf);
-            }
-        }
-        System.out.println();
-    }
-
-    // ==================== YARDIMCI SINIFLAR ====================
-    static class SimilarMatch {
-        String league, date, homeTeam, awayTeam;
-        String htScore, ftScore;
-        double similarityPercent;
-    }
-
-    static class CombinationResult {
-        double tolerance, similarity;
-        List<SimilarMatch> matches;
-        CombinationResult(double t, double s, List<SimilarMatch> m) {
-            tolerance = t; similarity = s; matches = m;
-        }
+        candidates.sort((a,b) -> Double.compare(b.similarityPercent, a.similarityPercent));
+        if (candidates.size() > topN) candidates = candidates.subList(0, topN);
+        return candidates;
     }
 
     // ==================== ANA ÇALIŞTIRMA ====================
@@ -531,13 +577,12 @@ public class Bet365DailySimilarityAnalyzer {
             System.out.println("❌ Bugünkü maç bulunamadı!");
             return;
         }
-        System.out.println("\n🤖 BENZERLİK TABANLI OTOMATİK ANALİZ BAŞLIYOR (" + todayMatches.size() + " maç)\n");
+        System.out.println("\n🤖 5 FARKLI BENZERLİK METRİĞİ İLE ANALİZ BAŞLIYOR (" + todayMatches.size() + " maç)\n");
         for (MatchInfo match : todayMatches) {
-            analyzeMatchSimilarity(match);
+            analyzeMatchSimilarityMultiMetric(match);
         }
         System.out.println("═══════════════════════════════════════════════════════════════");
         System.out.println("✅ TÜM ANALİZLER TAMAMLANDI");
-        System.out.println("═══════════════════════════════════════════════════════════════");
     }
 
     public static void main(String[] args) {
