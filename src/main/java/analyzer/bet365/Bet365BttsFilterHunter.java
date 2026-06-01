@@ -7,25 +7,13 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * ═══════════════════════════════════════════════════════════════════════════
- *  Bet365BttsFilterHunter
+ *  Bet365BttsFilterHunter (Dəyişdirilmiş versiya)
  * ───────────────────────────────────────────────────────────────────────────
- *  AXIN (sənin dediyin kimi):
- *   1) 20 random oyun seç.
- *   2) 1-ci oyun (seed) üçün: random sütunları bir-bir əlavə edib hovuzu
- *      DARALT — DƏQİQ 2-5 oyun qalana qədər. Bu sütun-ardıcıllığı = "filter".
- *      Hovuzun BTTS proqnozu seed-in əsl BTTS-i ilə uyğundursa → uğurlu filter.
- *      Min-maks 2-5 oyun (158/279 kimi böyük hovuz YOX).
- *   3) Bir seed üçün ən yaxşı 5-10 belə filter yığılır (List).
- *   4) Hər filter QALAN 19 oyuna (cəmi 20) tətbiq olunur: hər oyun öz əmsalları
- *      ilə eyni sütun-ardıcıllığında 2-5-ə daraldılır, BTTS proqnozu çıxır.
- *   5) Filter 20-dən ≥17-ni düz proqnozlayırsa → İDEAL FİLTER tapıldı.
- *   6) Olmasa loop təkrar (20 oyun eyni qala bilər; seed dəyişir, yeni random
- *      ardıcıllıqlar yoxlanır).
- *
- *  UĞUR KRİTERİYASI: yalnız BTTS (KG Var / KG Yox).  Qəbul: 17/20.
- *  PARALLELLİK: Virtual Threads (sənin tələbin).
- *
- *  Java 21.  İşə sal:  java -Xmx6g Bet365BttsFilterHunter.java
+ *  Tələblər:
+ *    1) Sintetik data yoxdur, yalnız real PostgreSQL.
+ *    2) Minimum filter uzunluğu = 6 sütun.
+ *    3) Hunt: hər oyun üçün 100 random filter yoxla, həmin oyunu düz bilənləri
+ *       digər 19 oyunda sına. 17/20 tapılanda dayan.
  * ═══════════════════════════════════════════════════════════════════════════
  */
 public class Bet365BttsFilterHunter {
@@ -36,30 +24,30 @@ public class Bet365BttsFilterHunter {
     static final String DB_PASS  = "fuad123";
     static final String TABLE    = "bet365_matches";
 
-    static final int    GAMES         = 20;     // oyun sayı
-    static final int    NEED_HITS     = 17;     // 17/20
-    static final int    POOL_MIN      = 2;      // hovuz alt sərhəd
-    static final int    POOL_MAX      = 5;      // hovuz üst sərhəd
+    static final int    GAMES         = 20;      // oyun sayı
+    static final int    NEED_HITS     = 17;      // 17/20
+    static final int    POOL_MIN      = 2;       // hovuz alt sərhəd
+    static final int    POOL_MAX      = 5;       // hovuz üst sərhəd
     static final long   SEED          = 123L;
 
-    // ───── DELİ AXTARIŞ: sonsuz loop + hill-climbing + restart ─────
-    static final int    MIN_FILTER_LEN   = 3;       // filterdə min sütun
-    static final int    MAX_FILTER_LEN   = 7;       // filterdə maks sütun
-    static final int    RANDOM_STARTS    = 600;     // hər restartda neçə random başlanğıc nöqtəsi
-    static final int    CLIMB_STEPS      = 40;      // bir başlanğıcdan neçə hill-climb addımı
-    static final int    NEIGHBORS_PER_STEP = 40;    // hər addımda neçə qonşu yoxlanır
-    static final int    SEED_TRIES       = 120;     // hər oyun üçün neçə dəfə toxum filteri axtarılsın
-    static final int    STAGNATION_RESTARTS = 15;   // bu qədər restartda yaxşılaşma olmasa → yeni 20 oyun
-    static final boolean RESELECT_ON_STUCK = true;  // ilişəndə yeni 20 oyun seçilsinmi
-    static final long   TIME_LIMIT_MS    = 6L*60*60*1000; // 6 saat (təhlükəsizlik limiti; 0 = limitsiz)
+    // Yeni tələb: minimum filter uzunluğu 6
+    static final int    MIN_FILTER_LEN   = 6;
+    static final int    MAX_FILTER_LEN   = 20;     // istəyə görə 10-12 edilə bilər
 
-    // ADAPTİV DARALMA: ortaq filter sütunları oyunu 2-5-ə endirə bilməsə,
-    // oyunun ÖZ əmsallarına uyğun ən-yaxşı doldurucu sütunlar avtomatik əlavə olunur.
-    static final boolean ADAPTIVE_FILL   = true;
-    static final int     FILL_MAX        = 4;       // maks neçə doldurucu sütun əlavə oluna bilər
+    static final int    RANDOM_STARTS    = 600;    // hər restartda random başlanğıc (toxum + random)
+    static final int    CLIMB_STEPS      = 40;
+    static final int    NEIGHBORS_PER_STEP = 40;
 
-    static final boolean USE_SYNTHETIC = false; // offline test üçün true
-    static final int     SYNTHETIC_ROWS = 60000;
+    // HUNT üçün parametrlər
+    static final int    HUNT_FILTERS_PER_SEED = 100;   // hər oyun üçün yoxlanacaq random filter sayı
+    static final int    TOP_HUNT_KEEP        = 10;     // ən yaxşı neçə filter saxlanacaq
+
+    static final int    STAGNATION_RESTARTS = 15;
+    static final boolean RESELECT_ON_STUCK = true;
+    static final long   TIME_LIMIT_MS    = 6L*60*60*1000;
+
+    // Adaptiv doldurma SÖNDÜRÜLÜR (təmiz ortaq filter)
+    static final boolean ADAPTIVE_FILL   = false;
 
     /* ===================== Sütunlar ===================== */
     record Col(String sql, String disp) {}
@@ -99,14 +87,12 @@ public class Bet365BttsFilterHunter {
         return List.copyOf(c);
     }
 
-    /* ===================== Data (sütun-bazlı) ===================== */
+    /* ===================== Data ===================== */
     static int N;
     static int[][]  code;     // code[col][row] = round(odds*100); 0 = yox
     static byte[]   btts;     // 1=KG Var, 0=KG Yox, -1=skor yox
     static int[]    ftH, ftA, htH, htA;
     static String[] home, away, date, league;
-
-    // İNVERTED İNDEKS: col -> (oddsCode -> sorted row[])
     static List<Map<Integer,int[]>> index;
 
     static String bttsStr(int v){ return v==1?"KG Var":v==0?"KG Yox":"?"; }
@@ -116,28 +102,26 @@ public class Bet365BttsFilterHunter {
         System.setOut(new java.io.PrintStream(System.out, true, java.nio.charset.StandardCharsets.UTF_8));
         long t0 = System.currentTimeMillis();
         head("🎯 BET365 BTTS FILTER HUNTER  —  20 oyun → 17 düz (KG Var/Yox)");
-        System.out.println("🧵 Virtual Threads | hovuz daralma: " + POOL_MIN + "-" + POOL_MAX + " oyun");
+        System.out.println("🧵 Virtual Threads | hovuz daralma: " + POOL_MIN + "-" + POOL_MAX + " oyun | MIN_FILTER_LEN="+MIN_FILTER_LEN);
 
-        if (USE_SYNTHETIC){ System.out.println("📂 🧪 SİNTETİK data"); loadSynthetic(); }
-        else { System.out.println("📂 🐘 PostgreSQL → " + TABLE); loadDb(); }
+        // Yalnız real DB
+        System.out.println("📂 🐘 PostgreSQL → " + TABLE);
+        loadDb();
         System.out.println("✅ " + N + " oyun, " + NC + " sütun");
         buildIndex();
 
-        // BTTS-i olan oyunlar
         int[] valid = validRows();
         System.out.println("✅ BTTS hesablana bilən oyun: " + valid.length);
         if (valid.length < GAMES){ System.out.println("❌ Kifayət oyun yoxdur."); return; }
 
         Random rng = new Random(SEED);
         int[] games = pick(valid, GAMES, rng);
-
         sec("🎲 SEÇİLƏN " + GAMES + " OYUN");
         for (int i = 0; i < games.length; i++)
             System.out.printf("  %2d. %-34s MS:%s → %s%n", i+1, home[games[i]]+" v "+away[games[i]],
                     ftScore(games[i]), bttsStr(btts[games[i]]));
 
-        // ════════ DELİ AXTARIŞ MOTORU: sonsuz loop + hill-climbing + restart ════════
-        sec("🔥 DELİ AXTARIŞ — sonsuz loop, hill-climbing, " + NEED_HITS + "/" + GAMES + " tapılana qədər");
+        sec("🔥 DELİ AXTARIŞ — hər oyun üçün 100 random filter yoxlanır, sonra digər 19 oyunda sına");
         System.out.println("  (dayandırmaq üçün Ctrl+C — ən yaxşı nəticə daim ekranda yenilənir)");
 
         CommonFilter best = null;
@@ -148,22 +132,27 @@ public class Bet365BttsFilterHunter {
         outer:
         while (true){
             restart++;
-            // bu restart üçün toxumlar (hər oyunun öz filterlərindən) + parametrli random
             long base = SEED * 1_000_003L + restart * 7919L;
-            List<int[]> seeds = seedCandidates(games, base);
+            // YENİ HUNT: hər oyun üçün 100 random filter yaradıb digərlərində sına
+            List<int[]> seeds = huntBestFilters(games, base);
 
-            // paralel: hər task bir random/toxum başlanğıcdan hill-climb edir
-            int starts = RANDOM_STARTS + seeds.size();
-            final int[] gms = games;   // lambda üçün effectively-final snapshot
-            List<Callable<CommonFilter>> tasks = new ArrayList<>(starts);
-            for (int s = 0; s < starts; s++){
+            // seeds artıq ən yaxşı filterlərdir. Onları hill-climbing ilə yaxşılaşdıra bilərik.
+            // Lakin istəsək, sadəcə seeds içində ən yüksək hit sayını axtara bilərik.
+            // Paralel hill-climbing də edə bilərik.
+            final int[] gms = games;
+            List<Callable<CommonFilter>> tasks = new ArrayList<>();
+            // seeds-dən əlavə random başlanğıclar da əlavə edirik
+            for (int s = 0; s < RANDOM_STARTS; s++){
                 final long sd = base * 31 + s;
-                final int  si = s;
                 tasks.add(() -> {
                     Random r = new Random(sd);
-                    int[] start = (si < seeds.size()) ? seeds.get(si) : randomCols(r);
-                    return hillClimb(start, gms, r);   // local search
+                    int[] start = randomCols(r);
+                    return hillClimb(start, gms, r);
                 });
+            }
+            // Seeds-ə də hill-climb tətbiq edirik
+            for (int[] seed : seeds){
+                tasks.add(() -> hillClimb(seed, gms, new Random(base)));
             }
 
             CommonFilter roundBest = null;
@@ -175,7 +164,7 @@ public class Bet365BttsFilterHunter {
                         best = c;
                         System.out.printf("  ⬆️ [restart %d] yeni REKORD: %d/%d  (%d sütun: %s)%n",
                                 restart, best.hits, GAMES, best.cols.length, names(best.cols));
-                        if (best.hits >= NEED_HITS) break outer;   // 🎉 tapıldı
+                        if (best.hits >= NEED_HITS) break outer;
                     }
                 }
             }
@@ -183,12 +172,11 @@ public class Bet365BttsFilterHunter {
             if (best != null && best.hits > bestEver){ bestEver = best.hits; stagnation = 0; }
             else stagnation++;
 
-            long el = (System.currentTimeMillis() - tStart);
+            long el = System.currentTimeMillis() - tStart;
             System.out.printf("  · restart %d bitdi | round ən yaxşı %d/%d | qlobal %d/%d | stagn %d | %.0f san%n",
                     restart, roundBest==null?0:roundBest.hits, GAMES, best==null?0:best.hits, GAMES,
                     stagnation, el/1000.0);
 
-            // ilişəndə yeni 20 oyun seç
             if (RESELECT_ON_STUCK && stagnation >= STAGNATION_RESTARTS){
                 games = pick(valid, GAMES, rng);
                 bestEver = -1; best = null; stagnation = 0;
@@ -220,50 +208,131 @@ public class Bet365BttsFilterHunter {
         System.out.printf("%n⏱️  Ümumi vaxt: %.1f san%n", (System.currentTimeMillis()-tStart)/1000.0);
     }
 
-    /* ===================== ORTAQ FİLTER + HILL CLIMBING ===================== */
+    /* ===================== HUNT: hər oyun üçün 100 random filter, sonra digər 19-da sına ===================== */
+    static List<int[]> huntBestFilters(int[] games, long base) throws Exception {
+        // games: 20 oyunun indeksləri
+        // Hər oyun üçün ayrı-ayrılıqda 100 random filter yoxla və o oyunu düz bilənləri yadda saxla.
+        // Sonra hər belə filteri qalan 19 oyunda sına və ən yaxşı TOP_HUNT_KEEP filteri qaytar.
+        List<int[]> allCandidates = Collections.synchronizedList(new ArrayList<>());
+        List<Callable<Void>> tasks = new ArrayList<>();
+        for (int idx = 0; idx < games.length; idx++) {
+            final int gameIdx = games[idx];
+            final int targetBtts = btts[gameIdx];
+            final long seedOff = base * 101 + idx;
+            tasks.add(() -> {
+                Random r = new Random(seedOff);
+                List<int[]> goodForThis = new ArrayList<>();
+                for (int t = 0; t < HUNT_FILTERS_PER_SEED; t++) {
+                    int[] cols = randomCols(r); // minimum 6 sütun
+                    // Yalnız bu tək oyun üçün filterin nəticəsini yoxla (adaptiv doldurma OLMADAN)
+                    int pred = applyFilterSingle(cols, gameIdx);
+                    if (pred == targetBtts) {
+                        goodForThis.add(cols);
+                    }
+                }
+                // İndi hər bir yaxşı filteri digər 19 oyunda sına
+                // Lakin hər filter üçün countHits etmək baha olar. Sadəcə ən yaxşı bir neçəsini saxlayaq.
+                // Biz bütün filterləri yığıb əsas thread-də sıralaya da bilərik.
+                synchronized (allCandidates) {
+                    allCandidates.addAll(goodForThis);
+                }
+                return null;
+            });
+        }
+        try (ExecutorService ex = Executors.newVirtualThreadPerTaskExecutor()) {
+            ex.invokeAll(tasks);
+        }
+        // Bütün namizəd filterləri (hər oyundan gələn) topladıq. İndi hər birini bütün 20 oyun üzərində sınaqdan keçir.
+        // Lakin çox sayda filter ola bilər (20*100=2000-ə qədər). Onları sıralayıb ən yaxşı TOP_HUNT_KEEP-ni qaytarırıq.
+        Set<String> unique = new HashSet<>();
+        List<CommonFilter> scored = new ArrayList<>();
+        for (int[] cols : allCandidates) {
+            String key = Arrays.toString(cols);
+            if (unique.contains(key)) continue;
+            unique.add(key);
+            int hits = countHitsNoAdaptive(cols, games);
+            scored.add(new CommonFilter(cols, hits));
+        }
+        scored.sort((a,b) -> {
+            if (a.hits != b.hits) return Integer.compare(b.hits, a.hits);
+            return Integer.compare(a.cols.length, b.cols.length);
+        });
+        List<int[]> bestFilters = new ArrayList<>();
+        for (int i = 0; i < Math.min(TOP_HUNT_KEEP, scored.size()); i++) {
+            bestFilters.add(scored.get(i).cols);
+        }
+        return bestFilters;
+    }
+
+    /* ==================== Filter tətbiqi (adaptivsiz) ==================== */
+    static int applyFilterSingle(int[] cols, int game) {
+        int[] pool = null;
+        for (int col : cols) {
+            int cd = code[col][game];
+            if (cd == 0) continue;
+            int[] cand = index.get(col).get(cd);
+            if (cand == null || cand.length == 0) continue;
+            int[] np = (pool == null) ? without(cand, game) : without(intersect(pool, cand), game);
+            if (np.length < POOL_MIN) continue;
+            pool = np;
+            if (pool.length <= POOL_MAX) return predict(pool);
+        }
+        if (pool != null && pool.length >= POOL_MIN && pool.length <= POOL_MAX) return predict(pool);
+        return -1;
+    }
+
+    static int countHitsNoAdaptive(int[] cols, int[] games) {
+        int hits = 0;
+        for (int g : games) {
+            int pred = applyFilterSingle(cols, g);
+            if (pred >= 0 && pred == btts[g]) hits++;
+        }
+        return hits;
+    }
+
+    /* ===================== ORTAQ FİLTER + HILL CLIMBING (adaptivsiz) ===================== */
     record CommonFilter(int[] cols, int hits) {}
 
     static boolean better(CommonFilter a, CommonFilter b){
         if (a.hits != b.hits) return a.hits > b.hits;
-        return a.cols.length < b.cols.length;   // bərabər hitsdə qısa filter
+        return a.cols.length < b.cols.length;
     }
 
-    // Hill-climbing: start nöqtəsindən başla, hər addımda ən yaxşı qonşuya keç (əlavə/dəyiş/sil).
     static CommonFilter hillClimb(int[] start, int[] games, Random r){
         int[] cur = dedupeCols(start);
-        int curHits = countHits(cur, games);
+        int curHits = countHitsNoAdaptive(cur, games);
         for (int step = 0; step < CLIMB_STEPS; step++){
             int[] bestNbr = null; int bestNbrHits = curHits; int bestLen = cur.length;
             for (int n = 0; n < NEIGHBORS_PER_STEP; n++){
                 int[] nbr = mutate(cur, r);
                 if (nbr == null) continue;
-                int h = countHits(nbr, games);
+                int h = countHitsNoAdaptive(nbr, games);
                 if (h > bestNbrHits || (h == bestNbrHits && nbr.length < bestLen)){
                     bestNbrHits = h; bestNbr = nbr; bestLen = nbr.length;
                 }
             }
-            if (bestNbr == null) break;            // yaxşılaşma yoxdur → lokal maksimum
+            if (bestNbr == null) break;
             cur = bestNbr; curHits = bestNbrHits;
-            if (curHits >= NEED_HITS) break;       // erkən dayan
+            if (curHits >= NEED_HITS) break;
         }
         return new CommonFilter(cur, curHits);
     }
 
-    // qonşu: 3 əməliyyatdan biri — sütun əlavə et / sütun dəyiş / sütun sil
     static int[] mutate(int[] cols, Random r){
         int op = r.nextInt(3);
-        if (op == 0 && cols.length < MAX_FILTER_LEN){           // əlavə
+        if (op == 0 && cols.length < MAX_FILTER_LEN){
             int c; int guard=0; do { c = r.nextInt(NC); } while (contains(cols,c) && ++guard<20);
             if (contains(cols,c)) return null;
             return append(cols, c);
-        } else if (op == 2 && cols.length > MIN_FILTER_LEN){    // sil
+        } else if (op == 2 && cols.length > MIN_FILTER_LEN){
             return remove(cols, r.nextInt(cols.length));
-        } else {                                                 // dəyiş
+        } else {
             int[] out = cols.clone();
             int pos = r.nextInt(out.length);
             int c; int guard=0; do { c = r.nextInt(NC); } while (contains(cols,c) && ++guard<20);
             if (contains(cols,c)) return null;
-            out[pos] = c; return out;
+            out[pos] = c;
+            return out;
         }
     }
 
@@ -273,74 +342,6 @@ public class Bet365BttsFilterHunter {
         int[] o = new int[s.size()]; int i=0; for (int x : s) o[i++]=x; return o;
     }
 
-    // toxumlar: hər oyun üçün tək-oyunluq filter(lər) tapıb ortaq-namizəd kimi götür
-    static List<int[]> seedCandidates(int[] games, long base) throws Exception {
-        List<int[]> seeds = Collections.synchronizedList(new ArrayList<>());
-        List<Callable<Void>> tasks = new ArrayList<>();
-        for (int g : games)
-            tasks.add(() -> {
-                Random r = new Random(base * 131 + g);
-                int found = 0;
-                for (int t = 0; t < SEED_TRIES && found < 3; t++){
-                    int[] f = narrowSeedCols(g, btts[g], r);
-                    if (f != null){ seeds.add(f); found++; }
-                }
-                return null;
-            });
-        try (ExecutorService ex = Executors.newVirtualThreadPerTaskExecutor()){ ex.invokeAll(tasks); }
-        return new ArrayList<>(seeds);
-    }
-
-    static int countHits(int[] cols, int[] games){
-        int hits = 0;
-        for (int g : games){
-            int pred = applyFilter(cols, g);
-            if (pred >= 0 && pred == btts[g]) hits++;
-        }
-        return hits;
-    }
-
-    // filter sütunlarını g oyununun öz əmsalları ilə 2-5-ə daralt → BTTS proqnozu (-1 = alınmadı)
-    // ADAPTIVE_FILL: ortaq sütunlar bəs etməsə, oyunun öz ən-daraldıcı sütunları ilə doldurulur.
-    static int applyFilter(int[] cols, int g){
-        int[] pool = null;
-        for (int col : cols){
-            int cd = code[col][g];
-            if (cd == 0) continue;
-            int[] cand = index.get(col).get(cd);
-            if (cand == null || cand.length == 0) continue;
-            int[] np = (pool == null) ? without(cand, g) : without(intersect(pool, cand), g);
-            if (np.length < POOL_MIN) continue;
-            pool = np;
-            if (pool.length <= POOL_MAX) return predict(pool);
-        }
-        // adaptiv doldurma: hələ böyükdürsə, oyunun digər sütunları ilə daralt
-        if (ADAPTIVE_FILL && pool != null && pool.length > POOL_MAX){
-            int fills = 0;
-            // ən çox daraldan sütunu acgözlüklə seç
-            while (pool.length > POOL_MAX && fills < FILL_MAX){
-                int bestCol = -1; int[] bestPool = null;
-                for (int col = 0; col < NC; col++){
-                    if (contains(cols, col)) continue;
-                    int cd = code[col][g];
-                    if (cd == 0) continue;
-                    int[] cand = index.get(col).get(cd);
-                    if (cand == null) continue;
-                    int[] np = without(intersect(pool, cand), g);
-                    if (np.length < POOL_MIN) continue;            // çox daraldar → keç
-                    if (bestPool == null || np.length < bestPool.length){ bestPool = np; bestCol = col; }
-                    if (np.length <= POOL_MAX){ bestPool = np; bestCol = col; break; }
-                }
-                if (bestCol < 0) break;
-                pool = bestPool; fills++;
-                if (pool.length <= POOL_MAX) return predict(pool);
-            }
-        }
-        if (pool != null && pool.length >= POOL_MIN && pool.length <= POOL_MAX) return predict(pool);
-        return -1;
-    }
-    static int predict(int[] pool){ int[] v = bttsVote(pool); return v[0] >= v[1] ? 1 : 0; }
-
     static int[] randomCols(Random r){
         int len = MIN_FILTER_LEN + r.nextInt(MAX_FILTER_LEN - MIN_FILTER_LEN + 1);
         int[] pick = new int[len];
@@ -349,102 +350,14 @@ public class Bet365BttsFilterHunter {
         return pick;
     }
 
-    /* ===================== tək-oyunluq daralma (toxum üçün) ===================== */
-    // seed-i random sütun ardıcıllığı ilə 2-5-ə daralt; hovuz seed-in BTTS-ini düz verirsə
-    // istifadə olunan sütunları (toxum kimi) qaytar, yoxsa null.
-    static int[] narrowSeedCols(int seed, int targetBtts, Random r){
-        int[] order = shuffledValidCols(seed, r);
-        int[] pool = null;
-        int[] active = new int[MAX_FILTER_LEN]; int al = 0;
-        for (int col : order){
-            if (al >= MAX_FILTER_LEN) break;
-            int cd = code[col][seed];
-            if (cd == 0) continue;
-            int[] cand = index.get(col).get(cd);
-            if (cand == null || cand.length == 0) continue;
-            int[] np = (pool == null) ? without(cand, seed) : without(intersect(pool, cand), seed);
-            if (np.length < POOL_MIN){ continue; }   // bu sütun çox daraltdı → atla
-            pool = np; active[al++] = col;
-            if (pool.length <= POOL_MAX){
-                int[] vote = bttsVote(pool);
-                int pred = vote[0] >= vote[1] ? 1 : 0;
-                if (pred == targetBtts) return Arrays.copyOf(active, al);
-                return null;
-            }
-        }
-        return null;
-    }
-
-    // {kgVar, kgYox} sayı
+    static int predict(int[] pool){ int[] v = bttsVote(pool); return v[0] >= v[1] ? 1 : 0; }
     static int[] bttsVote(int[] pool){
         int yes=0,no=0;
         for (int r : pool){ if (btts[r]==1) yes++; else if (btts[r]==0) no++; }
         return new int[]{yes,no};
     }
 
-    /* ===================== Detallı analiz ===================== */
-    static void analyze(int g, int[] cols){
-        System.out.println("\n┌─ 🎯 " + home[g]+" v "+away[g] + "  MS:" + ftScore(g) + " → əsl: " + bttsStr(btts[g]) + "  #"+g);
-        System.out.println("│  🧩 Ortaq filter: " + names(cols));
-        int[] pool = null;
-        StringBuilder steps = new StringBuilder();
-        for (int col : cols){
-            int cd = code[col][g];
-            if (cd == 0){ continue; }
-            int[] cand = index.get(col).get(cd);
-            if (cand == null || cand.length == 0) continue;
-            int[] np = (pool == null) ? without(cand, g) : without(intersect(pool, cand), g);
-            if (np.length < POOL_MIN) continue;
-            pool = np;
-            steps.append(String.format("│     + %-16s (%.2f) → hovuz %d%n", COLS.get(col).disp(), cd/100.0, pool.length));
-            if (pool.length <= POOL_MAX) break;
-        }
-        // adaptiv doldurma (applyFilter ilə eyni məntiq) — display üçün
-        if (ADAPTIVE_FILL && pool != null && pool.length > POOL_MAX){
-            int fills = 0;
-            while (pool.length > POOL_MAX && fills < FILL_MAX){
-                int bestCol=-1; int[] bestPool=null;
-                for (int col=0; col<NC; col++){
-                    if (contains(cols,col)) continue;
-                    int cd = code[col][g]; if (cd==0) continue;
-                    int[] cand = index.get(col).get(cd); if (cand==null) continue;
-                    int[] np = without(intersect(pool,cand), g);
-                    if (np.length < POOL_MIN) continue;
-                    if (bestPool==null || np.length<bestPool.length){ bestPool=np; bestCol=col; }
-                    if (np.length<=POOL_MAX){ bestPool=np; bestCol=col; break; }
-                }
-                if (bestCol<0) break;
-                pool = bestPool; fills++;
-                steps.append(String.format("│     +🔧%-15s (%.2f) → hovuz %d  (adaptiv)%n",
-                        COLS.get(bestCol).disp(), code[bestCol][g]/100.0, pool.length));
-                if (pool.length<=POOL_MAX) break;
-            }
-        }
-        System.out.print(steps);
-        if (pool == null || pool.length < POOL_MIN || pool.length > POOL_MAX){
-            System.out.printf("│  ⚠️ 2-5 hovuz alınmadı (son hovuz: %s) → ❌ proqnoz yox%n",
-                    pool==null?"0":String.valueOf(pool.length));
-            System.out.println("└────────"); return;
-        }
-        System.out.println("│  📜 Hovuz (" + pool.length + " əkiz oyun):");
-        for (int r : pool)
-            System.out.printf("│     • %-34s MS:%s → %s%n", home[r]+" v "+away[r], ftScore(r), bttsStr(btts[r]));
-        int[] v = bttsVote(pool);
-        int pred = v[0] >= v[1] ? 1 : 0;
-        boolean hit = pred == btts[g];
-        System.out.printf("│  🔮 PROQNOZ: %s  (KG Var %d / KG Yox %d)  →  %s%n",
-                bttsStr(pred), v[0], v[1], hit?"✅ DÜZ":"❌ SƏHV");
-        System.out.println("└────────────────────────────────────────────────");
-    }
-
     /* ===================== Köməkçilər ===================== */
-    static int[] shuffledValidCols(int row, Random r){
-        int[] v = new int[NC]; int n=0;
-        for (int c=0;c<NC;c++) if (code[c][row] != 0) v[n++]=c;
-        v = Arrays.copyOf(v, n);
-        for (int i=n-1;i>0;i--){ int j=r.nextInt(i+1); int t=v[i]; v[i]=v[j]; v[j]=t; }
-        return v;
-    }
     static int[] without(int[] a, int val){
         int n=0; for (int x:a) if (x!=val) n++;
         if (n==a.length) return a;
@@ -461,7 +374,6 @@ public class Bet365BttsFilterHunter {
     static boolean contains(int[] a, int v){ for (int x:a) if (x==v) return true; return false; }
     static int[] append(int[] a, int v){ int[] r=Arrays.copyOf(a,a.length+1); r[a.length]=v; return r; }
     static int[] remove(int[] a, int i){ int[] r=new int[a.length-1]; int k=0; for(int j=0;j<a.length;j++) if(j!=i) r[k++]=a[j]; return r; }
-    static String key(int[] cols){ int[] s=cols.clone(); Arrays.sort(s); return Arrays.toString(s); }
     static String names(int[] cols){ StringJoiner sj=new StringJoiner(", "); for(int c:cols) sj.add(COLS.get(c).disp()); return sj.toString(); }
     static void printFilterBox(int[] cols){
         System.out.println("┌─ 🧩 FİLTER (" + cols.length + " sütun, sıra ilə) ──────────────");
@@ -483,11 +395,10 @@ public class Bet365BttsFilterHunter {
     static void sec(String t){ System.out.println("\n════════════════════════════════════════════════════════"); System.out.println("  "+t); System.out.println("════════════════════════════════════════════════════════"); }
 
     /* ===================== İndeks ===================== */
-    static void buildIndex(){
+    static void buildIndex() throws Exception {
         System.out.println("🔨 İnverted indeks qurulur...");
         index = new ArrayList<>(NC);
         for (int c=0;c<NC;c++) index.add(null);
-        // virtual thread-lərlə paralel qur
         List<Callable<Void>> tasks = new ArrayList<>();
         for (int c=0;c<NC;c++){
             final int col=c;
@@ -497,7 +408,7 @@ public class Bet365BttsFilterHunter {
                     tmp.computeIfAbsent(cd,k->new ArrayList<>()).add(r); }
                 Map<Integer,int[]> byVal = new HashMap<>();
                 for (var e: tmp.entrySet()){
-                    int[] arr=e.getValue().stream().mapToInt(Integer::intValue).toArray(); // artan
+                    int[] arr=e.getValue().stream().mapToInt(Integer::intValue).toArray();
                     byVal.put(e.getKey(), arr);
                 }
                 index.set(col, byVal);
@@ -505,11 +416,10 @@ public class Bet365BttsFilterHunter {
             });
         }
         try (ExecutorService ex = Executors.newVirtualThreadPerTaskExecutor()){ ex.invokeAll(tasks); }
-        catch (InterruptedException e){ Thread.currentThread().interrupt(); }
         System.out.println("✅ İndeks hazır");
     }
 
-    /* ===================== DB ===================== */
+    /* ===================== DB LOAD ===================== */
     static void loadDb() throws Exception {
         Class.forName("org.postgresql.Driver");
         try (Connection conn = DriverManager.getConnection(JDBC_URL, DB_USER, DB_PASS)){
@@ -558,32 +468,38 @@ public class Bet365BttsFilterHunter {
         home=new String[rows]; away=new String[rows]; date=new String[rows]; league=new String[rows];
     }
 
-    /* ===================== SİNTETİK (offline test) ===================== */
-    static final String[] TEAMS={"Qarabağ","Neftçi","Sabah","Zirə","Real","Barca","Bayern","PSG","City","Inter","Milan","Ajax","Porto","Roma"};
-    static void loadSynthetic(){
-        Random r=new Random(SEED); N=SYNTHETIC_ROWS; alloc(N);
-        int iBy=col("bts_ft_yes_a"), iBn=col("bts_ft_no_a"),
-                iO=col("ft_2_5_over_a"), iU=col("ft_2_5_under_a");
-        for (int g=0;g<N;g++){
-            int profile=r.nextInt(20);
-            // profilə bağlı BTTS meyli
-            double pYes = 0.2 + (profile%10)*0.06;
-            boolean yes = r.nextDouble() < pYes;
-            int hg = yes ? 1+r.nextInt(3) : r.nextInt(2);
-            int ag = yes ? 1+r.nextInt(3) : (hg>0?0:1);
-            if (yes){ hg=Math.max(1,hg); ag=Math.max(1,ag); } else { if (r.nextBoolean()) ag=0; else hg=0; }
-            ftH[g]=hg; ftA[g]=ag; htH[g]=Math.min(hg,r.nextInt(hg+1)); htA[g]=Math.min(ag,r.nextInt(ag+1));
-            btts[g]=(byte)((hg>0&&ag>0)?1:0);
-            home[g]=TEAMS[r.nextInt(TEAMS.length)]; away[g]=TEAMS[r.nextInt(TEAMS.length)]; date[g]="2020-01-01";
-            for (int c=0;c<NC;c++){
-                int cd;
-                if (c==iBy) cd = (int)Math.round((1.4+(profile%10)*0.18)*100);
-                else if (c==iBn) cd = (int)Math.round((1.5+((profile+5)%10)*0.18)*100);
-                else cd = (int)Math.round((1.2 + r.nextInt(45)*0.2)*100);   // diskret şum
-                if (r.nextDouble()<0.02) cd=0;
-                code[c][g]=cd;
-            }
+    /* ===================== ANALİZ (detallı) ===================== */
+    static void analyze(int g, int[] cols){
+        System.out.println("\n┌─ 🎯 " + home[g]+" v "+away[g] + "  MS:" + ftScore(g) + " → əsl: " + bttsStr(btts[g]) + "  #"+g);
+        System.out.println("│  🧩 Ortaq filter: " + names(cols));
+        int[] pool = null;
+        StringBuilder steps = new StringBuilder();
+        for (int col : cols){
+            int cd = code[col][g];
+            if (cd == 0){ continue; }
+            int[] cand = index.get(col).get(cd);
+            if (cand == null || cand.length == 0) continue;
+            int[] np = (pool == null) ? without(cand, g) : without(intersect(pool, cand), g);
+            if (np.length < POOL_MIN) continue;
+            pool = np;
+            steps.append(String.format("│     + %-16s (%.2f) → hovuz %d%n", COLS.get(col).disp(), cd/100.0, pool.length));
+            if (pool.length <= POOL_MAX) break;
         }
+        // Adaptiv doldurma yoxdur (ADAPTIVE_FILL = false)
+        System.out.print(steps);
+        if (pool == null || pool.length < POOL_MIN || pool.length > POOL_MAX){
+            System.out.printf("│  ⚠️ 2-5 hovuz alınmadı (son hovuz: %s) → ❌ proqnoz yox%n",
+                    pool==null?"0":String.valueOf(pool.length));
+            System.out.println("└────────"); return;
+        }
+        System.out.println("│  📜 Hovuz (" + pool.length + " əkiz oyun):");
+        for (int r : pool)
+            System.out.printf("│     • %-34s MS:%s → %s%n", home[r]+" v "+away[r], ftScore(r), bttsStr(btts[r]));
+        int[] v = bttsVote(pool);
+        int pred = v[0] >= v[1] ? 1 : 0;
+        boolean hit = pred == btts[g];
+        System.out.printf("│  🔮 PROQNOZ: %s  (KG Var %d / KG Yox %d)  →  %s%n",
+                bttsStr(pred), v[0], v[1], hit?"✅ DÜZ":"❌ SƏHV");
+        System.out.println("└────────────────────────────────────────────────");
     }
-    static int col(String sql){ for (int i=0;i<NC;i++) if (COLS.get(i).sql().equals(sql)) return i; return -1; }
 }
