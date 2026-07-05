@@ -494,77 +494,61 @@ public class Bet365DailyAutoAnalyzer {
 
     // ==================== YENİ YÖNTEMLER İÇİN SEQUENTIAL ADAPTİF METOT ====================
     private void analyzeWithSequentialPattern(MatchInfo match, List<String> patternDisplayNames, String methodName) {
-        String header = methodName + " [" + match.home + " vs " + match.away + "]";
-        System.out.println("═══════════════════════════════════════════════════════════════");
-        System.out.println(header);
-        System.out.println("═══════════════════════════════════════════════════════════════");
-
+        // Səssiz işləyir: heç bir addım/başlıq çap etmir.
+        // Yalnız sonda uyğun twin oyun (1-2 nəticə) tapılanda kompakt çap edir.
         List<ColumnDef> patternFilters = new ArrayList<>();
-        List<String> missingFilters = new ArrayList<>();
-
         for (String displayName : patternDisplayNames) {
             ColumnDef col = ALL_COLS.stream()
                     .filter(c -> c.displayName.equals(displayName))
                     .findFirst().orElse(null);
-            if (col == null) {
-                System.out.println("❌ Tanımlı olmayan filtre: " + displayName);
-                return;
-            }
+            if (col == null) continue;
             String val = match.odds.getOrDefault(col.flashscoreKey, "");
-            if (val.isEmpty() || "-".equals(val)) {
-                missingFilters.add(displayName);
-                continue;
-            }
+            if (val.isEmpty() || "-".equals(val)) continue;
             patternFilters.add(col);
         }
-
-        if (!missingFilters.isEmpty()) {
-            System.out.println("⚠️  Aşağıdaki filtreler için oran bulunamadı, atlanacak:");
-            for (String mf : missingFilters) {
-                System.out.println("   - " + mf);
-            }
-        }
-
-        if (patternFilters.isEmpty()) {
-            System.out.println("❌ Desende hiçbir geçerli filtre yok, analiz yapılamadı.");
-            return;
-        }
+        if (patternFilters.isEmpty()) return;
 
         List<ColumnDef> activeFilters = new ArrayList<>();
         List<MatchResult> results = new ArrayList<>();
 
-        int stage = 1;
         for (ColumnDef col : patternFilters) {
             List<ColumnDef> tempFilters = new ArrayList<>(activeFilters);
             tempFilters.add(col);
             List<MatchResult> newResults = querySQL(match, tempFilters);
-
-            String oddsVal = match.odds.get(col.flashscoreKey);
-            System.out.printf("🔍 AŞAMA %d: +%s (oran: %s) → sonuç: %d", stage, col.displayName, oddsVal, newResults.size());
-
-            if (newResults.isEmpty()) {
-                System.out.println(" → ATLANDI (sonuç sıfırlandı)");
-                stage++;
-                continue;
-            }
+            if (newResults.isEmpty()) continue;
 
             activeFilters.add(col);
             results = newResults;
-            System.out.println(" → EKLENDİ (aktif filtre: " + activeFilters.size() + ")");
-            stage++;
 
-            if (results.size() >= 1 && results.size() <= 2) {
-                System.out.println("   Hedef aralığa (1-2) ulaşıldı, durduruldu.");
-                break;
-            }
+            if (results.size() >= 1 && results.size() <= 2) break;
         }
 
-        if (activeFilters.isEmpty()) {
-            System.out.println("❌ Hiçbir filtre uygulanamadı, desen sonuç vermedi.");
-            return;
-        }
+        // Uyğun twin oyun yoxdursa (aralıq dışı) heç nə çap etmə.
+        if (results.size() < 1 || results.size() > 2) return;
 
-        printResultsIfInRange(results, activeFilters, match, methodName);
+        printCompactResult(results, match, methodName);
+    }
+
+    // ==================== KOMPAKT ÇIXIŞ: yalnız uyğun twin oyun tapılanda ====================
+    private void printCompactResult(List<MatchResult> results, MatchInfo match, String methodName) {
+        System.out.println("═══════════════════════════════════════════════════════════════");
+        System.out.println(methodName);
+        System.out.println("⚽ Analiz olunan maç: " + match.home + " vs " + match.away);
+        System.out.println("✅ Uyğun twin oyunlar (" + results.size() + " ədəd):");
+        System.out.println("┌──────┬─────────────────────┬─────────────────────┬──────────┬──────────┬──────────┐");
+        System.out.println("│ #    │ Tarih               │ Ev Sahibi           │ Deplasman│ MS       │ İY       │");
+        System.out.println("├──────┼─────────────────────┼─────────────────────┼──────────┼──────────┼──────────┤");
+        for (int i = 0; i < results.size(); i++) {
+            MatchResult r = results.get(i);
+            String date = truncate(r.data.getOrDefault("date_time", "-"), 19);
+            String home = truncate(r.data.getOrDefault("home_team", "-"), 19);
+            String away = truncate(r.data.getOrDefault("away_team", "-"), 8);
+            String ft = truncate(r.data.getOrDefault("ft_ms", "-"), 8);
+            String ht = truncate(r.data.getOrDefault("ht_iy", "-"), 8);
+            System.out.printf("│ %-4d │ %-19s │ %-19s │ %-8s │ %-8s │ %-8s │%n",
+                    (i + 1), date, home, away, ft, ht);
+        }
+        System.out.println("└──────┴─────────────────────┴─────────────────────┴──────────┴──────────┴──────────┘\n");
     }
 
     // ==================== YARDIMCI: SONUÇ TABLOSUNU SADECE BELİRLİ ARALIKTA YAZDIR ====================
@@ -675,21 +659,197 @@ public class Bet365DailyAutoAnalyzer {
         }
 
         System.out.println("═══════════════════════════════════════════════════════════════");
-        System.out.println("🤖 1 ANALİZ YÖNTEMİ İLE OTOMATİK ANALİZ BAŞLIYOR: " + todayMatches.size() + " maç");
+        System.out.println("🤖 16 ANALİZ YÖNTEMİ İLE OTOMATİK ANALİZ BAŞLIYOR: " + todayMatches.size() + " maç");
         System.out.println("═══════════════════════════════════════════════════════════════\n");
 
         for (MatchInfo match : todayMatches) {
-            System.out.println("\n\n⚽ " + match.home + " vs " + match.away);
+            // Qeyd: hər maç üçün başlıq çap edilmir. Yalnız uyğun twin oyun tapılan
+            // yöntemlər (printCompactResult) ekrana yazır.
 
-
-            // ── YENİ FİLTRE SETLERİ ───────────────────────────────────────
-            // YÖNTEM 2: Kolon seti 1
+            // ── YENİ FİLTRE SETLERİ (Round-Robin HT/FT Yüksek Güvenli Setler) ──────────────
             analyzeWithSequentialPattern(match,
                     List.of(
-                            "MS Skor 4:4", "HT/FT 2/2", "İY Skor 1:3",
-                            "MS Skor 4:0", "HT/FT 1/X"
+                            "İY X", "MS Skor 0:2", "İY A/U 2.5 Üst", "İY Skor 1:1", "İY Skor 0:2",
+                            "MS Skor 2:0", "İY A/U 1.5 Alt", "MS Skor 4:4", "İY Skor 1:2", "MS Skor 3:4",
+                            "İY Skor 3:1", "MS Skor 4:0", "İY Skor 3:0", "KG Evet", "MS Skor 0:1",
+                            "ÇŞ 1X", "2Y A/U 1.5 Üst", "İY Skor 2:0", "2Y A/U 2.5 Üst", "A/U 5.5 Alt",
+                            "A/U 1.5 Üst", "MS Skor 4:2", "İY Skor 0:1", "İY Skor 0:3", "MS Skor 4:3",
+                            "ÇŞ 12"
                     ),
-                    "🔵 YÖNTEM 2 [Kolon Seti 1]"
+                    "🔵 YÖNTEM 2 [HT/FT Seti 1]"
+            );
+
+            analyzeWithSequentialPattern(match,
+                    List.of(
+                            "İY A/U 0.5 Alt", "2Y A/U 1.5 Alt", "2Y A/U 2.5 Üst", "İY A/U 2.5 Alt",
+                            "MS Skor 4:3", "MS Skor 3:0", "HT/FT 1/2", "A/U 5.5 Üst", "A/U 2.5 Alt",
+                            "KG Evet", "2Y A/U 0.5 Alt", "2Y A/U 1.5 Üst", "MS Skor 2:4", "MS Skor 1:0",
+                            "HT/FT X/2", "İY A/U 2.5 Üst", "İY Skor 3:1", "2Y A/U 0.5 Üst", "İY KG Hayır",
+                            "2Y KG Evet", "MS Skor 4:4", "İY 1", "A/U 1.5 Alt", "İY Skor 2:1",
+                            "İY A/U 1.5 Üst", "A/U 3.5 Üst", "KG Hayır", "İY Skor 0:3", "MS Skor 0:2"
+                    ),
+                    "🔵 YÖNTEM 3 [HT/FT Seti 2]"
+            );
+
+            analyzeWithSequentialPattern(match,
+                    List.of(
+                            "İY Skor 2:2", "MS Skor 2:2", "İY Skor 1:0", "İY Skor 1:1", "İY KG Evet",
+                            "A/U 3.5 Üst", "MS Skor 3:0", "MS Skor 4:3", "İY KG Hayır", "İY ÇŞ 1X",
+                            "MS Skor 1:3", "İY A/U 1.5 Üst", "ÇŞ X2", "MS Skor 3:3", "2Y KG Evet",
+                            "İY Skor 0:2", "İY A/U 1.5 Alt", "İY Skor 2:3", "İY Skor 3:1", "İY A/U 0.5 Alt",
+                            "2Y 2"
+                    ),
+                    "🔵 YÖNTEM 4 [HT/FT Seti 3]"
+            );
+
+            analyzeWithSequentialPattern(match,
+                    List.of(
+                            "İY X", "MS Skor 0:2", "İY A/U 2.5 Üst", "İY Skor 1:1", "İY Skor 0:2",
+                            "MS Skor 2:0", "İY A/U 1.5 Alt", "MS Skor 4:4", "İY Skor 1:2", "MS Skor 3:4",
+                            "İY Skor 3:1", "MS Skor 4:0", "İY Skor 3:0", "KG Evet", "MS Skor 0:1",
+                            "ÇŞ 1X", "2Y A/U 1.5 Üst", "İY Skor 2:0", "2Y A/U 2.5 Üst", "A/U 5.5 Alt",
+                            "A/U 1.5 Üst", "MS Skor 4:2", "İY Skor 0:1", "İY Skor 0:3", "MS Skor 4:3",
+                            "ÇŞ 12"
+                    ),
+                    "🔵 YÖNTEM 5 [HT/FT Seti 4]"
+            );
+
+            analyzeWithSequentialPattern(match,
+                    List.of(
+                            "İY A/U 0.5 Alt", "2Y A/U 1.5 Alt", "2Y A/U 2.5 Üst", "İY A/U 2.5 Alt",
+                            "MS Skor 4:3", "MS Skor 3:0", "HT/FT 1/2", "A/U 5.5 Üst", "A/U 2.5 Alt",
+                            "KG Evet", "2Y A/U 0.5 Alt", "2Y A/U 1.5 Üst", "MS Skor 2:4", "MS Skor 1:0",
+                            "HT/FT X/2", "İY A/U 2.5 Üst", "İY Skor 3:1", "2Y A/U 0.5 Üst", "İY KG Hayır",
+                            "2Y KG Evet", "MS Skor 4:4", "İY 1", "A/U 1.5 Alt", "İY Skor 2:1",
+                            "İY A/U 1.5 Üst", "A/U 3.5 Üst", "KG Hayır", "İY Skor 0:3", "MS Skor 0:2"
+                    ),
+                    "🔵 YÖNTEM 6 [HT/FT Seti 5]"
+            );
+
+            analyzeWithSequentialPattern(match,
+                    List.of(
+                            "İY A/U 0.5 Alt", "2Y A/U 0.5 Alt", "İY Skor 1:1", "KG Hayır", "İY Skor 2:2",
+                            "İY A/U 0.5 Üst", "İY A/U 1.5 Üst", "MS Skor 1:3", "İY X", "A/U 0.5 Alt",
+                            "2Y 1", "MS Skor 1:1", "MS Skor 2:4", "HT/FT 2/X", "İY Skor 1:3",
+                            "MS Skor 1:2", "2Y 2", "MS Skor 2:2", "İY Skor 3:1", "A/U 5.5 Alt",
+                            "HT/FT 1/2", "MS Skor 1:4", "A/U 1.5 Alt", "ÇŞ X2"
+                    ),
+                    "🔵 YÖNTEM 7 [HT/FT Seti 6]"
+            );
+
+            // ── 🎯 YÜKSƏK GÜVƏN: 5/10 düz! (yeni əlavə edilən filtr dəstləri) ──────────────
+            // Not: istifadəçinin göndərdiyi dəstlərdən biri mövcud YÖNTEM 7 ilə eyni idi, təkrarlanmadı.
+            analyzeWithSequentialPattern(match,
+                    List.of(
+                            "MS 2", "MS Skor 3:0", "MS Skor 4:4", "MS Skor 1:0", "İY Skor 2:0",
+                            "İY ÇŞ 12", "İY A/U 0.5 Üst", "ÇŞ X2", "HT/FT X/1", "İY A/U 1.5 Alt"
+                    ),
+                    "🎯 YÖNTEM 8 [HT/FT Seti 7]"
+            );
+
+            analyzeWithSequentialPattern(match,
+                    List.of(
+                            "MS Skor 0:1", "İY Skor 1:1", "İY Skor 0:2", "HT/FT 2/2", "İY Skor 0:3",
+                            "HT/FT X/1", "MS Skor 2:4", "İY 2", "MS Skor 0:2", "KG Hayır",
+                            "MS Skor 0:3", "MS Skor 3:3", "2Y A/U 2.5 Alt", "İY Skor 3:2", "İY Skor 2:1",
+                            "MS Skor 4:3", "KG Evet", "İY Skor 1:2", "A/U 3.5 Alt", "HT/FT 1/2",
+                            "A/U 4.5 Alt", "MS Skor 3:0", "MS Skor 3:1", "2Y 2", "HT/FT 1/1",
+                            "2Y A/U 2.5 Üst", "İY X", "2Y A/U 1.5 Üst", "MS Skor 2:0", "MS Skor 4:0",
+                            "İY A/U 1.5 Üst", "ÇŞ 1X", "MS Skor 3:2", "MS Skor 4:4", "MS Skor 1:2",
+                            "İY Skor 0:1", "İY Skor 3:1", "A/U 0.5 Alt", "MS Skor 3:4", "MS Skor 1:3",
+                            "2Y 1", "İY Skor 2:3", "İY Skor 1:3", "MS Skor 4:1", "MS Skor 4:2",
+                            "HT/FT 2/X", "HT/FT X/X", "İY A/U 2.5 Alt", "2Y X", "A/U 5.5 Üst",
+                            "MS Skor 0:4", "A/U 0.5 Üst", "MS Skor 1:1"
+                    ),
+                    "🎯 YÖNTEM 9 [HT/FT Seti 8]"
+            );
+
+            analyzeWithSequentialPattern(match,
+                    List.of(
+                            "A/U 0.5 Alt", "İY Skor 1:0", "A/U 4.5 Üst", "A/U 4.5 Alt", "HT/FT 2/1",
+                            "MS Skor 0:1", "MS Skor 4:4", "A/U 5.5 Üst", "HT/FT 1/1", "KG Hayır",
+                            "HT/FT X/1", "MS Skor 1:1", "MS Skor 2:4", "MS Skor 4:2", "2Y 2",
+                            "İY Skor 0:3", "İY A/U 0.5 Üst", "İY Skor 3:1", "2Y X", "MS Skor 3:0",
+                            "MS Skor 1:3", "İY A/U 2.5 Üst", "İY 2", "İY Skor 0:1", "HT/FT 2/2",
+                            "İY Skor 2:1", "KG Evet", "HT/FT 1/2", "2Y A/U 2.5 Üst", "2Y A/U 0.5 Alt"
+                    ),
+                    "🎯 YÖNTEM 10 [HT/FT Seti 9]"
+            );
+
+            analyzeWithSequentialPattern(match,
+                    List.of(
+                            "İY Skor 2:1", "MS Skor 0:4", "MS Skor 4:1", "A/U 2.5 Üst", "KG Evet",
+                            "İY Skor 1:2", "2Y A/U 2.5 Alt", "İY A/U 1.5 Alt", "A/U 0.5 Üst", "İY Skor 0:3",
+                            "MS Skor 2:1", "2Y KG Evet", "İY Skor 1:0", "2Y KG Hayır", "A/U 3.5 Üst",
+                            "HT/FT X/1", "İY 2"
+                    ),
+                    "🎯 YÖNTEM 11 [HT/FT Seti 10]"
+            );
+
+            analyzeWithSequentialPattern(match,
+                    List.of(
+                            "İY Skor 1:2", "MS Skor 2:2", "MS 1", "MS Skor 4:4", "HT/FT X/1",
+                            "İY A/U 2.5 Üst", "İY ÇŞ 12", "HT/FT 2/X", "MS Skor 2:3", "ÇŞ 12",
+                            "İY ÇŞ 1X", "HT/FT 1/2", "A/U 4.5 Alt", "MS Skor 1:3", "İY A/U 1.5 Alt",
+                            "MS Skor 3:3", "2Y 1", "İY Skor 1:1", "İY KG Evet", "İY Skor 1:0",
+                            "İY Skor 2:0"
+                    ),
+                    "🎯 YÖNTEM 12 [HT/FT Seti 11]"
+            );
+
+            analyzeWithSequentialPattern(match,
+                    List.of(
+                            "MS Skor 3:3", "İY Skor 3:1", "MS Skor 1:1", "İY A/U 0.5 Alt", "MS Skor 2:3",
+                            "HT/FT X/1", "HT/FT 1/2", "A/U 3.5 Alt", "MS Skor 0:4", "MS Skor 3:4",
+                            "MS Skor 2:2", "İY Skor 2:2", "MS Skor 3:2", "İY Skor 0:2", "HT/FT X/X",
+                            "İY Skor 1:2", "MS Skor 3:0", "MS Skor 1:4", "MS Skor 2:4", "HT/FT 2/1",
+                            "A/U 2.5 Üst"
+                    ),
+                    "🎯 YÖNTEM 13 [HT/FT Seti 12]"
+            );
+
+            analyzeWithSequentialPattern(match,
+                    List.of(
+                            "A/U 3.5 Üst", "İY ÇŞ X2", "2Y X", "MS Skor 1:1", "2Y KG Hayır",
+                            "2Y A/U 1.5 Üst", "2Y A/U 2.5 Alt", "İY A/U 0.5 Alt", "2Y A/U 1.5 Alt", "A/U 5.5 Alt",
+                            "HT/FT X/2", "İY Skor 0:2", "MS Skor 4:3", "İY KG Evet", "ÇŞ X2",
+                            "A/U 4.5 Üst", "MS Skor 3:3", "İY Skor 2:0", "MS Skor 2:4", "A/U 3.5 Alt",
+                            "İY 1", "ÇŞ 12", "MS Skor 3:2", "2Y A/U 0.5 Üst", "İY ÇŞ 12",
+                            "MS Skor 0:4", "A/U 1.5 Üst", "İY 2", "A/U 5.5 Üst", "HT/FT 1/1",
+                            "İY ÇŞ 1X", "HT/FT X/X", "İY Skor 3:1", "İY Skor 1:2", "MS Skor 2:2",
+                            "MS Skor 1:2", "MS Skor 1:3"
+                    ),
+                    "🎯 YÖNTEM 14 [HT/FT Seti 13]"
+            );
+
+            analyzeWithSequentialPattern(match,
+                    List.of(
+                            "A/U 4.5 Üst", "2Y A/U 2.5 Alt", "İY Skor 3:1", "A/U 5.5 Alt", "İY Skor 1:0",
+                            "2Y 2", "İY Skor 1:2", "İY ÇŞ X2", "MS Skor 0:1", "HT/FT 2/2",
+                            "İY ÇŞ 12", "ÇŞ X2", "MS Skor 4:1", "A/U 3.5 Alt", "HT/FT 1/1",
+                            "MS Skor 1:1", "İY Skor 2:2", "2Y A/U 1.5 Alt"
+                    ),
+                    "🎯 YÖNTEM 15 [HT/FT Seti 14]"
+            );
+
+            analyzeWithSequentialPattern(match,
+                    List.of(
+                            "İY 2", "MS Skor 3:3", "MS Skor 1:4", "A/U 5.5 Üst", "KG Hayır",
+                            "İY A/U 1.5 Alt", "MS Skor 2:4", "A/U 2.5 Üst", "KG Evet", "HT/FT 1/X",
+                            "2Y A/U 2.5 Alt", "2Y KG Evet", "A/U 3.5 Üst", "MS Skor 1:1", "İY Skor 0:3",
+                            "A/U 3.5 Alt", "HT/FT X/1", "MS Skor 4:1", "MS Skor 0:4"
+                    ),
+                    "🎯 YÖNTEM 16 [HT/FT Seti 15]"
+            );
+
+            analyzeWithSequentialPattern(match,
+                    List.of(
+                            "A/U 3.5 Alt", "MS X", "İY ÇŞ X2", "KG Evet", "A/U 0.5 Üst",
+                            "İY KG Evet", "A/U 4.5 Üst", "HT/FT 1/X", "2Y A/U 0.5 Üst", "İY ÇŞ 1X",
+                            "MS Skor 2:4", "İY Skor 1:0", "HT/FT 1/1", "HT/FT X/1", "İY Skor 0:3",
+                            "MS Skor 3:3"
+                    ),
+                    "🎯 YÖNTEM 17 [HT/FT Seti 16]"
             );
 
         }
