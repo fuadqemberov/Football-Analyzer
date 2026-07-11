@@ -135,8 +135,10 @@ public class MackolikHalfTimePatternFinder {
                     TableAnalysis home = parseForm(forms.get(0), matchId);
                     TableAnalysis away = parseForm(forms.get(1), matchId);
 
-                    checkPatterns(home, away, matchUrl);
-                    checkTriplePattern(home, away, matchUrl);  // YENİ PATTERN
+                    MatchResult result = new MatchResult(matchUrl, home.teamName, away.teamName);
+                    checkPatterns(home, away, result);
+                    checkTriplePattern(home, away, result);
+                    evaluateResult(result);
                     return;
 
                 } finally {
@@ -258,66 +260,46 @@ public class MackolikHalfTimePatternFinder {
     }
 
     // ─────────────────────────────────────────────────────────────
-    // Pattern Kontrolleri (ESKİ)
+    // Pattern Kontrolleri: 🎯 Bağımsız Skor Serisi + 🔥 Kusursuz X Çapraz
     // ─────────────────────────────────────────────────────────────
-    private static void checkPatterns(TableAnalysis h, TableAnalysis a, String url) {
-        // Bağımsız skor serisi
+    private static void checkPatterns(TableAnalysis h, TableAnalysis a, MatchResult r) {
+        // 🎯 Bağımsız skor serisi
         boolean homeSequenceMatch = isScoreMatch(h.last2Score, "1-0", "0-1") && isScoreMatch(h.last1Score, "2-1", "1-2");
         boolean awaySequenceMatch = isScoreMatch(a.last2Score, "1-0", "0-1") && isScoreMatch(a.last1Score, "2-1", "1-2");
 
         if (homeSequenceMatch) {
-            recordMatch(url, h.teamName, a.teamName, Set.of("Maç 1: " + h.last2Score + " | Maç 2: " + h.last1Score),
-                    "🎯 BAĞIMSIZ SKOR SERİSİ (EV SAHİBİ)", "Ev Sahibinin oynadığı son 2 maç sırasıyla (1-0 / 0-1) ve ardından (2-1 / 1-2) bitti.", "🎯");
+            r.foundSequence = true;
+            r.details.add("🎯 BAĞIMSIZ SKOR SERİSİ (EV SAHİBİ): Maç 1: " + h.last2Score + " | Maç 2: " + h.last1Score
+                    + " — Ev Sahibinin son 2 maçı sırasıyla (1-0 / 0-1) ve ardından (2-1 / 1-2) bitti.");
         }
         if (awaySequenceMatch) {
-            recordMatch(url, h.teamName, a.teamName, Set.of("Maç 1: " + a.last2Score + " | Maç 2: " + a.last1Score),
-                    "🎯 BAĞIMSIZ SKOR SERİSİ (DEPLASMAN)", "Deplasmanın oynadığı son 2 maç sırasıyla (1-0 / 0-1) ve ardından (2-1 / 1-2) bitti.", "🎯");
+            r.foundSequence = true;
+            r.details.add("🎯 BAĞIMSIZ SKOR SERİSİ (DEPLASMAN): Maç 1: " + a.last2Score + " | Maç 2: " + a.last1Score
+                    + " — Deplasmanın son 2 maçı sırasıyla (1-0 / 0-1) ve ardından (2-1 / 1-2) bitti.");
         }
 
-        // Çapraz havuz eşleşmeleri
-        Set<String> matchType1 = new HashSet<>(h.prevOpponents);
-        matchType1.retainAll(a.nextOpponents);
-
-        Set<String> matchType2 = new HashSet<>(h.nextOpponents);
-        matchType2.retainAll(a.prevOpponents);
-
-        if (matchType1.size() >= 2)
-            recordMatch(url, h.teamName, a.teamName, matchType1,
-                    "BİLGİ-3 (Havuz Eşleşmesi)", "A'nın Önceki 2 Maçı = B'nin Sonraki 2 Maçı", "🟢");
-        if (matchType2.size() >= 2)
-            recordMatch(url, h.teamName, a.teamName, matchType2,
-                    "BİLGİ-3 (Havuz Eşleşmesi)", "A'nın Sonraki 2 Maçı = B'nin Önceki 2 Maçı", "🟢");
-
+        // 🔥 Kusursuz X Çapraz
         boolean c1A = h.prev1 != null && h.prev1.equals(a.next1);
         boolean c1B = h.next1 != null && h.next1.equals(a.prev1);
         boolean c2A = h.prev2 != null && h.prev2.equals(a.next2);
         boolean c2B = h.next2 != null && h.next2.equals(a.prev2);
 
         if (c1A && c1B) {
-            recordMatch(url, h.teamName, a.teamName, Set.of(h.prev1, h.next1),
-                    "🔥 KUSURSUZ X ÇAPRAZ (Mesafe 1)", "Ev[-1] = Dep[+1] VE Ev[+1] = Dep[-1]", "🔥");
-        } else {
-            if (c1A) recordMatch(url, h.teamName, a.teamName, Set.of(h.prev1),
-                    "YENİ PATTERN (1. Mesafe Çapraz)", "Ev Sahibinin 1 Önceki Rakibi [-1] = Deplasmanın 1 Sonraki Rakibi [+1]", "🔵");
-            if (c1B) recordMatch(url, h.teamName, a.teamName, Set.of(h.next1),
-                    "YENİ PATTERN (1. Mesafe Çapraz)", "Ev Sahibinin 1 Sonraki Rakibi [+1] = Deplasmanın 1 Önceki Rakibi [-1]", "🔵");
+            r.foundCross = true;
+            r.details.add("🔥 KUSURSUZ X ÇAPRAZ (Mesafe 1): Ev[-1] = Dep[+1] VE Ev[+1] = Dep[-1] — Eşleşme: "
+                    + Set.of(h.prev1, h.next1));
         }
-
         if (c2A && c2B) {
-            recordMatch(url, h.teamName, a.teamName, Set.of(h.prev2, h.next2),
-                    "🔥 KUSURSUZ X ÇAPRAZ (Mesafe 2)", "Ev[-2] = Dep[+2] VE Ev[+2] = Dep[-2]", "🔥");
-        } else {
-            if (c2A) recordMatch(url, h.teamName, a.teamName, Set.of(h.prev2),
-                    "YENİ PATTERN (2. Mesafe Çapraz)", "Ev Sahibinin 2 Önceki Rakibi [-2] = Deplasmanın 2 Sonraki Rakibi [+2]", "🔵");
-            if (c2B) recordMatch(url, h.teamName, a.teamName, Set.of(h.next2),
-                    "YENİ PATTERN (2. Mesafe Çapraz)", "Ev Sahibinin 2 Sonraki Rakibi [+2] = Deplasmanın 2 Önceki Rakibi [-2]", "🔵");
+            r.foundCross = true;
+            r.details.add("🔥 KUSURSUZ X ÇAPRAZ (Mesafe 2): Ev[-2] = Dep[+2] VE Ev[+2] = Dep[-2] — Eşleşme: "
+                    + Set.of(h.prev2, h.next2));
         }
     }
 
     // ─────────────────────────────────────────────────────────────
     // YENİ ÜÇLÜ AĞ PATTERNİ
     // ─────────────────────────────────────────────────────────────
-    private static void checkTriplePattern(TableAnalysis home, TableAnalysis away, String matchUrl) {
+    private static void checkTriplePattern(TableAnalysis home, TableAnalysis away, MatchResult r) {
         // Lig tanımlı değilse çık
         if (home.upcomingLeague == null || away.upcomingLeague == null) return;
         if (!home.upcomingLeague.equals(away.upcomingLeague)) return;
@@ -397,12 +379,10 @@ public class MackolikHalfTimePatternFinder {
 
             // Sırasıyla önce Y'ye, sonra Z'ye karşı oynamış olmalı
             if (oppSecond.equals(away.teamName) && oppLast.equals(home.teamName)) {
-                // Pattern tamam! Tahminle beraber kaydet
-                String desc = String.format(
-                        "Üçlü Ağ: %s → %s (önce), %s → %s (sonra), şimdi %s - %s oynanacak. Tahmin: 2/1 veya 1/2 (İY/MS)",
-                        x, away.teamName, x, home.teamName, home.teamName, away.teamName);
-                recordMatch(matchUrl, home.teamName, away.teamName, Set.of(x),
-                        "🧩 ÜÇLÜ AĞ PATTERNİ (Lig: " + league + ")", desc, "🧩");
+                r.foundTriple = true;
+                r.details.add(String.format(
+                        "🧩 ÜÇLÜ AĞ PATTERNİ (Lig: %s): %s → %s (önce), %s → %s (sonra), şimdi %s - %s oynanacak.",
+                        league, x, away.teamName, x, home.teamName, home.teamName, away.teamName));
             }
         }
     }
@@ -456,13 +436,29 @@ public class MackolikHalfTimePatternFinder {
     // ─────────────────────────────────────────────────────────────
     // Yardımcı Metodlar
     // ─────────────────────────────────────────────────────────────
-    private static void recordMatch(String url, String home, String away,
-                                    Set<String> common, String patternName,
-                                    String matchDesc, String emoji) {
-        String resultMsg = String.format(
-                "%s [%s] %s vs %s\n   Açıklama: %s\n   Bulunan Eşleşme/Skor: %s\n   Taktik: 2/1 VEYA 1/2 Oyna!\n   Link: %s",
-                emoji, patternName, home, away, matchDesc, common, url);
-        matchedPatterns.add(resultMsg);
+    // 3 yöntemden en az 2'si bulunduysa sonuca ekle; 3'ü birden bulunduysa BINGOOO!
+    private static void evaluateResult(MatchResult r) {
+        int count = (r.foundTriple ? 1 : 0) + (r.foundCross ? 1 : 0) + (r.foundSequence ? 1 : 0);
+        if (count < 2) return;
+
+        String header = (count == 3)
+                ? "🎰🎰🎰 BİNGOOO!!! 3/3 PATTERN 🎰🎰🎰"
+                : "⭐ 2/3 PATTERN EŞLEŞMESİ ⭐";
+
+        StringBuilder sb = new StringBuilder();
+        sb.append(header).append("\n");
+        sb.append("   Maç: ").append(r.home).append(" vs ").append(r.away).append("\n");
+        sb.append("   Bulunan Yöntemler: ")
+                .append(r.foundTriple ? "[🧩 ÜÇLÜ AĞ] " : "")
+                .append(r.foundCross ? "[🔥 KUSURSUZ X ÇAPRAZ] " : "")
+                .append(r.foundSequence ? "[🎯 BAĞIMSIZ SKOR SERİSİ] " : "")
+                .append("(").append(count).append("/3)\n");
+        for (String detail : r.details) {
+            sb.append("   • ").append(detail).append("\n");
+        }
+        sb.append("   Taktik: 2/1 VEYA 1/2 Oyna!\n");
+        sb.append("   Link: ").append(r.url);
+        matchedPatterns.add(sb.toString());
     }
 
     private static void printProgress(int completed, int total) {
@@ -473,17 +469,24 @@ public class MackolikHalfTimePatternFinder {
     private static void printResults(long startTime) {
         System.out.println("\n\n==== BÜTÜN MAÇLARIN ANALİZİ TAMAMLANDI ====");
         System.out.println("\n=======================================================");
-        System.out.println("🔥 SONUÇ: SİSTEM TAKTİKLERİNE UYAN MAÇLAR 🔥");
+        System.out.println("🔥 SONUÇ: EN AZ 2/3 YÖNTEME UYAN MAÇLAR 🔥");
         System.out.println("=======================================================");
 
         if (matchedPatterns.isEmpty()) {
-            System.out.println("❌ Maalesef bugün için patternlere uyan maç bulunamadı.");
+            System.out.println("❌ Maalesef bugün için en az 2 yönteme birden uyan maç bulunamadı.");
         } else {
-            for (String result : matchedPatterns) {
+            // BINGOOO (3/3) olanlar en üstte gösterilsin
+            List<String> sorted = new ArrayList<>(matchedPatterns);
+            sorted.sort((s1, s2) -> Boolean.compare(s2.startsWith("🎰"), s1.startsWith("🎰")));
+
+            long bingoCount = sorted.stream().filter(s -> s.startsWith("🎰")).count();
+
+            for (String result : sorted) {
                 System.out.println(result);
                 System.out.println("-------------------------------------------------------");
             }
-            System.out.println("\n✅ Toplam Bulunan Sinyal Sayısı: " + matchedPatterns.size());
+            System.out.println("\n✅ Toplam Bulunan Maç Sayısı: " + sorted.size()
+                    + " (🎰 BINGOOO: " + bingoCount + " | ⭐ 2/3: " + (sorted.size() - bingoCount) + ")");
         }
         System.out.println("=======================================================\n");
 
@@ -502,6 +505,23 @@ public class MackolikHalfTimePatternFinder {
     // ─────────────────────────────────────────────────────────────
     // Veri Modelleri
     // ─────────────────────────────────────────────────────────────
+    // Bir maçta 3 yöntemden hangilerinin bulunduğunu toplar
+    static class MatchResult {
+        final String url;
+        final String home;
+        final String away;
+        boolean foundTriple;    // 🧩 Üçlü Ağ Patterni
+        boolean foundCross;     // 🔥 Kusursuz X Çapraz
+        boolean foundSequence;  // 🎯 Bağımsız Skor Serisi
+        final List<String> details = new ArrayList<>();
+
+        MatchResult(String url, String home, String away) {
+            this.url = url;
+            this.home = home;
+            this.away = away;
+        }
+    }
+
     static class PastMatch {
         String league;
         String date;

@@ -12,6 +12,9 @@ import java.sql.*;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.util.*;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
 public class Bet365DailyAutoAnalyzer {
 
@@ -27,27 +30,6 @@ public class Bet365DailyAutoAnalyzer {
             this.flashscoreKey = flashscoreKey;
         }
     }
-
-    // ---------- Adaptif yöntem için varsayılan ve ek kolonlar ----------
-    private static final List<ColumnDef> DEFAULT_COLS = List.of(
-            new ColumnDef("first_x_a",       "İY X",           "1x2|1st Half|Draw"),
-            new ColumnDef("bts_second_no_a", "2Y KG Hayır",    "Both teams|2nd Half|No"),
-            new ColumnDef("bts_first_no_a",   "İY KG Hayır",     "Both teams|1st Half|No"),
-            new ColumnDef("dbc_ft_12_a",      "ÇŞ 12",          "Double chance|Full Time|12"),
-            new ColumnDef("ft_1_5_over_a",    "A/U 1.5 Üst",    "Over/Under|Full Time|O 1.5"),
-            new ColumnDef("bts_ft_yes_a",     "KG Evet",        "Both teams|Full Time|Yes"),
-            new ColumnDef("first_2_a",        "İY 2",           "1x2|1st Half|Away")
-    );
-
-    private static final List<ColumnDef> EXTRA_COLS = List.of(
-            new ColumnDef("dbc_ft_x2_a",      "ÇŞ X2",         "Double chance|Full Time|X2"),
-            new ColumnDef("dbc_ft_1x_a",      "ÇŞ 1X",         "Double chance|Full Time|1X"),
-            new ColumnDef("first_1_a",        "İY 1",          "1x2|1st Half|Home"),
-            new ColumnDef("first_2_a",        "İY 2",          "1x2|1st Half|Away"),
-            new ColumnDef("ft_1_a",           "MS 1",          "1x2|Full Time|Home"),
-            new ColumnDef("ft_2_a",           "MS 2",          "1x2|Full Time|Away"),
-            new ColumnDef("ft_4_5_under_a",   "A/U 4.5 Alt",   "Over/Under|Full Time|U 4.5")
-    );
 
     // ---------- TÜM KOLONLAR ----------
     private static final List<ColumnDef> ALL_COLS = new ArrayList<>();
@@ -161,6 +143,15 @@ public class Bet365DailyAutoAnalyzer {
     private Connection conn;
     private List<String> sqlColumns = new ArrayList<>();
 
+    // ---- Bellek içi tablo: tüm filtrelemeler SQL yerine RAM'de yapılır ----
+    private final Map<String, float[]> oddsColumns = new HashMap<>(); // sql kolon -> değerler (NaN = NULL)
+    private long[] rowIds;   // pkey (id) değerleri, date_time DESC sıralı
+    private int rowCount;
+    private String pkColumn;
+    private int[] scratch;   // filterColumn için tekrar kullanılan tampon
+    // Aynı desen listesi maç başına bir kez hesaplanır
+    private final Map<String, int[]> patternResultCache = new HashMap<>();
+
     // ==================== VERİ MODELLERİ ====================
     static class MatchInfo {
         String id, home, away, date;
@@ -171,6 +162,21 @@ public class Bet365DailyAutoAnalyzer {
     static class MatchResult {
         Map<String, String> data = new HashMap<>();
     }
+
+    // Bir twin oyunun istatistikte gösterilecek detayları
+    static class TwinInfo {
+        String date, home, away, ft, ht, htft;
+    }
+
+    // Bir yöntemin bir maç için bulduğu twin oyunların HT/FT sonuçları
+    static class MethodVerdict {
+        String methodName;
+        List<String> htftOutcomes = new ArrayList<>(); // örn. "1/2", "2/1", "1/X" ...
+        List<TwinInfo> twins = new ArrayList<>();
+    }
+
+    // Gün sonu istatistiği için: bugünkü maç -> onu bulan yöntemlerin kararları
+    private final Map<MatchInfo, List<MethodVerdict>> matchVerdicts = new LinkedHashMap<>();
 
     // ==================== YAPILANDIRICI ====================
     public Bet365DailyAutoAnalyzer() {
@@ -186,6 +192,7 @@ public class Bet365DailyAutoAnalyzer {
             }
             System.out.println("✅ Veritabanına bağlandı. " + sqlColumns.size() + " kolon bulundu.");
             System.out.println("✅ SQL'de " + getSQLRowCount() + " kayıt var.\n");
+            loadTableIntoMemory();
         } catch (Exception e) {
             System.err.println("❌ Veritabanı hatası: " + e.getMessage());
             e.printStackTrace();
@@ -199,6 +206,54 @@ public class Bet365DailyAutoAnalyzer {
             if (rs.next()) return rs.getLong(1);
         }
         return 0;
+    }
+
+    // ==================== TABLOYU BELLEĞE YÜKLEME ====================
+    // 771k+ satırlık tabloda indexsiz sorgular her seferinde tam tablo taraması yapıyordu.
+    // Tüm oran kolonları bir kez float dizilerine yüklenir (~300MB); sonrası mikrosaniyelik tarama.
+    private void loadTableIntoMemory() throws SQLException {
+        long t0 = System.currentTimeMillis();
+        System.out.println("⏳ bet365_matches belleğe yükleniyor...");
+
+        try (ResultSet rs = conn.getMetaData().getPrimaryKeys(null, null, "bet365_matches")) {
+            if (rs.next()) pkColumn = rs.getString("COLUMN_NAME");
+        }
+        if (pkColumn == null) throw new SQLException("bet365_matches için primary key bulunamadı");
+
+        LinkedHashSet<String> cols = new LinkedHashSet<>();
+        for (ColumnDef c : ALL_COLS) if (sqlColumns.contains(c.sqlColumn)) cols.add(c.sqlColumn);
+        List<String> colList = new ArrayList<>(cols);
+
+        int capacity = (int) getSQLRowCount() + 1000; // yükleme sırasında eklenebilecek satırlar için pay
+        rowIds = new long[capacity];
+        float[][] data = new float[colList.size()][capacity];
+
+        String sql = "SELECT " + pkColumn + ", " + String.join(", ", colList)
+                + " FROM bet365_matches ORDER BY date_time DESC";
+        conn.setAutoCommit(false); // fetchSize'ın etkili olması için gerekli
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setFetchSize(20000);
+            try (ResultSet rs = ps.executeQuery()) {
+                int r = 0;
+                while (rs.next() && r < capacity) {
+                    rowIds[r] = rs.getLong(1);
+                    for (int i = 0; i < colList.size(); i++) {
+                        float v = rs.getFloat(i + 2);
+                        data[i][r] = rs.wasNull() ? Float.NaN : v;
+                    }
+                    r++;
+                }
+                rowCount = r;
+            }
+        } finally {
+            conn.setAutoCommit(true);
+        }
+
+        for (int i = 0; i < colList.size(); i++) oddsColumns.put(colList.get(i), data[i]);
+        scratch = new int[rowCount];
+
+        System.out.printf("✅ Tablo belleğe yüklendi: %,d satır × %d kolon (%.1f sn)%n%n",
+                rowCount, colList.size(), (System.currentTimeMillis() - t0) / 1000.0);
     }
 
     // ==================== SCRAPER ====================
@@ -236,7 +291,14 @@ public class Bet365DailyAutoAnalyzer {
                 } catch (Exception ignored) {}
             }
 
-            for (MatchInfo mi : matches) fetchOddsForMatch(mi);
+            // Oranlar paralel çekilir; maç başına 2 HTTP isteğinin seri yapılması en büyük zaman kayıplarındandı
+            ExecutorService pool = Executors.newFixedThreadPool(16);
+            List<Future<?>> futures = new ArrayList<>();
+            for (MatchInfo mi : matches) futures.add(pool.submit(() -> fetchOddsForMatch(mi)));
+            for (Future<?> f : futures) {
+                try { f.get(); } catch (Exception ignored) {}
+            }
+            pool.shutdown();
             System.out.println("✅ " + matches.size() + " maçın oranları çekildi.\n");
 
         } catch (Exception e) {
@@ -434,99 +496,83 @@ public class Bet365DailyAutoAnalyzer {
         return "-";
     }
 
-    // ==================== ANALİZ: YÖNTEM 1 (ADAPTİF) ====================
-    private void analyzeMatchAdaptive(MatchInfo match) {
-        String header = "🔵 YÖNTEM 1 [" + match.home + " vs " + match.away + "]: Adaptif Filtreleme";
-        System.out.println("═══════════════════════════════════════════════════════════════");
-        System.out.println(header);
-        System.out.println("═══════════════════════════════════════════════════════════════");
-
-        System.out.println("📊 Maç Oranları:");
-        for (ColumnDef col : DEFAULT_COLS) {
-            String val = match.odds.getOrDefault(col.flashscoreKey, "-");
-            System.out.printf("   %-15s = %s%n", col.displayName, val);
-        }
-        System.out.println();
-
-        List<ColumnDef> activeFilters = new ArrayList<>(DEFAULT_COLS);
-        List<MatchResult> results = querySQL(match, activeFilters);
-
-        System.out.println("🔍 AŞAMA 1: Default " + DEFAULT_COLS.size() + " kolon ile filtreleme");
-        System.out.println("   Aktif filtreler: " + getFilterNames(activeFilters));
-        System.out.println("   Sonuç: " + results.size() + " maç\n");
-
-        if (results.size() >= 1 && results.size() <= 2) {
-            printResultsIfInRange(results, activeFilters, match, "Yöntem 1");
-            return;
-        }
-
-        int stage = 2;
-        for (ColumnDef extraCol : EXTRA_COLS) {
-            if (results.size() >= 1 && results.size() <= 2) break;
-
-            boolean alreadyActive = activeFilters.stream()
-                    .anyMatch(c -> c.sqlColumn.equals(extraCol.sqlColumn));
-            if (alreadyActive) continue;
-
-            String oddsValue = match.odds.getOrDefault(extraCol.flashscoreKey, "");
-            if (oddsValue.isEmpty() || "-".equals(oddsValue)) continue;
-
-            activeFilters.add(extraCol);
-            List<MatchResult> newResults = querySQL(match, activeFilters);
-
-            if (newResults.isEmpty()) {
-                activeFilters.remove(activeFilters.size() - 1);
-                System.out.println("🔍 AŞAMA " + stage + ": +" + extraCol.displayName
-                        + " eklenseydi sonuç " + newResults.size() + " olacaktı → ATLANDI");
-                stage++;
-                continue;
-            }
-
-            results = newResults;
-            System.out.println("🔍 AŞAMA " + stage + ": +" + extraCol.displayName + " eklendi");
-            System.out.println("   Aktif filtreler: " + getFilterNames(activeFilters));
-            System.out.println("   Sonuç: " + results.size() + " maç\n");
-            stage++;
-        }
-
-        printResultsIfInRange(results, activeFilters, match, "Yöntem 1");
-    }
-
-    // ==================== YENİ YÖNTEMLER İÇİN SEQUENTIAL ADAPTİF METOT ====================
+    // ==================== YÖNTEMLER İÇİN SEQUENTIAL ADAPTİF METOT (BELLEK İÇİ) ====================
     private void analyzeWithSequentialPattern(MatchInfo match, List<String> patternDisplayNames, String methodName) {
         // Səssiz işləyir: heç bir addım/başlıq çap etmir.
         // Yalnız sonda uyğun twin oyun (1-2 nəticə) tapılanda kompakt çap edir.
+        // Filtreleme SQL yerine bellekteki tablo üzerinde yapılır.
         List<ColumnDef> patternFilters = new ArrayList<>();
         for (String displayName : patternDisplayNames) {
             ColumnDef col = ALL_COLS.stream()
                     .filter(c -> c.displayName.equals(displayName))
                     .findFirst().orElse(null);
             if (col == null) continue;
+            if (!oddsColumns.containsKey(col.sqlColumn)) continue; // kolon tabloda yok
             String val = match.odds.getOrDefault(col.flashscoreKey, "");
             if (val.isEmpty() || "-".equals(val)) continue;
             patternFilters.add(col);
         }
         if (patternFilters.isEmpty()) return;
 
-        List<ColumnDef> activeFilters = new ArrayList<>();
-        List<MatchResult> results = new ArrayList<>();
-
-        for (ColumnDef col : patternFilters) {
-            List<ColumnDef> tempFilters = new ArrayList<>(activeFilters);
-            tempFilters.add(col);
-            List<MatchResult> newResults = querySQL(match, tempFilters);
-            if (newResults.isEmpty()) continue;
-
-            activeFilters.add(col);
-            results = newResults;
-
-            if (results.size() >= 1 && results.size() <= 2) break;
+        String cacheKey = match.id + "::" + String.join(",", patternDisplayNames);
+        int[] rows = patternResultCache.get(cacheKey);
+        if (rows == null) {
+            rows = runSequentialFilter(match, patternFilters);
+            patternResultCache.put(cacheKey, rows);
         }
 
         // Uyğun twin oyun yoxdursa (aralıq dışı) heç nə çap etmə.
-        if (results.size() < 1 || results.size() > 2) return;
+        if (rows.length < 1 || rows.length > 2) return;
+
+        List<MatchResult> results = fetchRowsByIndex(rows);
+        if (results.isEmpty()) return;
 
         printCompactResult(results, match, methodName);
+
+        // İstatistik için bu yöntemin kararını kaydet (twin oyunların HT/FT sonuçları)
+        MethodVerdict verdict = new MethodVerdict();
+        verdict.methodName = methodName;
+        for (MatchResult r : results) {
+            String htft = computeHtFt(r.data.get("ht_iy"), r.data.get("ft_ms"));
+            if (htft == null) continue;
+            verdict.htftOutcomes.add(htft);
+
+            TwinInfo twin = new TwinInfo();
+            twin.date = r.data.getOrDefault("date_time", "-");
+            twin.home = r.data.getOrDefault("home_team", "-");
+            twin.away = r.data.getOrDefault("away_team", "-");
+            twin.ft = r.data.getOrDefault("ft_ms", "-");
+            twin.ht = r.data.getOrDefault("ht_iy", "-");
+            twin.htft = htft;
+            verdict.twins.add(twin);
+        }
+        if (!verdict.htftOutcomes.isEmpty()) {
+            matchVerdicts.computeIfAbsent(match, k -> new ArrayList<>()).add(verdict);
+        }
+    }
+
+    // ==================== HT/FT HESAPLAMA ====================
+    // "2-1" / "2:1" formatındaki İY ve MS skorlarından "1/2", "X/1" gibi HT/FT sonucu üretir.
+    private String computeHtFt(String htScore, String ftScore) {
+        String ht = scoreSign(htScore);
+        String ft = scoreSign(ftScore);
+        if (ht == null || ft == null) return null;
+        return ht + "/" + ft;
+    }
+
+    private String scoreSign(String score) {
+        if (score == null) return null;
+        String[] parts = score.trim().split("[-:]");
+        if (parts.length != 2) return null;
+        try {
+            int h = Integer.parseInt(parts[0].trim());
+            int a = Integer.parseInt(parts[1].trim());
+            if (h > a) return "1";
+            if (h < a) return "2";
+            return "X";
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 
     // ==================== KOMPAKT ÇIXIŞ: yalnız uyğun twin oyun tapılanda ====================
@@ -551,96 +597,61 @@ public class Bet365DailyAutoAnalyzer {
         System.out.println("└──────┴─────────────────────┴─────────────────────┴──────────┴──────────┴──────────┘\n");
     }
 
-    // ==================== YARDIMCI: SONUÇ TABLOSUNU SADECE BELİRLİ ARALIKTA YAZDIR ====================
-    private void printResultsIfInRange(List<MatchResult> results, List<ColumnDef> filters, MatchInfo match, String methodLabel) {
-        int size = results.size();
-        if (size < 1 || size > 2) {
-            System.out.println("❌ " + methodLabel + ": Sonuç aralık dışı (" + size + " maç) → tablo yazdırılmadı.\n");
-            return;
-        }
-        printResultsTable(results, filters, match);
-    }
-
-    private void printResultsTable(List<MatchResult> results, List<ColumnDef> filters, MatchInfo match) {
-        System.out.println("📊 SONUÇ: " + results.size() + " maç bulundu (hedef aralıkta).");
-        System.out.println("┌──────┬─────────────────────┬─────────────────────┬──────────┬──────────┬──────────┐");
-        System.out.println("│ #    │ Tarih               │ Ev Sahibi           │ Deplasman│ MS       │ İY       │");
-        System.out.println("├──────┼─────────────────────┼─────────────────────┼──────────┼──────────┼──────────┤");
-
-        for (int i = 0; i < results.size(); i++) {
-            MatchResult r = results.get(i);
-            String date = truncate(r.data.getOrDefault("date_time", "-"), 19);
-            String home = truncate(r.data.getOrDefault("home_team", "-"), 19);
-            String away = truncate(r.data.getOrDefault("away_team", "-"), 8);
-            String ft = truncate(r.data.getOrDefault("ft_ms", "-"), 8);
-            String ht = truncate(r.data.getOrDefault("ht_iy", "-"), 8);
-            System.out.printf("│ %-4d │ %-19s │ %-19s │ %-8s │ %-8s │ %-8s │%n",
-                    (i + 1), date, home, away, ft, ht);
-        }
-        System.out.println("└──────┴─────────────────────┴─────────────────────┴──────────┴──────────┴──────────┘");
-
-        System.out.println("\n📋 Kullanılan Filtreler (oranlarıyla):");
-        for (ColumnDef f : filters) {
-            String val = match.odds.getOrDefault(f.flashscoreKey, "-");
-            System.out.println("   • " + f.displayName + " = " + val);
-        }
-        System.out.println();
-    }
-
-    // ==================== ORTAK SORGU METOTU ====================
-    private List<MatchResult> querySQL(MatchInfo match, List<ColumnDef> filters) {
-        List<MatchResult> results = new ArrayList<>();
-        List<String> conditions = new ArrayList<>();
-        List<Object> params = new ArrayList<>();
-
-        for (ColumnDef col : filters) {
-            String oddsValue = match.odds.getOrDefault(col.flashscoreKey, "");
-            if (oddsValue.isEmpty() || "-".equals(oddsValue)) continue;
-            if (!sqlColumns.contains(col.sqlColumn)) continue;
-
-            conditions.add(col.sqlColumn + " = ?");
+    // ==================== BELLEK İÇİ FİLTRELEME ====================
+    // Sıralı desen mantığının aynısı: filtre tek tek eklenir, sonuç boşsa filtre atlanır,
+    // 1-2 satır kalınca durulur. Satırlar date_time DESC sıralı yüklendiği için
+    // eski SQL'deki ORDER BY davranışı korunur.
+    private int[] runSequentialFilter(MatchInfo match, List<ColumnDef> patternFilters) {
+        int[] candidates = null; // null = henüz koşul uygulanmadı (tüm tablo)
+        for (ColumnDef col : patternFilters) {
+            float value;
             try {
-                params.add(Double.parseDouble(oddsValue.replace(',', '.')));
+                value = Float.parseFloat(match.odds.get(col.flashscoreKey).replace(',', '.'));
             } catch (NumberFormatException e) {
-                params.add(oddsValue);
+                continue;
             }
+            int[] next = filterColumn(candidates, col.sqlColumn, value);
+            if (next.length == 0) continue;
+            candidates = next;
+            if (candidates.length <= 2) break;
         }
-
-        if (conditions.isEmpty()) return results;
-
-        String whereClause = " WHERE " + String.join(" AND ", conditions);
-        String sql = "SELECT * FROM bet365_matches " + whereClause
-                + " ORDER BY date_time DESC LIMIT 5000";
-
-        try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
-            for (int i = 0; i < params.size(); i++) {
-                pstmt.setObject(i + 1, params.get(i));
-            }
-            ResultSet rs = pstmt.executeQuery();
-            ResultSetMetaData meta = rs.getMetaData();
-            int colCount = meta.getColumnCount();
-
-            while (rs.next()) {
-                MatchResult mr = new MatchResult();
-                for (int i = 1; i <= colCount; i++) {
-                    mr.data.put(meta.getColumnName(i), rs.getString(i));
-                }
-                results.add(mr);
-            }
-        } catch (SQLException ex) {
-            System.err.println("SQL Hatası: " + ex.getMessage());
-        }
-
-        return results;
+        return candidates == null ? new int[0] : candidates;
     }
 
-    private String getFilterNames(List<ColumnDef> filters) {
-        StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < filters.size(); i++) {
-            sb.append(filters.get(i).displayName);
-            if (i < filters.size() - 1) sb.append(", ");
+    private int[] filterColumn(int[] base, String sqlColumn, float value) {
+        float[] col = oddsColumns.get(sqlColumn);
+        int k = 0;
+        if (base == null) {
+            for (int i = 0; i < rowCount; i++) if (col[i] == value) scratch[k++] = i;
+        } else {
+            for (int idx : base) if (col[idx] == value) scratch[k++] = idx;
         }
-        return sb.toString();
+        return Arrays.copyOf(scratch, k);
+    }
+
+    // Bulunan 1-2 twin satırın gösterim kolonları pkey üzerinden çekilir (indexli, milisaniyelik)
+    private List<MatchResult> fetchRowsByIndex(int[] rowIdx) {
+        List<MatchResult> results = new ArrayList<>();
+        String sql = "SELECT date_time, home_team, away_team, ft_ms, ht_iy FROM bet365_matches WHERE "
+                + pkColumn + " = ?";
+        for (int idx : rowIdx) {
+            try (PreparedStatement ps = conn.prepareStatement(sql)) {
+                ps.setLong(1, rowIds[idx]);
+                try (ResultSet rs = ps.executeQuery()) {
+                    if (rs.next()) {
+                        MatchResult mr = new MatchResult();
+                        ResultSetMetaData meta = rs.getMetaData();
+                        for (int i = 1; i <= meta.getColumnCount(); i++) {
+                            mr.data.put(meta.getColumnName(i), rs.getString(i));
+                        }
+                        results.add(mr);
+                    }
+                }
+            } catch (SQLException ex) {
+                System.err.println("SQL Hatası: " + ex.getMessage());
+            }
+        }
+        return results;
     }
 
     private String truncate(String s, int maxLen) {
@@ -659,7 +670,7 @@ public class Bet365DailyAutoAnalyzer {
         }
 
         System.out.println("═══════════════════════════════════════════════════════════════");
-        System.out.println("🤖 16 ANALİZ YÖNTEMİ İLE OTOMATİK ANALİZ BAŞLIYOR: " + todayMatches.size() + " maç");
+        System.out.println("🤖 7 ANALİZ YÖNTEMİ İLE OTOMATİK ANALİZ BAŞLIYOR: " + todayMatches.size() + " maç");
         System.out.println("═══════════════════════════════════════════════════════════════\n");
 
         for (MatchInfo match : todayMatches) {
@@ -704,68 +715,6 @@ public class Bet365DailyAutoAnalyzer {
 
             analyzeWithSequentialPattern(match,
                     List.of(
-                            "İY X", "MS Skor 0:2", "İY A/U 2.5 Üst", "İY Skor 1:1", "İY Skor 0:2",
-                            "MS Skor 2:0", "İY A/U 1.5 Alt", "MS Skor 4:4", "İY Skor 1:2", "MS Skor 3:4",
-                            "İY Skor 3:1", "MS Skor 4:0", "İY Skor 3:0", "KG Evet", "MS Skor 0:1",
-                            "ÇŞ 1X", "2Y A/U 1.5 Üst", "İY Skor 2:0", "2Y A/U 2.5 Üst", "A/U 5.5 Alt",
-                            "A/U 1.5 Üst", "MS Skor 4:2", "İY Skor 0:1", "İY Skor 0:3", "MS Skor 4:3",
-                            "ÇŞ 12"
-                    ),
-                    "🔵 YÖNTEM 5 [HT/FT Seti 4]"
-            );
-
-            analyzeWithSequentialPattern(match,
-                    List.of(
-                            "İY A/U 0.5 Alt", "2Y A/U 1.5 Alt", "2Y A/U 2.5 Üst", "İY A/U 2.5 Alt",
-                            "MS Skor 4:3", "MS Skor 3:0", "HT/FT 1/2", "A/U 5.5 Üst", "A/U 2.5 Alt",
-                            "KG Evet", "2Y A/U 0.5 Alt", "2Y A/U 1.5 Üst", "MS Skor 2:4", "MS Skor 1:0",
-                            "HT/FT X/2", "İY A/U 2.5 Üst", "İY Skor 3:1", "2Y A/U 0.5 Üst", "İY KG Hayır",
-                            "2Y KG Evet", "MS Skor 4:4", "İY 1", "A/U 1.5 Alt", "İY Skor 2:1",
-                            "İY A/U 1.5 Üst", "A/U 3.5 Üst", "KG Hayır", "İY Skor 0:3", "MS Skor 0:2"
-                    ),
-                    "🔵 YÖNTEM 6 [HT/FT Seti 5]"
-            );
-
-            analyzeWithSequentialPattern(match,
-                    List.of(
-                            "İY A/U 0.5 Alt", "2Y A/U 0.5 Alt", "İY Skor 1:1", "KG Hayır", "İY Skor 2:2",
-                            "İY A/U 0.5 Üst", "İY A/U 1.5 Üst", "MS Skor 1:3", "İY X", "A/U 0.5 Alt",
-                            "2Y 1", "MS Skor 1:1", "MS Skor 2:4", "HT/FT 2/X", "İY Skor 1:3",
-                            "MS Skor 1:2", "2Y 2", "MS Skor 2:2", "İY Skor 3:1", "A/U 5.5 Alt",
-                            "HT/FT 1/2", "MS Skor 1:4", "A/U 1.5 Alt", "ÇŞ X2"
-                    ),
-                    "🔵 YÖNTEM 7 [HT/FT Seti 6]"
-            );
-
-            // ── 🎯 YÜKSƏK GÜVƏN: 5/10 düz! (yeni əlavə edilən filtr dəstləri) ──────────────
-            // Not: istifadəçinin göndərdiyi dəstlərdən biri mövcud YÖNTEM 7 ilə eyni idi, təkrarlanmadı.
-            analyzeWithSequentialPattern(match,
-                    List.of(
-                            "MS 2", "MS Skor 3:0", "MS Skor 4:4", "MS Skor 1:0", "İY Skor 2:0",
-                            "İY ÇŞ 12", "İY A/U 0.5 Üst", "ÇŞ X2", "HT/FT X/1", "İY A/U 1.5 Alt"
-                    ),
-                    "🎯 YÖNTEM 8 [HT/FT Seti 7]"
-            );
-
-            analyzeWithSequentialPattern(match,
-                    List.of(
-                            "MS Skor 0:1", "İY Skor 1:1", "İY Skor 0:2", "HT/FT 2/2", "İY Skor 0:3",
-                            "HT/FT X/1", "MS Skor 2:4", "İY 2", "MS Skor 0:2", "KG Hayır",
-                            "MS Skor 0:3", "MS Skor 3:3", "2Y A/U 2.5 Alt", "İY Skor 3:2", "İY Skor 2:1",
-                            "MS Skor 4:3", "KG Evet", "İY Skor 1:2", "A/U 3.5 Alt", "HT/FT 1/2",
-                            "A/U 4.5 Alt", "MS Skor 3:0", "MS Skor 3:1", "2Y 2", "HT/FT 1/1",
-                            "2Y A/U 2.5 Üst", "İY X", "2Y A/U 1.5 Üst", "MS Skor 2:0", "MS Skor 4:0",
-                            "İY A/U 1.5 Üst", "ÇŞ 1X", "MS Skor 3:2", "MS Skor 4:4", "MS Skor 1:2",
-                            "İY Skor 0:1", "İY Skor 3:1", "A/U 0.5 Alt", "MS Skor 3:4", "MS Skor 1:3",
-                            "2Y 1", "İY Skor 2:3", "İY Skor 1:3", "MS Skor 4:1", "MS Skor 4:2",
-                            "HT/FT 2/X", "HT/FT X/X", "İY A/U 2.5 Alt", "2Y X", "A/U 5.5 Üst",
-                            "MS Skor 0:4", "A/U 0.5 Üst", "MS Skor 1:1"
-                    ),
-                    "🎯 YÖNTEM 9 [HT/FT Seti 8]"
-            );
-
-            analyzeWithSequentialPattern(match,
-                    List.of(
                             "A/U 0.5 Alt", "İY Skor 1:0", "A/U 4.5 Üst", "A/U 4.5 Alt", "HT/FT 2/1",
                             "MS Skor 0:1", "MS Skor 4:4", "A/U 5.5 Üst", "HT/FT 1/1", "KG Hayır",
                             "HT/FT X/1", "MS Skor 1:1", "MS Skor 2:4", "MS Skor 4:2", "2Y 2",
@@ -784,17 +733,6 @@ public class Bet365DailyAutoAnalyzer {
                             "HT/FT X/1", "İY 2"
                     ),
                     "🎯 YÖNTEM 11 [HT/FT Seti 10]"
-            );
-
-            analyzeWithSequentialPattern(match,
-                    List.of(
-                            "İY Skor 1:2", "MS Skor 2:2", "MS 1", "MS Skor 4:4", "HT/FT X/1",
-                            "İY A/U 2.5 Üst", "İY ÇŞ 12", "HT/FT 2/X", "MS Skor 2:3", "ÇŞ 12",
-                            "İY ÇŞ 1X", "HT/FT 1/2", "A/U 4.5 Alt", "MS Skor 1:3", "İY A/U 1.5 Alt",
-                            "MS Skor 3:3", "2Y 1", "İY Skor 1:1", "İY KG Evet", "İY Skor 1:0",
-                            "İY Skor 2:0"
-                    ),
-                    "🎯 YÖNTEM 12 [HT/FT Seti 11]"
             );
 
             analyzeWithSequentialPattern(match,
@@ -822,41 +760,229 @@ public class Bet365DailyAutoAnalyzer {
                     "🎯 YÖNTEM 14 [HT/FT Seti 13]"
             );
 
-            analyzeWithSequentialPattern(match,
-                    List.of(
-                            "A/U 4.5 Üst", "2Y A/U 2.5 Alt", "İY Skor 3:1", "A/U 5.5 Alt", "İY Skor 1:0",
-                            "2Y 2", "İY Skor 1:2", "İY ÇŞ X2", "MS Skor 0:1", "HT/FT 2/2",
-                            "İY ÇŞ 12", "ÇŞ X2", "MS Skor 4:1", "A/U 3.5 Alt", "HT/FT 1/1",
-                            "MS Skor 1:1", "İY Skor 2:2", "2Y A/U 1.5 Alt"
-                    ),
-                    "🎯 YÖNTEM 15 [HT/FT Seti 14]"
-            );
-
-            analyzeWithSequentialPattern(match,
-                    List.of(
-                            "İY 2", "MS Skor 3:3", "MS Skor 1:4", "A/U 5.5 Üst", "KG Hayır",
-                            "İY A/U 1.5 Alt", "MS Skor 2:4", "A/U 2.5 Üst", "KG Evet", "HT/FT 1/X",
-                            "2Y A/U 2.5 Alt", "2Y KG Evet", "A/U 3.5 Üst", "MS Skor 1:1", "İY Skor 0:3",
-                            "A/U 3.5 Alt", "HT/FT X/1", "MS Skor 4:1", "MS Skor 0:4"
-                    ),
-                    "🎯 YÖNTEM 16 [HT/FT Seti 15]"
-            );
-
-            analyzeWithSequentialPattern(match,
-                    List.of(
-                            "A/U 3.5 Alt", "MS X", "İY ÇŞ X2", "KG Evet", "A/U 0.5 Üst",
-                            "İY KG Evet", "A/U 4.5 Üst", "HT/FT 1/X", "2Y A/U 0.5 Üst", "İY ÇŞ 1X",
-                            "MS Skor 2:4", "İY Skor 1:0", "HT/FT 1/1", "HT/FT X/1", "İY Skor 0:3",
-                            "MS Skor 3:3"
-                    ),
-                    "🎯 YÖNTEM 17 [HT/FT Seti 16]"
-            );
-
         }
+
+        printEndOfDayStatistics();
+        printCommonHtFtPredictions();
+        printCommonSidePredictions();
 
         System.out.println("═══════════════════════════════════════════════════════════════");
         System.out.println("✅ TÜM ANALİZLER TAMAMLANDI");
         System.out.println("═══════════════════════════════════════════════════════════════");
+    }
+
+    // ==================== GÜN SONU İSTATİSTİĞİ ====================
+    // HT/FT marketinde 1/2 ve 2/1 = "Comeback", 1/X ve 2/X = "Beraberlik (geri dönüşlü)".
+    // Bir maçı bulan TÜM yöntemlerin twin sonuçları aynı gruba düşüyorsa ortak karar sayılır.
+    private void printEndOfDayStatistics() {
+        Set<String> comebackSet = Set.of("1/2", "2/1");
+        Set<String> drawbackSet = Set.of("1/X", "2/X");
+        Set<String> xxSet = Set.of("X/X");
+
+        List<Map.Entry<MatchInfo, List<MethodVerdict>>> comebackMatches = new ArrayList<>();
+        List<Map.Entry<MatchInfo, List<MethodVerdict>>> drawbackMatches = new ArrayList<>();
+        List<Map.Entry<MatchInfo, List<MethodVerdict>>> xxMatches = new ArrayList<>();
+
+        for (Map.Entry<MatchInfo, List<MethodVerdict>> e : matchVerdicts.entrySet()) {
+            List<MethodVerdict> verdicts = e.getValue();
+            if (verdicts.isEmpty()) continue;
+
+            Set<String> allOutcomes = new LinkedHashSet<>();
+            for (MethodVerdict v : verdicts) allOutcomes.addAll(v.htftOutcomes);
+            if (allOutcomes.isEmpty()) continue;
+
+            if (comebackSet.containsAll(allOutcomes)) comebackMatches.add(e);
+            else if (drawbackSet.containsAll(allOutcomes)) drawbackMatches.add(e);
+            else if (xxSet.containsAll(allOutcomes)) xxMatches.add(e);
+        }
+
+        System.out.println("═══════════════════════════════════════════════════════════════");
+        System.out.println("📈 GÜN SONU İSTATİSTİĞİ (ortak karar analizi)");
+        System.out.println("═══════════════════════════════════════════════════════════════");
+
+        System.out.println("1) Tüm yöntemlere uygun 2/1 & 1/2 COMEBACK maçları: "
+                + (comebackMatches.isEmpty() ? "— yok —" : comebackMatches.size() + " maç"));
+        printStatMatches(comebackMatches);
+
+        System.out.println("2) Tüm yöntemlere uygun 1/X & 2/X BERABERLİK maçları: "
+                + (drawbackMatches.isEmpty() ? "— yok —" : drawbackMatches.size() + " maç"));
+        printStatMatches(drawbackMatches);
+
+        System.out.println("3) Tüm yöntemlere uygun X/X maçları: "
+                + (xxMatches.isEmpty() ? "— yok —" : xxMatches.size() + " maç"));
+        printStatMatches(xxMatches);
+        System.out.println();
+    }
+
+    // ==================== ORTAK HT/FT TƏXMİNİ (min. 6 yöntəm) ====================
+    // Yalnız 1/X, 2/X, X/X, 1/2, 2/1 təxminləri nəzərə alınır.
+    // 1/X ilə 2/X eyni təxmin sayılır (heç-heçə qrupu), 1/2 ilə 2/1 eyni təxmin sayılır (comeback qrupu),
+    // X/X isə ayrıca qrup kimi hesablanır.
+    private static final int MIN_COMMON_METHODS = 6;
+
+    private void printCommonHtFtPredictions() {
+        Set<String> drawGroup = Set.of("1/X", "2/X");
+        Set<String> comebackGroup = Set.of("1/2", "2/1");
+        Set<String> xxGroup = Set.of("X/X");
+
+        System.out.println("═══════════════════════════════════════════════════════════════");
+        System.out.println("🎯 ORTAK HT/FT TƏXMİNLƏRİ (minimum " + MIN_COMMON_METHODS + " yöntəm eyni təxmin)");
+        System.out.println("═══════════════════════════════════════════════════════════════");
+
+        boolean anyFound = false;
+
+        for (Map.Entry<MatchInfo, List<MethodVerdict>> e : matchVerdicts.entrySet()) {
+            List<MethodVerdict> drawVerdicts = new ArrayList<>();
+            List<MethodVerdict> comebackVerdicts = new ArrayList<>();
+            List<MethodVerdict> xxVerdicts = new ArrayList<>();
+
+            for (MethodVerdict v : e.getValue()) {
+                Set<String> outcomes = new HashSet<>(v.htftOutcomes);
+                if (outcomes.isEmpty()) continue;
+                if (drawGroup.containsAll(outcomes)) drawVerdicts.add(v);
+                else if (comebackGroup.containsAll(outcomes)) comebackVerdicts.add(v);
+                else if (xxGroup.containsAll(outcomes)) xxVerdicts.add(v);
+            }
+
+            if (drawVerdicts.size() >= MIN_COMMON_METHODS) {
+                printCommonPrediction(e.getKey(), drawVerdicts);
+                anyFound = true;
+            }
+            if (comebackVerdicts.size() >= MIN_COMMON_METHODS) {
+                printCommonPrediction(e.getKey(), comebackVerdicts);
+                anyFound = true;
+            }
+            if (xxVerdicts.size() >= MIN_COMMON_METHODS) {
+                printCommonPrediction(e.getKey(), xxVerdicts);
+                anyFound = true;
+            }
+        }
+
+        if (!anyFound) {
+            System.out.println("— Minimum " + MIN_COMMON_METHODS
+                    + " yöntəmin eyni HT/FT təxmini verdiyi oyun tapılmadı —");
+        }
+        System.out.println();
+    }
+
+    private void printCommonPrediction(MatchInfo match, List<MethodVerdict> verdicts) {
+        Set<String> outcomes = new LinkedHashSet<>();
+        for (MethodVerdict v : verdicts) outcomes.addAll(v.htftOutcomes);
+
+        List<String> descs = new ArrayList<>();
+        for (String o : outcomes) {
+            String d = htftDescription(o);
+            if (!descs.contains(d)) descs.add(d);
+        }
+
+        System.out.println(match.home + " vs " + match.away);
+        System.out.println("Təxmin edilən HT/FT: " + String.join(" & ", outcomes)
+                + " (" + String.join(" | ", descs) + ") — " + verdicts.size() + " Metodda uyğun gəlir.");
+        System.out.println("Yöntəmlər və sübutlar:");
+        for (MethodVerdict v : verdicts) {
+            String name = shortMethodName(v.methodName);
+            for (TwinInfo t : v.twins) {
+                String[] p = t.htft.split("/");
+                System.out.printf("%s: %s vs %s (%s, %s) ➔ İY: %s, MS: %s (%s)%n",
+                        name, t.home, t.away, t.ft, t.ht, p[0], p[1], t.htft);
+            }
+        }
+        System.out.println();
+    }
+
+    // ==================== EYNİ TƏRƏF TƏXMİNİ (7 yöntəmdən min. 6-sı) ====================
+    // Hər yöntəmin twin oyunlarının HT/FT nəticəsinin MS işarəsi (1, X, 2) eyni tərəfi
+    // göstərirsə, o yöntəm həmin tərəfə səs vermiş sayılır. 7 yöntəmdən ən az 6-sı
+    // eyni tərəfi göstərən oyunlar burada çap edilir.
+    private static final int MIN_SAME_SIDE_METHODS = 6;
+
+    private void printCommonSidePredictions() {
+        System.out.println("═══════════════════════════════════════════════════════════════");
+        System.out.println("🤝 EYNİ TƏRƏF TƏXMİNLƏRİ (7 yöntəmdən minimum "
+                + MIN_SAME_SIDE_METHODS + " yöntəm eyni MS tərəfi)");
+        System.out.println("═══════════════════════════════════════════════════════════════");
+
+        boolean anyFound = false;
+
+        for (Map.Entry<MatchInfo, List<MethodVerdict>> e : matchVerdicts.entrySet()) {
+            Map<String, List<MethodVerdict>> bySide = new LinkedHashMap<>();
+            for (MethodVerdict v : e.getValue()) {
+                Set<String> sides = new HashSet<>();
+                for (String o : v.htftOutcomes) sides.add(o.substring(o.indexOf('/') + 1));
+                if (sides.size() != 1) continue; // yöntəmin twinləri fərqli tərəflər göstərir
+                bySide.computeIfAbsent(sides.iterator().next(), k -> new ArrayList<>()).add(v);
+            }
+            for (Map.Entry<String, List<MethodVerdict>> s : bySide.entrySet()) {
+                if (s.getValue().size() < MIN_SAME_SIDE_METHODS) continue;
+                printSameSidePrediction(e.getKey(), s.getKey(), s.getValue());
+                anyFound = true;
+            }
+        }
+
+        if (!anyFound) {
+            System.out.println("— Minimum " + MIN_SAME_SIDE_METHODS
+                    + " yöntəmin eyni tərəf təxmini verdiyi oyun tapılmadı —");
+        }
+        System.out.println();
+    }
+
+    private void printSameSidePrediction(MatchInfo match, String side, List<MethodVerdict> verdicts) {
+        Set<String> outcomes = new LinkedHashSet<>();
+        for (MethodVerdict v : verdicts) outcomes.addAll(v.htftOutcomes);
+
+        System.out.println(match.home + " vs " + match.away);
+        System.out.println("Təxmin edilən MS tərəfi: " + side + " (" + signName(side)
+                + ") — " + verdicts.size() + " metod eyni tərəfi göstərir. Twin HT/FT nəticələri: "
+                + String.join(", ", outcomes));
+        System.out.println("Yöntəmlər və sübutlar:");
+        for (MethodVerdict v : verdicts) {
+            String name = shortMethodName(v.methodName);
+            for (TwinInfo t : v.twins) {
+                System.out.printf("%s: %s vs %s | İY %s → MS %s | HT/FT: %s%n",
+                        name, t.home, t.away, t.ht, t.ft, t.htft);
+            }
+        }
+        System.out.println();
+    }
+
+    private String htftDescription(String htft) {
+        String[] p = htft.split("/");
+        return signName(p[0]) + " / " + signName(p[1]);
+    }
+
+    private String signName(String sign) {
+        switch (sign) {
+            case "1": return "Ev sahibi";
+            case "2": return "Deplasman";
+            default:  return "Heç-heçə";
+        }
+    }
+
+    private String shortMethodName(String fullName) {
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("YÖNTEM \\d+").matcher(fullName);
+        return m.find() ? m.group() : fullName;
+    }
+
+    // Uygun maçı ve onu bulan her yöntemin twin maçlarını yazdırır
+    private void printStatMatches(List<Map.Entry<MatchInfo, List<MethodVerdict>>> entries) {
+        for (Map.Entry<MatchInfo, List<MethodVerdict>> e : entries) {
+            MatchInfo match = e.getKey();
+            List<MethodVerdict> verdicts = e.getValue();
+
+            Set<String> allOutcomes = new LinkedHashSet<>();
+            for (MethodVerdict v : verdicts) allOutcomes.addAll(v.htftOutcomes);
+
+            System.out.printf("   • %s vs %s  (%d yöntem hemfikir, twin HT/FT: %s)%n",
+                    match.home, match.away, verdicts.size(), String.join(", ", allOutcomes));
+
+            for (MethodVerdict v : verdicts) {
+                System.out.println("       " + v.methodName);
+                for (TwinInfo t : v.twins) {
+                    System.out.printf("         └ %s | %s vs %s | İY %s → MS %s | HT/FT: %s%n",
+                            t.date, t.home, t.away, t.ht, t.ft, t.htft);
+                }
+            }
+        }
     }
 
     public static void main(String[] args) {
