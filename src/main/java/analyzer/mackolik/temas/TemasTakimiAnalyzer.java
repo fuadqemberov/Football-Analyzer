@@ -13,6 +13,7 @@ import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 
 import java.io.IOException;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -59,10 +60,24 @@ public class TemasTakimiAnalyzer {
 
     // ─── AYARLAR ────────────────────────────────────────────────────────────
     private static final String BASE_URL       = "https://arsiv.mackolik.com/Team/Default.aspx?id=%d&season=%s";
-    private static final String CURRENT_SEASON = "2025/2026";
-    private static final int START_YEAR = 2024;   // en yeni geçmiş sezon (2024/2025)
-    private static final int END_YEAR   = 2010;   // en eski taranan sezon (2015/2016)
+
+    /** Yeni futbol sezonunun başladığı ay (Temmuz). Bu aydan itibaren yıl/(yıl+1) sezonundayız. */
+    private static final int SEASON_START_MONTH = 7;
+
+    /** Güncel sezonun başlangıç yılı sistem tarihinden dinamik hesaplanır (ör. Temmuz 2026 → 2026). */
+    private static final int CURRENT_SEASON_START_YEAR = computeCurrentSeasonStartYear();
+    /** Güncel sezon "yyyy/yyyy" formatında dinamik (ör. "2026/2027"). */
+    private static final String CURRENT_SEASON = CURRENT_SEASON_START_YEAR + "/" + (CURRENT_SEASON_START_YEAR + 1);
+
+    private static final int START_YEAR = CURRENT_SEASON_START_YEAR - 1;   // en yeni geçmiş sezon
+    private static final int END_YEAR   = 2010;   // en eski taranan sezon
     private static final int NUM_THREADS = 10;
+
+    /** Sistem tarihine göre güncel futbol sezonunun başlangıç yılını döndürür. */
+    private static int computeCurrentSeasonStartYear() {
+        LocalDate now = LocalDate.now();
+        return now.getMonthValue() >= SEASON_START_MONTH ? now.getYear() : now.getYear() - 1;
+    }
 
     /** Temas maçına maksimum uzaklık: -3..+3 (0 hariç). Negatif = temas maçından ÖNCE. */
     private static final int MAX_OFFSET = 3;
@@ -76,9 +91,13 @@ public class TemasTakimiAnalyzer {
         System.out.println("║  TEMAS TAKIMI ANALİZÖRÜ - HT/FT Sürpriz Avcısı        ║");
         System.out.println("║  1/X, 2/X → BERABERLİK COMEBACK                       ║");
         System.out.println("║  1/2, 2/1 → FULL COMEBACK                             ║");
+        System.out.println("║  + CORRECT SCORE (ters-düz aynı skor tekrarı)         ║");
         System.out.println("╚══════════════════════════════════════════════════════╝\n");
 
         long globalStart = System.currentTimeMillis();
+
+        System.out.printf("📅 Güncel sezon (otomatik): %s | Taranan geçmiş: %d/%d → %d/%d%n%n",
+                CURRENT_SEASON, START_YEAR, START_YEAR + 1, END_YEAR, END_YEAR + 1);
 
         System.out.println("🔄 [1/3] Günün başlamamış maçlarından takım ID'leri alınıyor...");
         List<String> teamIds = TeamIdsFetcher.fetchUnstartedTeamIds();
@@ -267,6 +286,13 @@ public class TemasTakimiAnalyzer {
         sb.append(String.format("║ 🎯 SİNYAL: %s%n", teamName));
         sb.append(String.format("║    Bugünkü Maç : %s vs %s%n", todayMatch.homeTeam, todayMatch.awayTeam));
         sb.append(String.format("║    Tahmin      : %s%n", tahmin));
+        String cs = k.correctScore();
+        if (cs != null) {
+            int[] p = parseScore(cs);
+            String ters = p[1] + "-" + p[0];
+            sb.append(String.format("║    CORRECT SCORE: %s veya %s (ters-düz AYNI skor, tüm sezonlar)%n",
+                    cs, ters));
+        }
         sb.append(String.format("║    Temas Takımı: %s%n", k.temasAdi));
         sb.append(String.format("║    Kural       : Sürpriz, %s temasından %s geliyor%n", k.temasAdi, konum));
         sb.append(String.format("║    Bugünkü temas maçı: %s vs %s (%s)%n",
@@ -289,6 +315,7 @@ public class TemasTakimiAnalyzer {
         final String grup;                             // BERABERLIK_COMEBACK / FULL_COMEBACK
         final Set<String> seasons = new LinkedHashSet<>();
         final List<String> hitSatirlari = new ArrayList<>();
+        final List<String> ftSkorlari = new ArrayList<>();   // sürpriz maçların FT skorları (sezon başına 1)
 
         TemasKaniti(String temasAdi, int offset, String grup) {
             this.temasAdi = temasAdi;
@@ -300,12 +327,32 @@ public class TemasTakimiAnalyzer {
                     String htFt, String temasVenue) {
             // Aynı sezonda aynı çift birden fazla kez düşerse sadece ilkini yaz
             if (!seasons.add(season)) return;
+            ftSkorlari.add(surprizMac.ftScore);
             hitSatirlari.add(String.format(
                     "%-9s | SÜRPRİZ: %s %s (İY: %s) %s → HT/FT %s | TEMAS: %s vs %s [%s]",
                     season,
                     surprizMac.homeTeam, surprizMac.ftScore, surprizMac.htScore, surprizMac.awayTeam,
                     htFt,
                     temasMac.homeTeam, temasMac.awayTeam, temasVenue));
+        }
+
+        /**
+         * Tüm sezonlardaki sürpriz maçlar AYNI skorla (ters-düz dahil) bittiyse
+         * o skoru döndürür; örn. 3-1, 1-3, 3-1 → "3-1". Aksi halde null.
+         */
+        String correctScore() {
+            if (ftSkorlari.size() < MIN_SEZON_TEKRARI) return null;
+            String canon = null;
+            for (String s : ftSkorlari) {
+                int[] p = parseScore(s);
+                if (p == null) return null;
+                int hi = Math.max(p[0], p[1]);
+                int lo = Math.min(p[0], p[1]);
+                String c = hi + "-" + lo;
+                if (canon == null) canon = c;
+                else if (!canon.equals(c)) return null;   // sezonlardan biri farklı skor → yok
+            }
+            return canon;   // hi-lo formunda; ters-düz iki yön de geçerli
         }
     }
 
