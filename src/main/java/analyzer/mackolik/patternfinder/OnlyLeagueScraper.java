@@ -45,7 +45,7 @@ public class OnlyLeagueScraper {
     //  Lig filtresi
     // ═══════════════════════════════════════════════════════════════════════
 
-    private static boolean isLeagueCompetition(String compName) {
+    public static boolean isLeagueCompetition(String compName) {
         if (compName == null) return false;
         String lower = compName.toLowerCase(new Locale("tr", "TR"));
 
