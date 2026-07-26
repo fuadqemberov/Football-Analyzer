@@ -17,6 +17,11 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -44,6 +49,17 @@ public class NowGoalHTFT {
     static final String CURRENT_SEASON   = String.valueOf(java.time.Year.now().getValue());
     static final String BASE             = "https://football.nowgoal26.com";
     static final String LIVE_BASE        = "https://live8.nowgoal26.com";
+
+    // ── TARİX PARAMETRLƏRİ ───────────────────────────────────
+    /** NowGoal JSON-undakı vaxtlar UTC+8 (Çin) zonasındadır — yoxlanılıb. */
+    static final ZoneId SITE_ZONE  = ZoneId.of("GMT+8");
+    /** Matçın "hansı günə aid" olduğunu bizim yerli zonaya görə hesablayırıq. */
+    static final ZoneId LOCAL_ZONE = ZoneId.systemDefault();
+    /** 0 = yalnız bugünkü oyunlar; 1 = bugün + sabah, və s. */
+    static final int    DAY_WINDOW = 0;
+    /** "Futbol günü" 06:00-da başlayır — gecə yarısından sonrakı oyunlar əvvəlki günə aiddir. */
+    static final int    DAY_CUTOFF_HOUR = 6;
+    static final DateTimeFormatter SITE_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
     // ─────────────────────────────────────────────────────────
 
     static final HttpClient HTTP = HttpClient.newBuilder()
@@ -82,12 +98,54 @@ public class NowGoalHTFT {
         return new String(b, StandardCharsets.UTF_8);
     }
 
+    // ── TARİX YARDIMÇILARI ───────────────────────────────────
+    /**
+     * Vaxtın aid olduğu "futbol günü": DAY_CUTOFF_HOUR-dan (06:00) əvvəlki oyunlar
+     * əvvəlki günə yazılır. Məs. yerli vaxtla 27.07 01:30-dakı oyun 26 iyulun oyunudur.
+     */
+    static LocalDate footballDay(LocalDateTime t) {
+        return t == null ? null : t.minusHours(DAY_CUTOFF_HOUR).toLocalDate();
+    }
+
+    /** Bugünkü futbol günü — hər dəfə yenidən hesablanır (gecə yarısını keçən işləmələr üçün). */
+    static LocalDate today() {
+        return footballDay(LocalDateTime.now(LOCAL_ZONE));
+    }
+
+    /** JSON-dakı "2025-08-16 03:00" (UTC+8) → yerli zonaya çevrilmiş vaxt. */
+    static LocalDateTime parseSiteTime(String raw) {
+        if (raw == null) return null;
+        String s = raw.trim().replace('/', '-').replace('T', ' ');
+        if (s.length() < 10) return null;
+        if (s.length() == 10) s = s + " 00:00";       // yalnız tarix verilibsə
+        if (s.length() > 16)  s = s.substring(0, 16); // saniyələri at
+        try {
+            return ZonedDateTime.of(LocalDateTime.parse(s, SITE_FMT), SITE_ZONE)
+                    .withZoneSameInstant(LOCAL_ZONE)
+                    .toLocalDateTime();
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /** Matç verilən günə (və ya DAY_WINDOW pəncərəsinə) düşürmü? Tarixi yoxdursa — YOX. */
+    static boolean isOnDay(Match m, LocalDate day) {
+        LocalDate d = m.date();
+        if (d == null) return false;
+        return !d.isBefore(day) && !d.isAfter(day.plusDays(DAY_WINDOW));
+    }
+
+    static String fmt(LocalDateTime t) {
+        return t == null ? "tarix yoxdur" : t.format(SITE_FMT);
+    }
+
     // ── ANA METOD ─────────────────────────────────────────────
     public static void main(String[] args) throws Exception {
         LogManager.getLogManager().reset();
         Logger.getLogger("org.openqa.selenium").setLevel(Level.OFF);
         System.setProperty("webdriver.chrome.silentOutput", "true");
 
+        System.out.println(">>> Bugünkü tarix: " + today() + " (zona: " + LOCAL_ZONE + ")");
         System.out.println(">>> Cari sezon: " + CURRENT_SEASON);
         System.out.println(">>> Liqa ID-ləri gətirilir...");
 
@@ -149,18 +207,23 @@ public class NowGoalHTFT {
         LeagueData cur = loadLeague(ligId, curSeason);
         if (cur == null) return;
 
-        // YENİLƏNDİ: İndi ligId və cur eyni anda göndərilir
+        LocalDate today = today();
+
+        // YENİLƏNDİ: həftə əvvəlcə TARİXƏ görə, sonra HTML/saymaqla təyin olunur
         int currentActiveRound = detectCurrentActiveRound(ligId, cur);
         if (currentActiveRound < 2) return;
 
-        // Aktiv həftədəki OYNANMAMIŞ (Postp. deyil) matçları tap
+        // Aktiv həftədəki BUGÜNKÜ, oynanmamış (Postp. deyil) matçları tap.
+        // Tarix yoxlaması: matçın öz tarixi bugünlə üst-üstə düşməlidir —
+        // yalnız belə əmin oluruq ki, həm həftə, həm də oyun düzgündür.
         List<Match> upcomingMatches = new ArrayList<>();
         List<Match> roundMatches = cur.rounds.get(currentActiveRound);
         if (roundMatches != null) {
             for (Match m : roundMatches) {
-                if (m.ft == null && !m.postponed) {
-                    upcomingMatches.add(m);
-                }
+                if (m.postponed) continue;
+                if (m.ft != null) continue;              // artıq oynanıb
+                if (!isOnDay(m, today)) continue;        // bugünkü oyun deyil
+                upcomingMatches.add(m);
             }
         }
         if (upcomingMatches.isEmpty()) return;
@@ -185,6 +248,7 @@ public class NowGoalHTFT {
                                 offset,
                                 b1, b2,
                                 cur.teamName(up.homeId), cur.teamName(up.awayId),
+                                up.kickoff,
                                 cur.leagueName, cur
                         );
                     } catch (Exception ignored) {}
@@ -193,25 +257,60 @@ public class NowGoalHTFT {
         }
     }
 
-    // ── CARİ AKTİV HƏFTƏNİ DOM-dan (class="current") TAP ─────
+    // ── CARİ AKTİV HƏFTƏNİ TAP (1. TARİX → 2. HTML → 3. SAYMAQ) ─
     static int detectCurrentActiveRound(int ligId, LeagueData ld) {
-        try {
-            // Liqanın əsas səhifəsini HTML olaraq çəkirik
-            String html = get(BASE + "/league/" + ligId);
+        // 1) ƏSAS MƏNBƏ: bugünkü tarixli matçların yerləşdiyi həftə.
+        //    Saytın HTML-i keşlənə/gecikə bilər, tarix isə yalan danışmır.
+        int byDate = roundByDate(ld, today());
 
-            // HTML içindəki <span ... class="current">12</span> hissəsini tapmaq üçün Regex
-            Pattern pattern = Pattern.compile("<span[^>]*\\bclass\\s*=\\s*['\"][^'\"]*\\bcurrent\\b[^'\"]*['\"][^>]*>\\s*(\\d+)\\s*</span>", Pattern.CASE_INSENSITIVE);
-            Matcher matcher = pattern.matcher(html);
+        // 2) Saytın <span class="current">N</span> həftəsi
+        int byHtml = htmlCurrentRound(ligId);
 
-            if (matcher.find()) {
-                return Integer.parseInt(matcher.group(1)); // 12 (və ya başqa bir rəqəm) qayıdacaq
+        if (byDate > 0) {
+            if (byHtml > 0 && byHtml != byDate) {
+                System.out.println("[XƏBƏRDARLIQ] liqa=" + ligId
+                        + " | HTML həftə=" + byHtml
+                        + " , tarixə görə həftə=" + byDate
+                        + " → TARİX əsas götürüldü.");
             }
-        } catch (Exception e) {
-            // Səssizcə xətanı yoksayırıq və ehtiyat varianta keçirik
+            return byDate;
         }
 
-        // HTML-dən (class="current") tapmaq alınmasa, köhnə "saymaq" məntiqindən istifadə et (Ehtiyat Variant)
+        // Bugün oyun yoxdursa HTML-ə, o da olmasa köhnə "saymaq" məntiqinə düş
+        if (byHtml > 0 && ld.rounds.containsKey(byHtml)) return byHtml;
         return fallbackDetectCurrentActiveRound(ld);
+    }
+
+    /** Bugünkü (DAY_WINDOW pəncərəsindəki) matçları ən çox olan həftəni qaytarır. */
+    static int roundByDate(LeagueData ld, LocalDate day) {
+        int bestRound = -1, bestCount = 0;
+        for (Map.Entry<Integer, List<Match>> e : ld.rounds.entrySet()) {
+            int cnt = 0;
+            for (Match m : e.getValue()) {
+                if (m.postponed) continue;
+                if (isOnDay(m, day)) cnt++;
+            }
+            if (cnt == 0) continue;
+            // Bərabərlikdə kiçik həftə nömrəsi (təxirə salınmış oyunlar üst həftəyə "sızmasın")
+            if (cnt > bestCount || (cnt == bestCount && e.getKey() < bestRound)) {
+                bestCount = cnt;
+                bestRound = e.getKey();
+            }
+        }
+        return bestCount > 0 ? bestRound : -1;
+    }
+
+    /** Liqa səhifəsindəki <span ... class="current">12</span> həftəsi. Tapılmasa -1. */
+    static int htmlCurrentRound(int ligId) {
+        try {
+            String html = get(BASE + "/league/" + ligId);
+            Pattern pattern = Pattern.compile("<span[^>]*\\bclass\\s*=\\s*['\"][^'\"]*\\bcurrent\\b[^'\"]*['\"][^>]*>\\s*(\\d+)\\s*</span>", Pattern.CASE_INSENSITIVE);
+            Matcher matcher = pattern.matcher(html);
+            if (matcher.find()) return Integer.parseInt(matcher.group(1));
+        } catch (Exception e) {
+            // Səssizcə xətanı yoksayırıq
+        }
+        return -1;
     }
 
     // ── EHTİYAT AKTİV HƏFTƏ MƏNTİQİ (Köhnə Metod) ────────────
@@ -253,6 +352,7 @@ public class NowGoalHTFT {
                                int bridgeOffset,
                                int b1, int b2,
                                String curHome, String curAway,
+                               LocalDateTime curKickoff,
                                String leagueName, LeagueData curData) throws Exception {
         LeagueData past = loadLeague(ligId, season);
         if (past == null) return;
@@ -268,6 +368,9 @@ public class NowGoalHTFT {
         Match found = findMatch(past, targetRound, oldA, oldB);
         if (found == null || found.ft == null || found.ht == null) return;
 
+        // TARİX YOXLAMASI: keçmiş sezonun matçı həqiqətən keçmişdə oynanmış olmalıdır
+        if (found.date() != null && !found.date().isBefore(today())) return;
+
         String comeback = comeback(found.ft, found.ht);
         if (comeback.equals("NONE")) return;
 
@@ -276,7 +379,8 @@ public class NowGoalHTFT {
             System.out.println("[LİQA]: " + leagueName
                     + " | [GÜNCƏL HƏFTƏ]: " + targetRound
                     + " | [KÖRPÜ OFFSETİ]: " + bridgeOffset + " tur öncə");
-            System.out.println("[GÜNCƏL OYUN]: " + curHome + " vs " + curAway);
+            System.out.println("[GÜNCƏL OYUN]: " + curHome + " vs " + curAway
+                    + " | [TARİX]: " + fmt(curKickoff) + "  (bugün: " + today() + ")");
             System.out.println("[KÖPRÜLƏR]: "
                     + curData.teamName(b1) + " & " + curData.teamName(b2));
             System.out.println("[TAPILAN SEZON]: " + season
@@ -286,7 +390,8 @@ public class NowGoalHTFT {
                     + past.teamName(found.homeId)
                     + " " + found.ft + " "
                     + past.teamName(found.awayId)
-                    + " | HT: (" + found.ht + ")");
+                    + " | HT: (" + found.ht + ")"
+                    + " | [TARİX]: " + fmt(found.kickoff));
             System.out.println("**********************");
         }
     }
@@ -298,10 +403,12 @@ public class NowGoalHTFT {
         if (ms == null) return map;
         for (Match m : ms) {
             if (m.postponed) continue;
-            if (m.ft != null) {
-                map.put(m.homeId, m.awayId);
-                map.put(m.awayId, m.homeId);
-            }
+            // Körpü matçı MÜTLƏQ artıq oynanmış olmalıdır: həm nəticəsi var,
+            // həm də tarixi bugündən əvvəldir (tarix varsa).
+            if (m.ft == null) continue;
+            if (m.date() != null && !m.date().isBefore(today())) continue;
+            map.put(m.homeId, m.awayId);
+            map.put(m.awayId, m.homeId);
         }
         return map;
     }
@@ -392,6 +499,11 @@ public class NowGoalHTFT {
         int homeId, awayId;
         String ft, ht;
         boolean postponed = false;
+        /** Yerli zonaya çevrilmiş başlama vaxtı (JSON-da index 3). Tapılmasa null. */
+        LocalDateTime kickoff;
+
+        /** Matçın aid olduğu futbol günü (06:00 kəsimi ilə). */
+        LocalDate date() { return footballDay(kickoff); }
     }
 
     static class LeagueData {
@@ -438,6 +550,7 @@ public class NowGoalHTFT {
                     Match match  = new Match();
                     match.homeId = m.get(4).asInt();
                     match.awayId = m.get(5).asInt();
+                    match.kickoff = parseSiteTime(m.size() > 3 ? m.get(3).asText("") : "");
 
                     String ft = m.size() > 6 ? m.get(6).asText("") : "";
                     String ht = m.size() > 7 ? m.get(7).asText("") : "";
