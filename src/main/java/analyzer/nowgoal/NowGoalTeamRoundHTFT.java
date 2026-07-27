@@ -23,13 +23,14 @@ import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
-import java.util.LinkedHashMap;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.TreeMap;
+import java.util.TreeSet;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -43,10 +44,17 @@ import java.util.zip.GZIPInputStream;
 /**
  * NowGoalTeamRoundHTFT
  * ────────────────────────────────────────────────────────────────────────────
- * ŞƏRT: YALNIZ BUGÜNKÜ matçlar analiz olunur (live8-dən çəkilir).
+ * ŞƏRT: YALNIZ BUGÜNKÜ matçlar analiz olunur.
+ *
+ * BUGÜNKÜ MATÇLARIN ÇƏKİLMƏSİ (NowGoalHTFT ilə eyni üsul):
+ *   1) Selenium yalnız CANLI səhifədəki LİQA ID-lərini ([sclassid]) yığır.
+ *   2) Hər liqanın cari sezon JSON-u yüklənir və bugünkü tarixli, oynanmamış
+ *      matçlar oradan götürülür (həftə nömrəsi + takım ID-ləri hazır gəlir).
+ *   Beləliklə canlı səhifənin HTML strukturuna (tr1_/team link) bağlılıq yoxdur —
+ *   sayt DOM-unu dəyişəndə də matçlar çəkilir.
  *
  * Hər bugünkü "A vs B" matçı üçün:
- *   1) Cari sezonu tapır və o matçın oynanacağı HƏFTƏ nömrəsini (round X) müəyyən edir.
+ *   1) O matçın oynanacağı HƏFTƏ nömrəsi (round X) cari sezon JSON-undan gəlir.
  *   2) 2010/2011 sezonuna qədər GERİYƏ gedir.
  *   3) Hər sezonda A takımının EYNİ X həftəsindəki matçını tapır.
  *   4) YALNIZ bu HT/FT nümunələrini (A takımı perspektivindən) çap edir:
@@ -65,9 +73,10 @@ public class NowGoalTeamRoundHTFT {
 
     // ── Parametrlər ──────────────────────────────────────────
     static final int    MIN_SEASON_YEAR = 2010;   // 2010/2011 sezonuna qədər geri get
-    static final int    THREADS         = 20;      // bugünkü matçların paralel analizi
+    static final int    SEASON_LOOKBACK = 20;     // sezon siyahısı endpoint-i sınanda ehtiyat
+    static final int    THREADS         = 50;     // liqa/matç yükləmələrinin paralelliyi
     static final String BASE            = "https://football.nowgoal26.com";
-    static final String LIVE_BASE       = "https://live10.nowgoal26.com/";
+    static final String LIVE_BASE       = "https://live8.nowgoal26.com";
 
     // Yalnız bu HT/FT nümunələri çap olunur (A takımı perspektivindən)
     static final Set<String> WANTED = Set.of("2/1", "1/2", "1/X", "2/X");
@@ -80,11 +89,6 @@ public class NowGoalTeamRoundHTFT {
     static final int    DAY_WINDOW = 0;
     /** "Futbol günü" 06:00-da başlayır — gecə yarısından sonrakı oyunlar əvvəlki günə aiddir. */
     static final int    DAY_CUTOFF_HOUR = 6;
-    /**
-     * true → live səhifədəki matçın həftəsi cari sezon JSON-unda TARİXƏ görə
-     * təsdiqlənməsə, o matç analiz olunmur (yanlış həftə ilə nəticə verməsin).
-     */
-    static final boolean STRICT_TODAY = true;
     static final DateTimeFormatter SITE_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
     // ─────────────────────────────────────────────────────────
 
@@ -100,10 +104,18 @@ public class NowGoalTeamRoundHTFT {
         Logger.getLogger("org.openqa.selenium").setLevel(Level.OFF);
         System.setProperty("webdriver.chrome.silentOutput", "true");
 
-        // ŞƏRT: yalnız BUGÜNKÜ matçlar (live8-dən)
         System.out.println(">>> Bugünkü tarix: " + today() + " (zona: " + LOCAL_ZONE + ")");
-        System.out.println(">>> Bugünkü matçlar live8-dən çəkilir...");
-        List<Fixture> fixtures = fetchTodayFixtures();
+        System.out.println(">>> Liqa ID-ləri gətirilir...");
+
+        List<Integer> leagueIds = fetchLeagueIdsViaBrowser();
+        System.out.println(">>> Tapılan liqa sayı: " + leagueIds.size());
+        if (leagueIds.isEmpty()) {
+            System.out.println(">>> Liqa ID tapılmadı — canlı səhifə açılmadı və ya boşdur.");
+            return;
+        }
+
+        System.out.println(">>> Bugünkü matçlar liqa JSON-larından çəkilir...");
+        List<Fixture> fixtures = collectTodayFixtures(leagueIds);
         System.out.println(">>> Bugün üçün tapılan matç sayı: " + fixtures.size() + "\n");
         if (fixtures.isEmpty()) return;
 
@@ -122,48 +134,89 @@ public class NowGoalTeamRoundHTFT {
         System.out.println("\n>>> Bütün bugünkü matçların analizi tamamlandı.");
     }
 
+    // ── SELENIUM: Yalnız liqa ID-lərini çək (NowGoalHTFT ilə eyni) ──
+    static List<Integer> fetchLeagueIdsViaBrowser() {
+        WebDriverManager.chromedriver().setup();
+        ChromeOptions opts = new ChromeOptions();
+        opts.addArguments("--headless", "--disable-gpu", "--no-sandbox",
+                "--disable-dev-shm-usage", "--blink-settings=imagesEnabled=false",
+                "--log-level=3", "--silent");
+        WebDriver driver = new ChromeDriver(opts);
+        Set<Integer> ids = new TreeSet<>();
+        try {
+            driver.get(LIVE_BASE + "/");
+            Thread.sleep(5000);
+            for (WebElement el : driver.findElements(By.cssSelector("[sclassid]"))) {
+                try {
+                    String v = el.getAttribute("sclassid");
+                    if (v != null && !v.isBlank()) ids.add(Integer.parseInt(v.trim()));
+                } catch (Exception ignored) {}
+            }
+        } catch (Exception e) {
+            System.out.println("Selenium xetasi: " + e.getMessage());
+        } finally {
+            try { driver.quit(); } catch (Exception ignored) {}
+        }
+        System.out.println("DOM-dan tapilan ID sayi: " + ids.size());
+        return new ArrayList<>(ids);
+    }
+
+    // ── BUGÜNKÜ MATÇLARI LİQA JSON-LARINDAN YIĞ ───────────────
+    //    Canlı səhifədən yalnız liqa ID-si gəlir; matçın özü, həftəsi və
+    //    takım ID-ləri cari sezon cədvəlindən TARİXƏ görə seçilir.
+    static List<Fixture> collectTodayFixtures(List<Integer> leagueIds) {
+        LocalDate today = today();
+        List<Fixture> out = Collections.synchronizedList(new ArrayList<>());
+
+        ExecutorService pool = Executors.newFixedThreadPool(THREADS);
+        List<Future<?>> fs = new ArrayList<>();
+        for (int id : leagueIds) {
+            final int lid = id;
+            fs.add(pool.submit(() -> {
+                try {
+                    List<String> seasons = loadSeasons(lid);
+                    if (seasons.isEmpty()) return;
+
+                    LeagueData cur = loadLeague(lid, seasons.get(0));
+                    if (cur == null) return;
+
+                    Set<String> seen = new HashSet<>();
+                    for (Map.Entry<Integer, List<Match>> e : cur.rounds.entrySet()) {
+                        for (Match m : e.getValue()) {
+                            if (m.postponed) continue;
+                            if (m.ft != null) continue;          // artıq oynanıb
+                            if (!isOnDay(m, today)) continue;    // bugünkü oyun deyil
+                            if (!seen.add(m.homeId + "-" + m.awayId)) continue;
+                            out.add(new Fixture(lid, e.getKey(), m.homeId, m.awayId,
+                                    m.kickoff, seasons, cur));
+                        }
+                    }
+                } catch (Exception e) {
+                    System.err.println("[XƏTA] liqa=" + lid + " : " + e.getMessage());
+                }
+            }));
+        }
+        for (Future<?> f : fs) { try { f.get(); } catch (Exception ignored) {} }
+        pool.shutdown();
+        return new ArrayList<>(out);
+    }
+
     // ── BİR BUGÜNKÜ MATÇI ANALİZ ET ───────────────────────────
     static void analyzeFixture(Fixture fx) throws Exception {
-        int ligId = fx.leagueId;
-
-        List<String> seasons = loadSeasons(ligId);
-        if (seasons.isEmpty()) return;
-
-        String curSeasonKey = seasons.get(0);
-        LeagueData cur = loadLeague(ligId, curSeasonKey);
-        if (cur == null) return;
-
-        // A (ev) və B (səfər) takımlarının ID-lərini cari sezon JSON-undan tap
-        int idA = fx.homeId > 0 && cur.teamNames.containsKey(fx.homeId) ? fx.homeId : cur.findTeamId(fx.homeName);
-        int idB = fx.awayId > 0 && cur.teamNames.containsKey(fx.awayId) ? fx.awayId : cur.findTeamId(fx.awayName);
-        if (idA < 0 || idB < 0) return;
-
-        // Cari sezonda A vs B matçının HƏFTƏSİNİ (round X) tap.
-        // ARDICILLIQ: 1) bugünkü tarixlə üst-üstə düşən matç → 2) oynanmamış matç → 3) aktiv həftə
-        LocalDate today = today();
-        int round = findRoundOfToday(cur, idA, idB, today);
-        LocalDateTime kickoff = null;
-        if (round > 0) {
-            Match m = findPairMatch(cur, round, idA, idB);
-            if (m != null) kickoff = m.kickoff;
-        } else {
-            if (STRICT_TODAY) {
-                // Bu cütün cari sezon cədvəlində bugünkü tarixi yoxdur →
-                // həftə nömrəsinə güvənmək olmaz, oyunu ötür.
-                return;
-            }
-            round = findRoundOf(cur, idA, idB);
-            if (round < 0) round = detectCurrentActiveRound(ligId, cur);
-        }
+        LeagueData cur = fx.cur;
+        int idA = fx.homeId, idB = fx.awayId;
+        int round = fx.round;
         if (round < 1) return;
+
+        LocalDate today = today();
 
         // Keçmiş sezonları gəz (cari daxil), 2010/2011-ə qədər — A takımı üçün
         StringBuilder sb = new StringBuilder();
         int hits = 0;
-        for (String season : seasons) {
+        for (String season : fx.seasons) {
             if (seasonStartYear(season) < MIN_SEASON_YEAR) break;
 
-            LeagueData ld = season.equals(curSeasonKey) ? cur : loadLeague(ligId, season);
+            LeagueData ld = season.equals(fx.seasons.get(0)) ? cur : loadLeague(fx.leagueId, season);
             if (ld == null) continue;
 
             Match m = ld.findTeamMatchInRound(round, idA);
@@ -188,79 +241,13 @@ public class NowGoalTeamRoundHTFT {
             System.out.println("==================================================================");
             System.out.println("[LİQA]: " + cur.leagueName + "   |   HƏFTƏ: " + round);
             System.out.println("[BUGÜNKÜ MATÇ]: " + cur.teamName(idA) + "  vs  " + cur.teamName(idB)
-                    + "   |   [TARİX]: " + fmt(kickoff) + "  (bugün: " + today + ")");
+                    + "   |   [TARİX]: " + fmt(fx.kickoff) + "  (bugün: " + today + ")");
             System.out.println("[A takımı = " + cur.teamName(idA) + "] " + round
                     + "-ci həftədə keçmiş HT/FT (2/1, 1/2, 1/X, 2/X):");
             System.out.print(sb);
             System.out.println("     >>> Uyğun nəticə: " + hits);
             System.out.println("==================================================================");
         }
-    }
-
-    // ── LIVE8-DƏN BUGÜNKÜ MATÇLARI ÇƏK (Selenium) ─────────────
-    static List<Fixture> fetchTodayFixtures() {
-        WebDriverManager.chromedriver().setup();
-        ChromeOptions opts = new ChromeOptions();
-        opts.addArguments("--headless=new", "--disable-gpu", "--no-sandbox",
-                "--disable-dev-shm-usage", "--blink-settings=imagesEnabled=false",
-                "--log-level=3", "--silent");
-        WebDriver driver = new ChromeDriver(opts);
-
-        Map<String, Fixture> uniq = new LinkedHashMap<>();
-        Pattern idInHref = Pattern.compile("/(?:team|analysis|h2h)[^0-9]*?(\\d+)");
-        try {
-            driver.get(LIVE_BASE + "/");
-            Thread.sleep(6000);
-
-            // Hər matç sətri: id="tr1_<matchId>", sclassid = liqa ID
-            List<WebElement> rows = driver.findElements(By.cssSelector("tr[id^='tr1_'][sclassid]"));
-            for (WebElement row : rows) {
-                try {
-                    String sclass = row.getAttribute("sclassid");
-                    if (sclass == null || sclass.isBlank()) continue;
-                    int leagueId = Integer.parseInt(sclass.trim());
-
-                    // Sətir içindəki takım linkləri (ev sonra səfər ardıcıllığı)
-                    List<WebElement> teamLinks = row.findElements(
-                            By.cssSelector("a[href*='/team/'], a[onclick*='team'], .homeTeam a, .guestTeam a"));
-                    if (teamLinks.size() < 2) continue;
-
-                    WebElement homeEl = teamLinks.get(0);
-                    WebElement awayEl = teamLinks.get(teamLinks.size() - 1);
-
-                    String homeName = safeText(homeEl);
-                    String awayName = safeText(awayEl);
-                    if (homeName.isBlank() || awayName.isBlank()) continue;
-
-                    int homeId = extractId(idInHref, homeEl.getAttribute("href"));
-                    int awayId = extractId(idInHref, awayEl.getAttribute("href"));
-
-                    String matchId = row.getAttribute("id");
-                    uniq.putIfAbsent(matchId,
-                            new Fixture(leagueId, homeName, awayName, homeId, awayId));
-                } catch (Exception ignored) {}
-            }
-        } catch (Exception e) {
-            System.out.println("Selenium xetasi: " + e.getMessage());
-        } finally {
-            try { driver.quit(); } catch (Exception ignored) {}
-        }
-        return new ArrayList<>(uniq.values());
-    }
-
-    static String safeText(WebElement el) {
-        try {
-            String t = el.getText();
-            if (t == null || t.isBlank()) t = el.getAttribute("title");
-            return t == null ? "" : t.trim();
-        } catch (Exception e) { return ""; }
-    }
-
-    static int extractId(Pattern p, String href) {
-        if (href == null) return -1;
-        Matcher m = p.matcher(href);
-        if (m.find()) { try { return Integer.parseInt(m.group(1)); } catch (Exception ignored) {} }
-        return -1;
     }
 
     // ── A takımı perspektivindən HT/FT ────────────────────────
@@ -330,94 +317,6 @@ public class NowGoalTeamRoundHTFT {
         return t == null ? "tarix yoxdur" : t.format(SITE_FMT);
     }
 
-    // ── A vs B cütünün BUGÜNKÜ tarixli matçının həftəsi ──────
-    //    Cüt sezonda 2 dəfə qarşılaşır (ev/səfər) — yanlış ayağı seçməmək
-    //    üçün həftəni tarixlə təsdiqləyirik.
-    static int findRoundOfToday(LeagueData ld, int a, int b, LocalDate day) {
-        for (Map.Entry<Integer, List<Match>> e : ld.rounds.entrySet()) {
-            for (Match m : e.getValue()) {
-                if (m.postponed) continue;
-                if (!isPair(m, a, b)) continue;
-                if (isOnDay(m, day)) return e.getKey();
-            }
-        }
-        return -1;
-    }
-
-    static boolean isPair(Match m, int a, int b) {
-        return (m.homeId == a && m.awayId == b) || (m.homeId == b && m.awayId == a);
-    }
-
-    static Match findPairMatch(LeagueData ld, int round, int a, int b) {
-        List<Match> ms = ld.rounds.get(round);
-        if (ms == null) return null;
-        for (Match m : ms) if (isPair(m, a, b)) return m;
-        return null;
-    }
-
-    // ── Cari sezonda A vs B-nin oynanacağı həftəni tap ────────
-    static int findRoundOf(LeagueData ld, int a, int b) {
-        int best = -1;
-        for (Map.Entry<Integer, List<Match>> e : ld.rounds.entrySet()) {
-            for (Match m : e.getValue()) {
-                if ((m.homeId == a && m.awayId == b) || (m.homeId == b && m.awayId == a)) {
-                    // Oynanmamış matça üstünlük ver (gələcək matç), yoxsa istənilən birini götür
-                    if (m.ft == null) return e.getKey();
-                    best = e.getKey();
-                }
-            }
-        }
-        return best;
-    }
-
-    // ── Cari aktiv həftə: 1) TARİX → 2) HTML class="current" → 3) saymaq ──
-    static int detectCurrentActiveRound(int ligId, LeagueData ld) {
-        // Bugünkü tarixli matçların yerləşdiyi həftə ən etibarlı mənbədir
-        LocalDate day = today();
-        int bestRound = -1, bestCount = 0;
-        for (Map.Entry<Integer, List<Match>> e : ld.rounds.entrySet()) {
-            int cnt = 0;
-            for (Match m : e.getValue()) {
-                if (m.postponed) continue;
-                if (isOnDay(m, day)) cnt++;
-            }
-            if (cnt == 0) continue;
-            if (cnt > bestCount || (cnt == bestCount && e.getKey() < bestRound)) {
-                bestCount = cnt;
-                bestRound = e.getKey();
-            }
-        }
-        if (bestCount > 0) return bestRound;
-
-        try {
-            String html = get(BASE + "/league/" + ligId);
-            Pattern p = Pattern.compile(
-                    "<span[^>]*\\bclass\\s*=\\s*['\"][^'\"]*\\bcurrent\\b[^'\"]*['\"][^>]*>\\s*(\\d+)\\s*</span>",
-                    Pattern.CASE_INSENSITIVE);
-            Matcher mt = p.matcher(html);
-            if (mt.find()) return Integer.parseInt(mt.group(1));
-        } catch (Exception ignored) {}
-
-        // Ehtiyat: son oynanmış həftə
-        TreeMap<Integer, int[]> stats = new TreeMap<>();
-        for (Map.Entry<Integer, List<Match>> e : ld.rounds.entrySet()) {
-            int played = 0, upcoming = 0;
-            for (Match m : e.getValue()) {
-                if (m.postponed) continue;
-                if (m.ft != null) played++; else upcoming++;
-            }
-            stats.put(e.getKey(), new int[]{played, upcoming});
-        }
-        int lastPlayed = -1;
-        for (Map.Entry<Integer, int[]> e : stats.entrySet())
-            if (e.getValue()[0] > 0) lastPlayed = e.getKey();
-        if (lastPlayed == -1) return 1;
-        if (stats.get(lastPlayed)[1] > 0) return lastPlayed;
-        int next = lastPlayed + 1;
-        if (stats.containsKey(next) && stats.get(next)[1] > 0) return next;
-        return lastPlayed;
-    }
-
     // ── Sezon açar sətrindən başlanğıc ili çıxar (məs. "2024-2025" → 2024) ──
     static int seasonStartYear(String season) {
         Matcher m = Pattern.compile("(\\d{4})").matcher(season);
@@ -433,6 +332,7 @@ public class NowGoalTeamRoundHTFT {
         } catch (Exception e) { return null; }
     }
 
+    /** Sezon siyahısı; endpoint cavab verməsə NowGoalHTFT-dəki kimi ehtiyat siyahı qurulur. */
     static List<String> loadSeasons(int ligId) {
         Set<String> list = new LinkedHashSet<>();
         try {
@@ -440,7 +340,39 @@ public class NowGoalTeamRoundHTFT {
             JsonNode node = JSON.readTree(raw).get("SeasonList");
             if (node != null) for (JsonNode s : node) list.add(s.asText());
         } catch (Exception ignored) {}
-        return new ArrayList<>(list);
+        if (!list.isEmpty()) return new ArrayList<>(list);
+
+        // ── EHTİYAT: cari sezon açarını sınayaraq tap, sonra geriyə düz ──
+        String[] candidates = {
+                "2025-2026", "2026", "2025/26",
+                "2024-2025", "2025", "2024/25"
+        };
+        String cur = null;
+        for (String c : candidates) {
+            if (loadLeague(ligId, c) != null) { cur = c; break; }
+        }
+        if (cur == null) return new ArrayList<>();
+
+        List<String> out = new ArrayList<>();
+        out.add(cur);
+        try {
+            if (cur.contains("-")) {
+                String[] parts = cur.split("-");
+                int y1 = Integer.parseInt(parts[0]);
+                int y2 = Integer.parseInt(parts[1]);
+                for (int i = 1; i <= SEASON_LOOKBACK; i++) out.add((y1 - i) + "-" + (y2 - i));
+            } else if (cur.contains("/")) {
+                String[] parts = cur.split("/");
+                int y1  = Integer.parseInt(parts[0]);
+                int y2s = Integer.parseInt(parts[1]);
+                for (int i = 1; i <= SEASON_LOOKBACK; i++)
+                    out.add((y1 - i) + "/" + String.format("%02d", y2s - i));
+            } else {
+                int y = Integer.parseInt(cur);
+                for (int i = 1; i <= SEASON_LOOKBACK; i++) out.add(String.valueOf(y - i));
+            }
+        } catch (Exception ignored) {}
+        return out;
     }
 
     // ── HTTP GET: gzip + BOM (NowGoalHTFT-dən) ────────────────
@@ -467,22 +399,29 @@ public class NowGoalTeamRoundHTFT {
         return new String(b, StandardCharsets.UTF_8);
     }
 
-    // ── BUGÜNKÜ MATÇ (live8-dən) ──────────────────────────────
+    // ── BUGÜNKÜ MATÇ (liqa JSON-undan) ────────────────────────
     static class Fixture {
         final int leagueId;
-        final String homeName, awayName;
-        final int homeId, awayId;   // -1 ola bilər (href-dən çıxmasa)
+        final int round;
+        final int homeId, awayId;
+        final LocalDateTime kickoff;
+        final List<String> seasons;   // [0] = cari sezon
+        final LeagueData cur;         // artıq yüklənib — təkrar sorğuya ehtiyac yoxdur
 
-        Fixture(int leagueId, String homeName, String awayName, int homeId, int awayId) {
+        Fixture(int leagueId, int round, int homeId, int awayId,
+                LocalDateTime kickoff, List<String> seasons, LeagueData cur) {
             this.leagueId = leagueId;
-            this.homeName = homeName;
-            this.awayName = awayName;
-            this.homeId = homeId;
-            this.awayId = awayId;
+            this.round    = round;
+            this.homeId   = homeId;
+            this.awayId   = awayId;
+            this.kickoff  = kickoff;
+            this.seasons  = seasons;
+            this.cur      = cur;
         }
 
         @Override public String toString() {
-            return "liga=" + leagueId + " " + homeName + " vs " + awayName;
+            return "liga=" + leagueId + " R" + round + " "
+                    + cur.teamName(homeId) + " vs " + cur.teamName(awayId);
         }
     }
 
@@ -564,18 +503,6 @@ public class NowGoalTeamRoundHTFT {
         }
 
         String teamName(int id) { return teamNames.getOrDefault(id, "ID:" + id); }
-
-        /** Ada görə takım ID-si tap: əvvəl dəqiq, sonra "contains" (böyük/kiçik həssaslıq yox). */
-        int findTeamId(String name) {
-            String n = name.toLowerCase().trim();
-            for (Map.Entry<Integer, String> e : teamNames.entrySet())
-                if (e.getValue().toLowerCase().trim().equals(n)) return e.getKey();
-            for (Map.Entry<Integer, String> e : teamNames.entrySet()) {
-                String tn = e.getValue().toLowerCase();
-                if (tn.contains(n) || n.contains(tn)) return e.getKey();
-            }
-            return -1;
-        }
 
         /** Verilən həftədə (round) takımın matçını tap. */
         Match findTeamMatchInRound(int round, int teamId) {
