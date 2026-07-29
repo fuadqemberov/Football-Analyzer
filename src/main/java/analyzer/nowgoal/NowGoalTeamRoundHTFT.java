@@ -56,7 +56,9 @@ import java.util.zip.GZIPInputStream;
  * Hər bugünkü "A vs B" matçı üçün:
  *   1) O matçın oynanacağı HƏFTƏ nömrəsi (round X) cari sezon JSON-undan gəlir.
  *   2) 2010/2011 sezonuna qədər GERİYƏ gedir.
- *   3) Hər sezonda A takımının EYNİ X həftəsindəki matçını tapır.
+ *   3) Hər sezonda A takımının EYNİ X həftəsindəki matçını tapır — MEYDAN FƏRQİ
+ *      YOXDUR: həmin həftədə A takımı istər evdə, istər səfərdə oynamış olsun,
+ *      matç nəzərə alınır.
  *   4) YALNIZ bu HT/FT nümunələrini (A takımı perspektivindən) çap edir:
  *          2/1   1/2   1/X   2/X
  *
@@ -210,6 +212,9 @@ public class NowGoalTeamRoundHTFT {
 
         LocalDate today = today();
 
+        // MEYDAN ŞƏRTİ YOXDUR: keçmişdə həmin həftədə A takımının həm EV,
+        // həm də SƏFƏR matçları nəzərə alınır.
+
         // Keçmiş sezonları gəz (cari daxil), 2010/2011-ə qədər — A takımı üçün
         StringBuilder sb = new StringBuilder();
         int hits = 0;
@@ -243,7 +248,7 @@ public class NowGoalTeamRoundHTFT {
             System.out.println("[BUGÜNKÜ MATÇ]: " + cur.teamName(idA) + "  vs  " + cur.teamName(idB)
                     + "   |   [TARİX]: " + fmt(fx.kickoff) + "  (bugün: " + today + ")");
             System.out.println("[A takımı = " + cur.teamName(idA) + "] " + round
-                    + "-ci həftədə keçmiş HT/FT (2/1, 1/2, 1/X, 2/X):");
+                    + "-ci həftədə (ev + səfər) keçmiş HT/FT (2/1, 1/2, 1/X, 2/X):");
             System.out.print(sb);
             System.out.println("     >>> Uyğun nəticə: " + hits);
             System.out.println("==================================================================");
@@ -504,7 +509,10 @@ public class NowGoalTeamRoundHTFT {
 
         String teamName(int id) { return teamNames.getOrDefault(id, "ID:" + id); }
 
-        /** Verilən həftədə (round) takımın matçını tap. */
+        /**
+         * Verilən həftədə (round) takımın matçını tap — MEYDANDAN ASILI OLMAYARAQ:
+         * takım həmin həftədə istər ev sahibi, istər qonaq olsun, matç qaytarılır.
+         */
         Match findTeamMatchInRound(int round, int teamId) {
             List<Match> ms = rounds.get(round);
             if (ms == null) return null;
