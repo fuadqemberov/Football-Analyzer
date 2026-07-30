@@ -53,20 +53,24 @@ import java.util.zip.GZIPInputStream;
  *   Beləliklə canlı səhifənin HTML strukturuna (tr1_/team link) bağlılıq yoxdur —
  *   sayt DOM-unu dəyişəndə də matçlar çəkilir.
  *
- * Hər bugünkü "A vs B" matçı üçün:
+ * Hər bugünkü "A vs B" matçı üçün (A = ev, B = qonaq — HƏR İKİSİ ayrıca analiz olunur):
  *   1) O matçın oynanacağı HƏFTƏ nömrəsi (round X) cari sezon JSON-undan gəlir.
  *   2) 2010/2011 sezonuna qədər GERİYƏ gedir.
- *   3) Hər sezonda A takımının EYNİ X həftəsindəki matçını tapır — MEYDAN FƏRQİ
- *      YOXDUR: həmin həftədə A takımı istər evdə, istər səfərdə oynamış olsun,
+ *   3) Hər sezonda həmin takımın EYNİ X həftəsindəki matçını tapır — MEYDAN FƏRQİ
+ *      YOXDUR: həmin həftədə takım istər evdə, istər səfərdə oynamış olsun,
  *      matç nəzərə alınır.
- *   4) YALNIZ bu HT/FT nümunələrini (A takımı perspektivindən) çap edir:
+ *   4) YALNIZ bu HT/FT nümunələrini (takımın öz perspektivindən) SEÇİR:
  *          2/1   1/2   1/X   2/X
+ *      Takımlardan ən azı birində uyğunluq varsa blok çap olunur (hər ikisi ayrı-ayrı).
  *
- *   Perspektiv A takımıdır:  1 = A öndə/qalib,  2 = A geridə/məğlub,  X = bərabərə.
- *      2/1 = A HT-də geridə idi → FT-də qalib gəldi  (comeback qələbə)
- *      1/2 = A HT-də öndə idi   → FT-də məğlub oldu   (çöküş)
- *      1/X = A HT-də öndə idi   → FT-də bərabərə
- *      2/X = A HT-də geridə idi → FT-də bərabərə
+ *   SEÇİM perspektivi takımın özüdür:  1 = takım öndə/qalib,  2 = geridə/məğlub,  X = bərabərə.
+ *      2/1 = HT-də geridə idi → FT-də qalib gəldi  (comeback qələbə)
+ *      1/2 = HT-də öndə idi   → FT-də məğlub oldu   (çöküş)
+ *      1/X = HT-də öndə idi   → FT-də bərabərə
+ *      2/X = HT-də geridə idi → FT-də bərabərə
+ *
+ *   ÇAP isə ORİJİNAL formadadır: "ev takımı vs qonaq takımı" və HT/FT etiketi
+ *   orijinal hesaba görə (1 = ev öndə/qalib, 2 = qonaq öndə/qalib, X = bərabərə).
  *
  * Mövcud NowGoalHTFT klasına TOXUNULMUR — data yükləmə məntiqi oradan ilhamlanıb.
  * ────────────────────────────────────────────────────────────────────────────
@@ -212,47 +216,71 @@ public class NowGoalTeamRoundHTFT {
 
         LocalDate today = today();
 
-        // MEYDAN ŞƏRTİ YOXDUR: keçmişdə həmin həftədə A takımının həm EV,
+        // MEYDAN ŞƏRTİ YOXDUR: keçmişdə həmin həftədə takımın həm EV,
         // həm də SƏFƏR matçları nəzərə alınır.
 
-        // Keçmiş sezonları gəz (cari daxil), 2010/2011-ə qədər — A takımı üçün
-        StringBuilder sb = new StringBuilder();
-        int hits = 0;
+        // Keçmiş sezonları gəz (cari daxil), 2010/2011-ə qədər — HƏR İKİ takım üçün.
+        // Sezon JSON-u bir dəfə yüklənir, hər iki takım eyni datadan yoxlanılır.
+        StringBuilder sbA = new StringBuilder(), sbB = new StringBuilder();
+        int hitsA = 0, hitsB = 0;
         for (String season : fx.seasons) {
             if (seasonStartYear(season) < MIN_SEASON_YEAR) break;
 
             LeagueData ld = season.equals(fx.seasons.get(0)) ? cur : loadLeague(fx.leagueId, season);
             if (ld == null) continue;
 
-            Match m = ld.findTeamMatchInRound(round, idA);
-            if (m == null || m.ft == null || m.ht == null) continue;
-            // TARİX YOXLAMASI: nəticə yalnız artıq oynanmış matçdan götürülə bilər
-            if (m.date() != null && !m.date().isBefore(today)) continue;
-
-            String htft = htftForTeam(m, idA);
-            if (htft == null || !WANTED.contains(htft)) continue;
-
-            hits++;
-            boolean aHome = (m.homeId == idA);
-            String opp = ld.teamName(aHome ? m.awayId : m.homeId);
-            String venue = aHome ? "(ev)" : "(səfər)";
-            sb.append(String.format("     [%-9s]  R%-2d  HT/FT: %-3s  |  %s %s vs %s   HT(%s) FT(%s)%n",
-                    season, round, htft, ld.teamName(idA), venue, opp, m.ht, m.ft));
+            if (appendRoundHit(sbA, ld, season, round, idA, today)) hitsA++;
+            if (appendRoundHit(sbB, ld, season, round, idB, today)) hitsB++;
         }
 
-        if (hits == 0) return;   // Bu nümunələrdən heç biri yoxdursa çap etmə
+        // Heç bir takımda bu nümunələrdən yoxdursa çap etmə
+        if (hitsA == 0 && hitsB == 0) return;
 
         synchronized (System.out) {
             System.out.println("==================================================================");
             System.out.println("[LİQA]: " + cur.leagueName + "   |   HƏFTƏ: " + round);
             System.out.println("[BUGÜNKÜ MATÇ]: " + cur.teamName(idA) + "  vs  " + cur.teamName(idB)
                     + "   |   [TARİX]: " + fmt(fx.kickoff) + "  (bugün: " + today + ")");
-            System.out.println("[A takımı = " + cur.teamName(idA) + "] " + round
-                    + "-ci həftədə (ev + səfər) keçmiş HT/FT (2/1, 1/2, 1/X, 2/X):");
-            System.out.print(sb);
-            System.out.println("     >>> Uyğun nəticə: " + hits);
+            printTeamBlock("A takımı (ev)", cur.teamName(idA), round, sbA, hitsA);
+            System.out.println();
+            printTeamBlock("B takımı (qonaq)", cur.teamName(idB), round, sbB, hitsB);
             System.out.println("==================================================================");
         }
+    }
+
+    // ── BİR TAKIMIN BLOKUNU ÇAP ET ────────────────────────────
+    static void printTeamBlock(String label, String teamName, int round, StringBuilder sb, int hits) {
+        System.out.println("[" + label + " = " + teamName + "] " + round
+                + "-ci həftədə (ev + səfər) keçmiş HT/FT (2/1, 1/2, 1/X, 2/X):");
+        if (hits == 0) {
+            System.out.println("     (bu nümunələr üzrə nəticə yoxdur)");
+        } else {
+            System.out.print(sb);
+        }
+        System.out.println("     >>> Uyğun nəticə: " + hits);
+    }
+
+    /**
+     * Verilən sezonda takımın həmin həftədəki matçını yoxlayır.
+     * Uyğun HT/FT nümunəsidirsə sətri {@code sb}-yə əlavə edir və {@code true} qaytarır.
+     */
+    static boolean appendRoundHit(StringBuilder sb, LeagueData ld, String season,
+                                  int round, int teamId, LocalDate today) {
+        Match m = ld.findTeamMatchInRound(round, teamId);
+        if (m == null || m.ft == null || m.ht == null) return false;
+        // TARİX YOXLAMASI: nəticə yalnız artıq oynanmış matçdan götürülə bilər
+        if (m.date() != null && !m.date().isBefore(today)) return false;
+
+        // SEÇİM takımın öz perspektivindən aparılır
+        String htft = htftForTeam(m, teamId);
+        if (htft == null || !WANTED.contains(htft)) return false;
+
+        // ÇAP ORİJİNAL formadadır: ev takımı vs səfər takımı, HT/FT də orijinal
+        // hesaba görə (1 = ev öndə/qalib, 2 = səfər öndə/qalib, X = bərabərə)
+        String htftOrig = htftForTeam(m, m.homeId);
+        sb.append(String.format("     [%-9s]  R%-2d  HT/FT: %-3s  |  %s vs %s   HT(%s) FT(%s)%n",
+                season, round, htftOrig, ld.teamName(m.homeId), ld.teamName(m.awayId), m.ht, m.ft));
+        return true;
     }
 
     // ── A takımı perspektivindən HT/FT ────────────────────────
