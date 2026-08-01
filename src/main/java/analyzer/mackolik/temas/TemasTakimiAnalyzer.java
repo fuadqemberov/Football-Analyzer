@@ -15,6 +15,7 @@ import org.jsoup.nodes.Element;
 import java.io.IOException;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -85,6 +86,9 @@ public class TemasTakimiAnalyzer {
     /** Aynı (temas takımı, offset) çiftinin sinyal sayılması için gereken farklı sezon sayısı. */
     private static final int MIN_SEZON_TEKRARI = 2;
 
+    /** İstatistikte "yüksek tekrar" sayılan eşik: tek sinyalde bu kadar+ farklı sezon tekrarı. */
+    private static final int YUKSEK_TEKRAR_ESIGI = 8;
+
     // ─── MAIN ───────────────────────────────────────────────────────────────
     public static void main(String[] args) {
         System.out.println("\n╔══════════════════════════════════════════════════════╗");
@@ -115,7 +119,7 @@ public class TemasTakimiAnalyzer {
 
         System.out.println("🔄 [2/3] " + teamIds.size() + " takım " + NUM_THREADS + " thread ile taranıyor...\n");
         ExecutorService executor = Executors.newFixedThreadPool(NUM_THREADS);
-        List<Future<String>> futures = new ArrayList<>();
+        List<Future<TeamResult>> futures = new ArrayList<>();
 
         for (String idStr : teamIds) {
             try {
@@ -126,14 +130,16 @@ public class TemasTakimiAnalyzer {
             }
         }
 
+        List<SignalInfo> tumSinyaller = new ArrayList<>();
         int processed = 0, signalCount = 0;
-        for (Future<String> f : futures) {
+        for (Future<TeamResult> f : futures) {
             try {
-                String result = f.get(5, TimeUnit.MINUTES);
+                TeamResult result = f.get(5, TimeUnit.MINUTES);
                 processed++;
-                if (result != null && !result.isEmpty()) {
+                if (result != null && !result.output.isEmpty()) {
                     signalCount++;
-                    System.out.println(result);
+                    System.out.println(result.output);
+                    tumSinyaller.addAll(result.signals);
                 }
                 System.out.printf("\r⏳ İlerleme: %d/%d  |  Sinyal: %d", processed, futures.size(), signalCount);
             } catch (Exception e) {
@@ -159,10 +165,77 @@ public class TemasTakimiAnalyzer {
         System.out.printf("✅ [3/3] TARAMA TAMAMLANDI | %d takım | %d sinyal | %ds%n",
                 processed, signalCount, sure);
         System.out.println("════════════════════════════════════════════════════════\n");
+
+        printStatistics(tumSinyaller);
+    }
+
+    // ─── İSTATİSTİK ÖZETİ ────────────────────────────────────────────────────
+    /**
+     * Program sonu istatistiği:
+     *   1) En çok sinyal alan maç (aynı maça düşen sinyal sayısı en yüksek olan).
+     *   2) Tek bir sinyalde {@link #YUKSEK_TEKRAR_ESIGI}+ farklı sezonda tekrarlayan maçlar,
+     *      FULL COMEBACK ve BERABERLİK COMEBACK olarak ayrı listelenir.
+     */
+    private static void printStatistics(List<SignalInfo> sinyaller) {
+        System.out.println("╔════════════════════════════════════════════════════════╗");
+        System.out.println("║  📊 İSTATİSTİK ÖZETİ                                     ║");
+        System.out.println("╚════════════════════════════════════════════════════════╝");
+
+        if (sinyaller.isEmpty()) {
+            System.out.println("Hiç sinyal üretilmedi — istatistik yok.\n");
+            return;
+        }
+
+        // ── 1) En çok sinyal alan maç ──
+        Map<String, Integer> macBasinaSinyal = new LinkedHashMap<>();
+        for (SignalInfo s : sinyaller) {
+            macBasinaSinyal.merge(s.matchKey(), 1, Integer::sum);
+        }
+        int enCokSinyal = macBasinaSinyal.values().stream().mapToInt(Integer::intValue).max().orElse(0);
+
+        System.out.printf("%n🏆 EN ÇOK SİNYAL ALAN MAÇ (%d sinyal):%n", enCokSinyal);
+        for (Map.Entry<String, Integer> e : macBasinaSinyal.entrySet()) {
+            if (e.getValue() == enCokSinyal) {
+                System.out.println("   • " + e.getKey());
+            }
+        }
+
+        // ── 2) Tek sinyalde YUKSEK_TEKRAR_ESIGI+ sezon tekrarı olan maçlar ──
+        List<SignalInfo> fullCB     = new ArrayList<>();
+        List<SignalInfo> beraberCB  = new ArrayList<>();
+        for (SignalInfo s : sinyaller) {
+            if (s.seasonCount < YUKSEK_TEKRAR_ESIGI) continue;
+            if (FULL_COMEBACK.equals(s.group)) fullCB.add(s);
+            else beraberCB.add(s);
+        }
+        Comparator<SignalInfo> tekrardanAzalan = (a, b) -> Integer.compare(b.seasonCount, a.seasonCount);
+        fullCB.sort(tekrardanAzalan);
+        beraberCB.sort(tekrardanAzalan);
+
+        System.out.printf("%n🔥 1 SİNYALDE %d+ SEZON TEKRARI OLAN MAÇLAR:%n", YUKSEK_TEKRAR_ESIGI);
+
+        System.out.println("\n   ── FULL COMEBACK (1/2, 2/1) ──");
+        printYuksekTekrarListesi(fullCB);
+
+        System.out.println("\n   ── BERABERLİK COMEBACK (1/X, 2/X) ──");
+        printYuksekTekrarListesi(beraberCB);
+
+        System.out.println();
+    }
+
+    private static void printYuksekTekrarListesi(List<SignalInfo> liste) {
+        if (liste.isEmpty()) {
+            System.out.println("      (yok)");
+            return;
+        }
+        for (SignalInfo s : liste) {
+            System.out.printf("      %2d sezon | %s | temas: %s%n",
+                    s.seasonCount, s.matchKey(), s.temasAdi);
+        }
     }
 
     // ─── TAKIM BAŞINA GÖREV ─────────────────────────────────────────────────
-    private static class TemasTask implements Callable<String> {
+    private static class TemasTask implements Callable<TeamResult> {
         private final int teamId;
         private final CloseableHttpClient http;
 
@@ -172,7 +245,7 @@ public class TemasTakimiAnalyzer {
         }
 
         @Override
-        public String call() {
+        public TeamResult call() {
             try {
                 return analyzeTeam(http, teamId);
             } catch (Exception e) {
@@ -183,7 +256,7 @@ public class TemasTakimiAnalyzer {
     }
 
     // ─── ANA ANALİZ ─────────────────────────────────────────────────────────
-    static String analyzeTeam(CloseableHttpClient http, int teamId) throws IOException {
+    static TeamResult analyzeTeam(CloseableHttpClient http, int teamId) throws IOException {
 
         // 1. Mevcut sezon fikstürü + bugünkü maç
         List<MacData> current = fetchSeasonMatches(http, teamId, CURRENT_SEASON);
@@ -248,6 +321,8 @@ public class TemasTakimiAnalyzer {
 
         // 3. Yeterince tekrar eden desenleri bugünkü maçla eşleştir
         StringBuilder out = new StringBuilder();
+        List<SignalInfo> signals = new ArrayList<>();
+        String macAdi = todayMatch.homeTeam + " vs " + todayMatch.awayTeam;
         for (TemasKaniti k : kanitlar.values()) {
             if (k.seasons.size() < MIN_SEZON_TEKRARI) continue;
 
@@ -261,9 +336,10 @@ public class TemasTakimiAnalyzer {
             if (rakip == null || !teamsMatch(rakip, k.temasAdi)) continue;
 
             out.append(buildSignal(teamName, todayMatch, k, temasMacBugun, teamName));
+            signals.add(new SignalInfo(teamName, macAdi, k.grup, k.seasons.size(), k.temasAdi));
         }
 
-        return out.length() == 0 ? null : out.toString();
+        return signals.isEmpty() ? null : new TeamResult(out.toString(), signals);
     }
 
     // ─── SİNYAL ÇIKTISI ─────────────────────────────────────────────────────
@@ -306,6 +382,40 @@ public class TemasTakimiAnalyzer {
         }
         sb.append("╚════════════════════════════════════════════════════════════════════╝");
         return sb.toString();
+    }
+
+    // ─── SONUÇ / SİNYAL MODELİ ──────────────────────────────────────────────
+    /** Bir takım analizinin sonucu: ekrana basılan metin + istatistik için sinyal listesi. */
+    static class TeamResult {
+        final String output;
+        final List<SignalInfo> signals;
+
+        TeamResult(String output, List<SignalInfo> signals) {
+            this.output  = output;
+            this.signals = signals;
+        }
+    }
+
+    /** İstatistik için tek bir sinyalin özeti. */
+    static class SignalInfo {
+        final String teamName;
+        final String macAdi;       // "Ev vs Deplasman"
+        final String group;        // FULL_COMEBACK / BERABERLIK_COMEBACK
+        final int    seasonCount;  // desenin tekrarlandığı farklı sezon sayısı
+        final String temasAdi;
+
+        SignalInfo(String teamName, String macAdi, String group, int seasonCount, String temasAdi) {
+            this.teamName    = teamName;
+            this.macAdi      = macAdi;
+            this.group       = group;
+            this.seasonCount = seasonCount;
+            this.temasAdi    = temasAdi;
+        }
+
+        /** Sinyalleri maça göre gruplamak için anahtar (hangi takım + bugünkü maç). */
+        String matchKey() {
+            return teamName + ": " + macAdi;
+        }
     }
 
     // ─── KANIT MODELİ ───────────────────────────────────────────────────────

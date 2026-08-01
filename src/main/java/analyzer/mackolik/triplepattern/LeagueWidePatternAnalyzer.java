@@ -49,8 +49,10 @@ public class LeagueWidePatternAnalyzer {
     private static final Logger log = LoggerFactory.getLogger(LeagueWidePatternAnalyzer.class);
 
     private static final String CURRENT_SEASON = "2026/2027";
-    /** How far back the pattern season is searched when the newest season has too few matches. */
+    /** How far back the league page is looked up when the current season's page does not exist yet. */
     private static final int MAX_ANCHOR_FALLBACK = 3;
+    /** The current season must have at least this many finished matches before analysis starts. */
+    private static final int MIN_PATTERN_MATCHES = 2;
     private static final int SEASONS_TO_SCAN     = 20;
     private static final int[] PATTERN_SIZES     = {2, 3, 4};
     private static final int NUM_THREADS         = 10;
@@ -97,34 +99,26 @@ public class LeagueWidePatternAnalyzer {
             List<String> labels = sortedLabelsNewestFirst(seasonIndex);
             String teamName = LeagueSeasonFetcher.fetchTeamName(http, teamId, league.seasonLabel);
 
-            // ── The season the pattern is taken from ────────────────────────
-            int patternSeasonPos = -1;
-            List<LeagueMatch> patternSeason = null;
-
-            int maxSize = PATTERN_SIZES[PATTERN_SIZES.length - 1];
-            int anchor  = indexOf(labels, league.seasonLabel);
-            // Bounded: a team that spent years in another division must not drag the
-            // whole season archive down before we give up on it.
-            int lastAnchor = Math.min(labels.size(), anchor + MAX_ANCHOR_FALLBACK);
-
-            for (int i = anchor; i < lastAnchor; i++) {
-                String label = labels.get(i);
-                List<LeagueMatch> season =
-                        LeagueSeasonFetcher.fetchLeagueSeason(http, seasonIndex.get(label), label);
-                if (LeagueWidePattern.timelineOf(season, teamId).size() >= maxSize) {
-                    patternSeasonPos = i;
-                    patternSeason    = season;
-                    break;
-                }
-                log.debug("Team {}: season {} has too few finished matches, stepping back", teamId, label);
-            }
-
-            if (patternSeason == null) {
-                log.warn("Team {}: no season with at least {} finished matches", teamId, maxSize);
+            // ── The season the pattern is taken from: strictly the current season ──
+            int patternSeasonPos = labels.indexOf(CURRENT_SEASON);
+            if (patternSeasonPos < 0) {
+                log.info("Team {} ({}): current season {} not listed — keçildi",
+                        teamId, teamName, CURRENT_SEASON);
                 return null;
             }
 
-            String patternLabel = labels.get(patternSeasonPos);
+            List<LeagueMatch> patternSeason =
+                    LeagueSeasonFetcher.fetchLeagueSeason(http, seasonIndex.get(CURRENT_SEASON), CURRENT_SEASON);
+
+            // At least MIN_PATTERN_MATCHES finished matches must exist this season, else pass the team.
+            int playedThisSeason = LeagueWidePattern.timelineOf(patternSeason, teamId).size();
+            if (playedThisSeason < MIN_PATTERN_MATCHES) {
+                log.info("Team {} ({}): {} sezonunda yalnız {} oyun oynanıb (min {}) — keçildi",
+                        teamId, teamName, CURRENT_SEASON, playedThisSeason, MIN_PATTERN_MATCHES);
+                return null;
+            }
+
+            String patternLabel = CURRENT_SEASON;
 
             // ── Seasons to scan: the 20 preceding the pattern season ────────
             List<String> historySeasons = new ArrayList<>();
@@ -277,12 +271,6 @@ public class LeagueWidePatternAnalyzer {
         } catch (Exception e) {
             return 0;
         }
-    }
-
-    /** Position of the anchor season, or 0 (newest) when it is not listed. */
-    private static int indexOf(List<String> labels, String label) {
-        int pos = labels.indexOf(label);
-        return pos >= 0 ? pos : 0;
     }
 
     // ═══════════════════════════════════════════════════════════════════════
