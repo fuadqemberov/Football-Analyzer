@@ -3,7 +3,7 @@ name: Daily All Analyzers
 on:
   schedule:
     # 12:30 Bakı = 08:30 UTC
-    - cron: '30 8 * * *'
+    - cron: '30 5 * * *'
   workflow_dispatch:
 
 jobs:
