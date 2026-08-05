@@ -3,13 +3,13 @@ name: Daily All Analyzers
 on:
   schedule:
     # 12:30 Bakı = 08:30 UTC
-    - cron: '30 8 * * *'
+    - cron: '30 5 * * *'
   workflow_dispatch:
 
 jobs:
   run:
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 150
 
     steps:
       - name: Checkout
@@ -35,60 +35,74 @@ jobs:
       - name: 1) NowGoalTeamRoundHTFT
         run: |
           echo "===== NowGoalTeamRoundHTFT START =====" > team_round.txt
-          mvn -B exec:java \
+          timeout -k 30 25m mvn -B exec:java \
             -Dexec.mainClass="analyzer.nowgoal.NowGoalTeamRoundHTFT" \
             -Dexec.classpathScope=compile \
-            >> team_round.txt 2>&1 || true
+            >> team_round.txt 2>&1 || echo "[workflow] step timed out or failed (exit $?)" >> team_round.txt
           echo "===== NowGoalTeamRoundHTFT END =====" >> team_round.txt
           tail -n 20 team_round.txt
 
       - name: 2) NowGoalHTFT
         run: |
           echo "===== NowGoalHTFT START =====" > nowgoal_htft.txt
-          mvn -B exec:java \
+          timeout -k 30 25m mvn -B exec:java \
             -Dexec.mainClass="analyzer.nowgoal.NowGoalHTFT" \
             -Dexec.classpathScope=compile \
-            >> nowgoal_htft.txt 2>&1 || true
+            >> nowgoal_htft.txt 2>&1 || echo "[workflow] step timed out or failed (exit $?)" >> nowgoal_htft.txt
           echo "===== NowGoalHTFT END =====" >> nowgoal_htft.txt
           tail -n 20 nowgoal_htft.txt
 
       - name: 3) TemasTakimiAnalyzer
         run: |
           echo "===== TemasTakimiAnalyzer START =====" > temas.txt
-          mvn -B exec:java \
+          timeout -k 30 25m mvn -B exec:java \
             -Dexec.mainClass="analyzer.mackolik.temas.TemasTakimiAnalyzer" \
             -Dexec.classpathScope=compile \
-            >> temas.txt 2>&1 || true
+            >> temas.txt 2>&1 || echo "[workflow] step timed out or failed (exit $?)" >> temas.txt
           echo "===== TemasTakimiAnalyzer END =====" >> temas.txt
           tail -n 20 temas.txt
 
       - name: 4) LeagueWidePatternAnalyzer
         run: |
           echo "===== LeagueWidePatternAnalyzer START =====" > league_wide.txt
-          mvn -B exec:java \
+          timeout -k 30 25m mvn -B exec:java \
             -Dexec.mainClass="analyzer.mackolik.triplepattern.LeagueWidePatternAnalyzer" \
             -Dexec.classpathScope=compile \
-            >> league_wide.txt 2>&1 || true
+            >> league_wide.txt 2>&1 || echo "[workflow] step timed out or failed (exit $?)" >> league_wide.txt
           echo "===== LeagueWidePatternAnalyzer END =====" >> league_wide.txt
           tail -n 20 league_wide.txt
 
+      - name: 5) HaftaDonguAnalyzer
+        run: |
+          echo "===== HaftaDonguAnalyzer START =====" > hafta_dongu.txt
+          timeout -k 30 25m mvn -B exec:java \
+            -Dexec.mainClass="analyzer.mackolik.dongu.HaftaDonguAnalyzer" \
+            -Dexec.classpathScope=compile \
+            >> hafta_dongu.txt 2>&1 || echo "[workflow] step timed out or failed (exit $?)" >> hafta_dongu.txt
+          echo "===== HaftaDonguAnalyzer END =====" >> hafta_dongu.txt
+          tail -n 20 hafta_dongu.txt
+
       - name: Send email
+        if: always()
         uses: dawidd6/action-send-mail@v3
         with:
           server_address: smtp.gmail.com
           server_port: 465
           username: ${{ secrets.MAIL_USERNAME }}
           password: ${{ secrets.MAIL_PASSWORD }}
-          subject: "Daily All 4 Analyzers - #${{ github.run_number }}"
+          subject: "Daily All 5 Analyzers - #${{ github.run_number }}"
           to: ${{ secrets.MAIL_TO }}
           from: GitHub Actions <${{ secrets.MAIL_USERNAME }}>
           body: |
-            Günlük 4 analiz tamamlandı (12:30 Bakı).
+            Günlük 5 analiz tamamlandı (12:30 Bakı).
 
-            1) NowGoalTeamRoundHTFT  → team_round.txt
-            2) NowGoalHTFT           → nowgoal_htft.txt
-            3) TemasTakimiAnalyzer   → temas.txt
+            1) NowGoalTeamRoundHTFT      → team_round.txt
+            2) NowGoalHTFT               → nowgoal_htft.txt
+            3) TemasTakimiAnalyzer       → temas.txt
             4) LeagueWidePatternAnalyzer → league_wide.txt
+            5) HaftaDonguAnalyzer        → hafta_dongu.txt
+
+            Not: Hər analiz üçün 25 dəqiqəlik limit var; bir analiz donsa belə iş dayanmır və email gəlir.
 
             Log: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          attachments: team_round.txt,nowgoal_htft.txt,temas.txt,league_wide.txt
+          attachments: team_round.txt,nowgoal_htft.txt,temas.txt,league_wide.txt,hafta_dongu.txt
