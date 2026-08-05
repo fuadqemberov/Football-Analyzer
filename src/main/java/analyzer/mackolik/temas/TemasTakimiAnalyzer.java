@@ -89,6 +89,9 @@ public class TemasTakimiAnalyzer {
     /** İstatistikte "yüksek tekrar" sayılan eşik: tek sinyalde bu kadar+ farklı sezon tekrarı. */
     private static final int YUKSEK_TEKRAR_ESIGI = 8;
 
+    /** "En çok sinyal alan maç" listesinde gösterilecek maç sayısı. */
+    private static final int TOP_SINYAL_MAC = 20;
+
     // ─── MAIN ───────────────────────────────────────────────────────────────
     public static void main(String[] args) {
         System.out.println("\n╔══════════════════════════════════════════════════════╗");
@@ -186,18 +189,20 @@ public class TemasTakimiAnalyzer {
             return;
         }
 
-        // ── 1) En çok sinyal alan maç ──
+        // ── 1) En çok sinyal alan maçlar (ilk TOP_SINYAL_MAC) ──
         Map<String, Integer> macBasinaSinyal = new LinkedHashMap<>();
         for (SignalInfo s : sinyaller) {
             macBasinaSinyal.merge(s.matchKey(), 1, Integer::sum);
         }
-        int enCokSinyal = macBasinaSinyal.values().stream().mapToInt(Integer::intValue).max().orElse(0);
+        List<Map.Entry<String, Integer>> siralı = new ArrayList<>(macBasinaSinyal.entrySet());
+        siralı.sort((a, b) -> Integer.compare(b.getValue(), a.getValue()));
 
-        System.out.printf("%n🏆 EN ÇOK SİNYAL ALAN MAÇ (%d sinyal):%n", enCokSinyal);
-        for (Map.Entry<String, Integer> e : macBasinaSinyal.entrySet()) {
-            if (e.getValue() == enCokSinyal) {
-                System.out.println("   • " + e.getKey());
-            }
+        int gosterilecek = Math.min(TOP_SINYAL_MAC, siralı.size());
+        System.out.printf("%n🏆 EN ÇOK SİNYAL ALAN MAÇLAR (top %d / toplam %d maç):%n",
+                gosterilecek, siralı.size());
+        for (int i = 0; i < gosterilecek; i++) {
+            Map.Entry<String, Integer> e = siralı.get(i);
+            System.out.printf("   %2d) %3d sinyal | %s%n", i + 1, e.getValue(), e.getKey());
         }
 
         // ── 2) Tek sinyalde YUKSEK_TEKRAR_ESIGI+ sezon tekrarı olan maçlar ──
