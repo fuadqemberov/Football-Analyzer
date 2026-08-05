@@ -82,6 +82,26 @@ jobs:
           echo "===== HaftaDonguAnalyzer END =====" >> hafta_dongu.txt
           tail -n 20 hafta_dongu.txt
 
+      - name: 6) SeasonXthOfficialMatchAnalyzer
+        run: |
+          echo "===== SeasonXthOfficialMatchAnalyzer START =====" > season_xth.txt
+          timeout -k 30 25m mvn -B exec:java \
+            -Dexec.mainClass="analyzer.mackolik.xthmatch.SeasonXthOfficialMatchAnalyzer" \
+            -Dexec.classpathScope=compile \
+            >> season_xth.txt 2>&1 || echo "[workflow] step timed out or failed (exit $?)" >> season_xth.txt
+          echo "===== SeasonXthOfficialMatchAnalyzer END =====" >> season_xth.txt
+          tail -n 20 season_xth.txt
+
+      - name: 7) ZincirSurprizAnalyzer
+        run: |
+          echo "===== ZincirSurprizAnalyzer START =====" > zincir_surpriz.txt
+          timeout -k 30 25m mvn -B exec:java \
+            -Dexec.mainClass="analyzer.mackolik.triplepattern.ZincirSurprizAnalyzer" \
+            -Dexec.classpathScope=compile \
+            >> zincir_surpriz.txt 2>&1 || echo "[workflow] step timed out or failed (exit $?)" >> zincir_surpriz.txt
+          echo "===== ZincirSurprizAnalyzer END =====" >> zincir_surpriz.txt
+          tail -n 20 zincir_surpriz.txt
+
       - name: Send email
         if: always()
         uses: dawidd6/action-send-mail@v3
@@ -90,19 +110,21 @@ jobs:
           server_port: 465
           username: ${{ secrets.MAIL_USERNAME }}
           password: ${{ secrets.MAIL_PASSWORD }}
-          subject: "Daily All 5 Analyzers - #${{ github.run_number }}"
+          subject: "Daily All 7 Analyzers - #${{ github.run_number }}"
           to: ${{ secrets.MAIL_TO }}
           from: GitHub Actions <${{ secrets.MAIL_USERNAME }}>
           body: |
-            Günlük 5 analiz tamamlandı (12:30 Bakı).
+            Günlük 7 analiz tamamlandı (12:30 Bakı).
 
-            1) NowGoalTeamRoundHTFT      → team_round.txt
-            2) NowGoalHTFT               → nowgoal_htft.txt
-            3) TemasTakimiAnalyzer       → temas.txt
-            4) LeagueWidePatternAnalyzer → league_wide.txt
-            5) HaftaDonguAnalyzer        → hafta_dongu.txt
+            1) NowGoalTeamRoundHTFT           → team_round.txt
+            2) NowGoalHTFT                    → nowgoal_htft.txt
+            3) TemasTakimiAnalyzer            → temas.txt
+            4) LeagueWidePatternAnalyzer      → league_wide.txt
+            5) HaftaDonguAnalyzer             → hafta_dongu.txt
+            6) SeasonXthOfficialMatchAnalyzer → season_xth.txt
+            7) ZincirSurprizAnalyzer          → zincir_surpriz.txt
 
             Not: Hər analiz üçün 25 dəqiqəlik limit var; bir analiz donsa belə iş dayanmır və email gəlir.
 
             Log: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          attachments: team_round.txt,nowgoal_htft.txt,temas.txt,league_wide.txt,hafta_dongu.txt
+          attachments: team_round.txt,nowgoal_htft.txt,temas.txt,league_wide.txt,hafta_dongu.txt,season_xth.txt,zincir_surpriz.txt
