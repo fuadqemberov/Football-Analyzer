@@ -26,9 +26,37 @@ import java.util.stream.Collectors;
 public class MultiVersionAnalyzer {
 
     private static final Logger log = LoggerFactory.getLogger(MultiVersionAnalyzer.class);
-    private static final int START_YEAR = 2024;
+    private static final int START_YEAR = 2025;
     private static final int END_YEAR = 2010;
     private static final int[] ANALYSIS_VERSIONS = {1, 2, 3, 4};
+    private static final int MIN_COMEBACK_COUNT = 2;
+
+    /**
+     * HT/FT sonucu 1/2 veya 2/1 mi? (Devre arasında önde olan taraf maçı kaybetti = full comeback)
+     */
+    static boolean isFullComeback(String htScore, String ftScore) {
+        int[] ht = parseScore(htScore);
+        int[] ft = parseScore(ftScore);
+        if (ht == null || ft == null) return false;
+        boolean htHomeLeads = ht[0] > ht[1];
+        boolean htAwayLeads = ht[1] > ht[0];
+        boolean ftHomeWins = ft[0] > ft[1];
+        boolean ftAwayWins = ft[1] > ft[0];
+        return (htHomeLeads && ftAwayWins)   // HT/FT 1/2
+                || (htAwayLeads && ftHomeWins); // HT/FT 2/1
+    }
+
+    private static int[] parseScore(String score) {
+        if (score == null) return null;
+        String cleaned = score.replace("(", "").replace(")", "").trim();
+        String[] parts = cleaned.split("-");
+        if (parts.length != 2) return null;
+        try {
+            return new int[]{Integer.parseInt(parts[0].trim()), Integer.parseInt(parts[1].trim())};
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
 
 
     private static class MultiVersionTeamProcessorTask implements Callable<MultiVersionResult> {
@@ -130,21 +158,39 @@ public class MultiVersionAnalyzer {
     static class VersionResult {
         int version;
         AdvancedMatchPattern pattern;
-        Map<Integer, List<AdvancedMatchResult>> matches;
+        Map<Integer, List<AdvancedMatchResult>> matches; // sadece Sonraki Maç'ı HT/FT 1/2 veya 2/1 (full comeback) olanlar
 
         public VersionResult(int version, AdvancedMatchPattern pattern,
                              Map<Integer, List<AdvancedMatchResult>> matches) {
             this.version = version;
             this.pattern = pattern;
-            this.matches = matches;
+            this.matches = filterFullComebacks(matches);
+        }
+
+        private static Map<Integer, List<AdvancedMatchResult>> filterFullComebacks(
+                Map<Integer, List<AdvancedMatchResult>> all) {
+            Map<Integer, List<AdvancedMatchResult>> filtered = new TreeMap<>();
+            for (Map.Entry<Integer, List<AdvancedMatchResult>> entry : all.entrySet()) {
+                List<AdvancedMatchResult> comebacks = entry.getValue().stream()
+                        .filter(m -> isFullComeback(m.nextHtScore, m.nextScore))
+                        .collect(Collectors.toList());
+                if (!comebacks.isEmpty()) {
+                    filtered.put(entry.getKey(), comebacks);
+                }
+            }
+            return filtered;
+        }
+
+        int comebackCount() {
+            return matches.values().stream().mapToInt(List::size).sum();
         }
 
         @Override
         public String toString() {
             StringBuilder sb = new StringBuilder();
             sb.append(String.format("\n╔══════════════════════════════════════════════════════════════╗\n"));
-            sb.append(String.format("║ VERSİYON %d: Sondan %d. Maç Baz Alındı, %d Maç Sonrası      ║\n",
-                    version, version, version));
+            sb.append(String.format("║ VERSİYON %d: Sondan %d. Maç | HT/FT 2/1 - 1/2 | %d Comeback  ║\n",
+                    version, version, comebackCount()));
             sb.append(String.format("╚══════════════════════════════════════════════════════════════╝\n"));
             sb.append("Aranan Pattern: ").append(pattern.toString()).append("\n");
 
@@ -172,24 +218,52 @@ public class MultiVersionAnalyzer {
             versionResults.add(result);
         }
 
+        /**
+         * Bir maç (pattern) için en az MIN_COMEBACK_COUNT full comeback bulunan versiyonlar.
+         */
+        List<VersionResult> printableVersions() {
+            return versionResults.stream()
+                    .filter(vr -> vr.comebackCount() >= MIN_COMEBACK_COUNT)
+                    .collect(Collectors.toList());
+        }
+
         public boolean hasAnyResults() {
-            return !versionResults.isEmpty();
+            return !printableVersions().isEmpty();
+        }
+
+        /**
+         * En sonda basılacak özet: bu maça geçmişte kaç adet HT/FT 2/1 - 1/2 bulundu.
+         */
+        String summaryLine() {
+            List<VersionResult> printable = printableVersions();
+            if (printable.isEmpty()) return "";
+            AdvancedMatchPattern p = printable.get(0).pattern;
+            String nextMatch = (p.nextHomeTeam != null && p.nextAwayTeam != null)
+                    ? p.nextHomeTeam + " vs " + p.nextAwayTeam
+                    : "?";
+            String versionCounts = printable.stream()
+                    .map(vr -> String.format("V%d: %d adet", vr.version, vr.comebackCount()))
+                    .collect(Collectors.joining(" | "));
+            return String.format("%s -> Geçmişte %s HT/FT 2/1-1/2 bulundu  [%s]",
+                    nextMatch,
+                    printable.stream().mapToInt(VersionResult::comebackCount).sum() + " adet",
+                    versionCounts);
         }
 
         @Override
         public String toString() {
+            List<VersionResult> printable = printableVersions();
             StringBuilder sb = new StringBuilder();
             sb.append("\n");
             sb.append("═══════════════════════════════════════════════════════════════════════\n");
-            sb.append(String.format("  TAKIM ID: %d - %d VERSİYON ANALİZİ\n",
-                    teamId, versionResults.size()));
+            sb.append(String.format("  TAKIM ID: %d - HT/FT FULL COMEBACK (2/1 - 1/2) ANALİZİ\n", teamId));
 
-            if (!versionResults.isEmpty()) {
-                sb.append(String.format("  Takım: %s\n", versionResults.get(0).pattern.teamName));
+            if (!printable.isEmpty()) {
+                sb.append(String.format("  Takım: %s\n", printable.get(0).pattern.teamName));
             }
             sb.append("═══════════════════════════════════════════════════════════════════════\n");
 
-            for (VersionResult vr : versionResults) {
+            for (VersionResult vr : printable) {
                 sb.append(vr.toString());
             }
 
@@ -231,12 +305,9 @@ public class MultiVersionAnalyzer {
         }
 
         log.info("{} tasks submitted. Waiting for completion...", submitted);
-        System.out.println("\n╔═══════════════════════════════════════════════════════════════╗");
-        System.out.println("║  MULTI-VERSION PATTERN ANALYZER                               ║");
-        System.out.println("║  Versions: 1,2,3,4 (Sondan 1.,2.,3.,4. maçlar)              ║");
-        System.out.println("╚═══════════════════════════════════════════════════════════════╝\n");
 
         int foundCount = 0;
+        List<MultiVersionResult> foundResults = new ArrayList<>();
         for (int i = 0; i < submitted; i++) {
             try {
                 Future<MultiVersionResult> completed = completionService.take();
@@ -245,6 +316,7 @@ public class MultiVersionAnalyzer {
                     synchronized (System.out) {
                         System.out.println(result);
                     }
+                    foundResults.add(result);
                     foundCount++;
                 }
             } catch (InterruptedException e) {
@@ -256,13 +328,17 @@ public class MultiVersionAnalyzer {
             }
         }
 
-        long duration = System.currentTimeMillis() - startTime;
-        System.out.println("\n╔═══════════════════════════════════════════════════════════════╗");
-        System.out.println("║  İŞLEM TAMAMLANDI                                             ║");
-        System.out.println(String.format("║  Süre: %d ms | Bulunan: %d/%d takım                      ║",
-                duration, foundCount, submitted));
-        System.out.println("╚═══════════════════════════════════════════════════════════════╝\n");
+        if (!foundResults.isEmpty()) {
+            System.out.println("\n╔═══════════════════════════════════════════════════════════════╗");
+            System.out.println("║  ÖZET İSTATİSTİK: HT/FT 2/1 - 1/2 (FULL COMEBACK)             ║");
+            System.out.println("╚═══════════════════════════════════════════════════════════════╝");
+            for (MultiVersionResult result : foundResults) {
+                System.out.println("  " + result.summaryLine());
+            }
+            System.out.println();
+        }
 
+        long duration = System.currentTimeMillis() - startTime;
         log.info("Processing complete in {} ms. Found patterns for {} out of {} teams.",
                 duration, foundCount, submitted);
 

@@ -161,7 +161,13 @@ public class AdvancedScoreScraper {
 
                     // matchesForward MAÇ SONRAKİ SONUCU AL (1, 2, 3, veya 4 maç sonra)
                     if (i + matchesForward < leagueMatches.size()) {
-                        result.nextMatchInfo = getMatchInfo(leagueMatches.get(i + matchesForward));
+                        Element nextRow = leagueMatches.get(i + matchesForward);
+                        result.nextMatchInfo = getMatchInfo(nextRow);
+                        try {
+                            result.nextScore = nextRow.selectFirst("td:nth-child(5) b a").text().trim();
+                            result.nextHtScore = nextRow.selectFirst("td:nth-child(9)").text().trim();
+                        } catch (Exception ignored) {
+                        }
                         log.info("{} maç sonraki sonuç: {}", matchesForward, result.nextMatchInfo);
                     } else {
                         // Yeterli maç yoksa mevcut olanları göster

@@ -166,11 +166,12 @@ public class Bet365HundredConsensusAnalyzer {
         Method(int number, ColumnDef[] cols) { this.number = number; this.cols = cols; }
     }
 
-    private static final int METHOD_COUNT = 100;
+    private static final int METHOD_COUNT = 1000;
     private static final int TWIN_MIN = 1;
     private static final int TWIN_MAX = 3;
     private static final double CONFIDENCE_THRESHOLD = 99.0; // "99% güvənli"
     private static final double MIN_DISPLAY_CONFIDENCE = 93.0; // ən güvənli təxmin bundan aşağıdırsa oyun çap olunmur
+    private static final int MIN_DISPLAY_TWINS = 15;         // havuzda bundan az twin oyun varsa güvənilir sayılmır, çap olunmur
     private static final int MIN_POOL_TWINS = 10;            // güvən mənalı olsun deyə min. twin sayı
 
     private static List<Method> buildMethods() {
@@ -641,6 +642,7 @@ public class Bet365HundredConsensusAnalyzer {
 
             int methodsAgreeing = hitQ.size();
             int[] pool = flatten(hitQ);
+            if (pool.length < MIN_DISPLAY_TWINS) continue; // 15-dən az twin oyun → güvənilir deyil, çap olunmur
             List<Pick> picks = evaluatePicks(pool);
             if (picks.isEmpty()) continue;
 

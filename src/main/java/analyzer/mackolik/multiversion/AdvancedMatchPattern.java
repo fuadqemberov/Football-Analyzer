@@ -40,6 +40,8 @@ class AdvancedMatchResult {
     String htScore;
     String previousMatchInfo;
     String nextMatchInfo;
+    String nextScore;   // Sonraki maçın maç sonu skoru
+    String nextHtScore; // Sonraki maçın ilk yarı skoru
     String season;
     AdvancedMatchPattern originalPattern;
 
