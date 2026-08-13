@@ -172,6 +172,7 @@ public class Bet365HundredConsensusAnalyzer {
     private static final double CONFIDENCE_THRESHOLD = 99.0; // "99% güvənli"
     private static final double MIN_DISPLAY_CONFIDENCE = 93.0; // ən güvənli təxmin bundan aşağıdırsa oyun çap olunmur
     private static final int MIN_DISPLAY_TWINS = 15;         // havuzda bundan az twin oyun varsa güvənilir sayılmır, çap olunmur
+    private static final double MIN_OTHER_PICK_CONFIDENCE = 90.0; // "Digər güclü təxminlər" siyahısında minimum güvən
     private static final int MIN_POOL_TWINS = 10;            // güvən mənalı olsun deyə min. twin sayı
 
     private static List<Method> buildMethods() {
@@ -543,10 +544,6 @@ public class Bet365HundredConsensusAnalyzer {
         addPred(picks, pool, "Tərəf: MS 1 (Ev sahibi qalib)", r -> rFtH[r] > rFtA[r], this::ftValid);
         addPred(picks, pool, "Tərəf: MS X (Heç-heçə)",        r -> rFtH[r] == rFtA[r], this::ftValid);
         addPred(picks, pool, "Tərəf: MS 2 (Deplasman qalib)", r -> rFtH[r] < rFtA[r], this::ftValid);
-        // ── İkili şans ──
-        addPred(picks, pool, "İkili şans: 1X",  r -> rFtH[r] >= rFtA[r], this::ftValid);
-        addPred(picks, pool, "İkili şans: 12",  r -> rFtH[r] != rFtA[r], this::ftValid);
-        addPred(picks, pool, "İkili şans: X2",  r -> rFtH[r] <= rFtA[r], this::ftValid);
         // ── MS tam qol A/U ── (MS 0.5 ÜST çıxarıldı: həmişə ~99% olan trivial variant)
         for (int line : new int[]{0,1,2,3,4}) {
             double L = line + 0.5;
@@ -683,11 +680,14 @@ public class Bet365HundredConsensusAnalyzer {
                 sure ? "🔒 99%+ GÜVƏNLİ" : "⭐ ƏN GÜVƏNLİ (99% altı)", best.label);
         System.out.printf("║    Güvən: %.1f%%  (%d/%d twin bu nəticə ilə bitib)%n",
                 best.conf(), best.hit, best.total);
-        System.out.println("╠──────────────────────────────────────────────────────────────");
-        System.out.println("║ Digər güclü təxminlər:");
         int shown = 0;
         for (int i = 1; i < picks.size() && shown < 5; i++) {
             Pick p = picks.get(i);
+            if (p.conf() < MIN_OTHER_PICK_CONFIDENCE) continue; // 90%-dən aşağı təxminlər göstərilmir
+            if (shown == 0) {
+                System.out.println("╠──────────────────────────────────────────────────────────────");
+                System.out.println("║ Digər güclü təxminlər:");
+            }
             System.out.printf("║    %2d) %-34s  %.1f%% (%d/%d)%n",
                     shown + 1, p.label, p.conf(), p.hit, p.total);
             shown++;

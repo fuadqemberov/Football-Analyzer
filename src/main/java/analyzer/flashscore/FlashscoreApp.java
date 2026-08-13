@@ -15,13 +15,10 @@ import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.ProgressBar;
 import javafx.scene.control.TextArea;
-import javafx.scene.control.TextField;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
-import javafx.stage.FileChooser;
 import javafx.stage.Stage;
 
-import java.io.File;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutorService;
@@ -45,13 +42,19 @@ public class FlashscoreApp extends Application {
     private ScheduledFuture<?> timerFuture;
 
     private ComboBox<Integer> daysCombo;
-    private TextField pathField;
     private Button startBtn;
     private ProgressBar progressBar;
     private Label statusLabel;
     private Label timerLabel;
+    private Label freshnessLabel;
     private TextArea logArea;
-    private File selectedSaveFile;
+
+    // AppLauncher üzerinden başlatılınca hazır gelir; doğrudan çalıştırılırsa start() içinde hesaplanır.
+    private static DatabaseService.DataFreshness dataFreshness;
+
+    public static void setDataFreshness(DatabaseService.DataFreshness freshness) {
+        dataFreshness = freshness;
+    }
 
     public static void main(String[] args) { launch(args); }
 
@@ -69,22 +72,10 @@ public class FlashscoreApp extends Application {
         daysCombo.setValue(1);
         daysBox.getChildren().addAll(new Label("Taranacak Gün Sayısı:"), daysCombo);
 
-        HBox fileBox = new HBox(10);
-        fileBox.setAlignment(Pos.CENTER_LEFT);
-        pathField = new TextField();
-        pathField.setEditable(false);
-        pathField.setPrefWidth(280);
-
-        // --- YENİ EKLENEN KISIM: Otomatik Masaüstü Seçimi ---
-        String userHome = System.getProperty("user.home");
-        File desktopPath = new File(userHome, "Desktop");
-        selectedSaveFile = new File(desktopPath, "bet365.xlsx");
-        pathField.setText(selectedSaveFile.getAbsolutePath());
-        // ---------------------------------------------------
-
-        Button browseBtn = new Button("Gözat...");
-        browseBtn.setOnAction(e -> selectSaveLocation(primaryStage));
-        fileBox.getChildren().addAll(new Label("Kaydedilecek Yer:"), pathField, browseBtn);
+        freshnessLabel = new Label();
+        freshnessLabel.setWrapText(true);
+        if (dataFreshness == null) dataFreshness = DatabaseService.checkDataFreshness();
+        showFreshness(dataFreshness);
 
         progressBar = new ProgressBar(0);
         progressBar.setPrefWidth(420);
@@ -109,7 +100,7 @@ public class FlashscoreApp extends Application {
 
         VBox root = new VBox(15);
         root.setPadding(new Insets(20));
-        root.getChildren().addAll(titleLabel, daysBox, fileBox, startBtn, statusRow, progressBar, logArea);
+        root.getChildren().addAll(titleLabel, freshnessLabel, daysBox, startBtn, statusRow, progressBar, logArea);
 
         Scene scene = new Scene(root, 580, 550);
         primaryStage.setScene(scene);
@@ -120,6 +111,15 @@ public class FlashscoreApp extends Application {
             System.exit(0);
         });
         primaryStage.show();
+    }
+
+    /** Güncellik etiketini tazeler; güncel veride yeşil, geride kalmışsa kırmızı gösterir. */
+    private void showFreshness(DatabaseService.DataFreshness freshness) {
+        dataFreshness = freshness;
+        boolean stale = !freshness.isAvailable() || freshness.daysBehind() > 0;
+        freshnessLabel.setText(freshness.message());
+        freshnessLabel.setStyle("-fx-font-size: 12px; -fx-text-fill: "
+                + (stale ? "#c0392b" : "#27ae60") + ";");
     }
 
     private void startTimer() {
@@ -137,33 +137,8 @@ public class FlashscoreApp extends Application {
         if (timerFuture != null) timerFuture.cancel(false);
     }
 
-    private void selectSaveLocation(Stage s) {
-        FileChooser fc = new FileChooser();
-        fc.getExtensionFilters().add(new FileChooser.ExtensionFilter("Excel", "*.xlsx"));
-
-        // Eğer seçili bir dosya varsa (Örn: Default masaüstü), o klasörü aç ve ismi hazırla
-        if (selectedSaveFile != null && selectedSaveFile.getParentFile().exists()) {
-            fc.setInitialDirectory(selectedSaveFile.getParentFile());
-            fc.setInitialFileName(selectedSaveFile.getName());
-        } else {
-            fc.setInitialFileName("bet365.xlsx");
-        }
-
-        File f = fc.showSaveDialog(s);
-        if (f != null) {
-            selectedSaveFile = f;
-            pathField.setText(f.getAbsolutePath());
-        }
-    }
-
     private void startScrapingTask() {
-        if (selectedSaveFile == null) {
-            AppLogger.log("Lütfen önce kaydetme konumu seçin!");
-            return;
-        }
-
         final int daysToProcess = daysCombo.getValue();
-        final String savePath = selectedSaveFile.getAbsolutePath();
 
         startBtn.setDisable(true);
         doneCount.set(0);
@@ -201,17 +176,20 @@ public class FlashscoreApp extends Application {
 
                 runParallelScraping(pendingMatches);
 
-                AppLogger.log("\n=== FAZ 3: EXCEL VE VERİTABANI İŞLEMLERİ ===");
-
-                ExcelReportService.generateReport(resultList, savePath);
+                AppLogger.log("\n=== FAZ 3: VERİTABANI İŞLEMLERİ ===");
 
                 DatabaseService.insertToDatabase(resultList);
 
-                AppLogger.log("İŞLEM TAMAMLANDI! Excel: " + savePath + " | Veritabanına aktarıldı.");
+                AppLogger.log("İŞLEM TAMAMLANDI! Veritabanına aktarıldı.");
+
+                DatabaseService.DataFreshness updated = DatabaseService.checkDataFreshness();
+                AppLogger.log(updated.message());
+
                 Platform.runLater(() -> {
                     statusLabel.setText("Tamamlandı!");
                     startBtn.setDisable(false);
                     progressBar.setProgress(1.0);
+                    showFreshness(updated);
                 });
                 stopTimer();
 

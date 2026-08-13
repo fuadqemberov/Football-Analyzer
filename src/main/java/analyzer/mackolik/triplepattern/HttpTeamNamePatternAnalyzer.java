@@ -32,7 +32,7 @@ public class HttpTeamNamePatternAnalyzer {
 
     private static final Logger log = LoggerFactory.getLogger(HttpTeamNamePatternAnalyzer.class);
 
-    private static final int START_YEAR = 2024;
+    private static final int START_YEAR = 2025;
     private static final int END_YEAR   = 2015;  // Reduced from 2010 (10 seasons instead of 15 = 33% faster)
     private static final int NUM_THREADS = 10;
 

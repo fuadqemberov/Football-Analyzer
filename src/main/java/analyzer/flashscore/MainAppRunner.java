@@ -42,8 +42,9 @@ public class MainAppRunner {
             System.out.println("\n=== FAZ 2: ULTRA HIZLI API PARALEL TARAMA ===");
             runParallelScraping(pendingMatches);
 
-            ExcelReportService.generateReport(pendingMatches, "bet365_results.xlsx");
-            System.out.println("Tamamlandı! Rapor kaydedildi.");
+            System.out.println("\n=== FAZ 3: VERİTABANI İŞLEMLERİ ===");
+            DatabaseService.insertToDatabase(pendingMatches);
+            System.out.println("Tamamlandı! Veritabanına aktarıldı.");
 
         } catch (Exception e) {
             e.printStackTrace();

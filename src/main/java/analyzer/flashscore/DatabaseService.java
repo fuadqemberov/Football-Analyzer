@@ -4,7 +4,11 @@ import java.math.BigDecimal;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.Statement;
 import java.sql.Types;
+import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 
 public class DatabaseService {
@@ -113,6 +117,55 @@ public class DatabaseService {
         } catch (Exception e) {
             AppLogger.log("❌ DB HATA: " + e.getMessage());
             e.printStackTrace();
+        }
+    }
+
+    /**
+     * DB'deki en güncel maç tarihi ile bugün arasındaki gecikme.
+     * Scraper her zaman "dün"den geriye doğru tarama yaptığı için ulaşılabilecek
+     * en taze veri dünün verisidir; bu yüzden fark hesabından 1 gün düşülür.
+     * daysBehind = 0 -> veri güncel.
+     */
+    public record DataFreshness(LocalDate latestDate, long daysBehind, String error) {
+
+        public boolean isAvailable() {
+            return error == null && latestDate != null;
+        }
+
+        public String message() {
+            if (error != null) return "⚠ Veri güncellik kontrolü yapılamadı: " + error;
+            if (latestDate == null) return "⚠ DB'de tarihi olan hiç maç yok.";
+            String suffix = (daysBehind == 0)
+                    ? "Veri güncel."
+                    : "Veri " + daysBehind + " gün geride.";
+            return "DB'deki en güncel tarih: " + latestDate
+                    + " | Bugün: " + LocalDate.now()
+                    + " | " + suffix;
+        }
+    }
+
+    public static DataFreshness checkDataFreshness() {
+        // date_time metin (varchar) kolon; boş ve bozuk kayıtlar var, sadece
+        // yyyy-MM-dd ile başlayanları dikkate alıyoruz.
+        String sql = "SELECT MAX(LEFT(date_time, 10)) FROM bet365_matches "
+                + "WHERE date_time ~ '^\\d{4}-\\d{2}-\\d{2}'";
+
+        try (Connection conn = DriverManager.getConnection(URL, USER, PASSWORD);
+             Statement st = conn.createStatement();
+             ResultSet rs = st.executeQuery(sql)) {
+
+            String maxDate = rs.next() ? rs.getString(1) : null;
+            if (maxDate == null || maxDate.isBlank()) {
+                return new DataFreshness(null, -1, null);
+            }
+
+            LocalDate latest = LocalDate.parse(maxDate);
+            long behind = ChronoUnit.DAYS.between(latest, LocalDate.now()) - 1;
+            if (behind < 0) behind = 0;
+            return new DataFreshness(latest, behind, null);
+
+        } catch (Exception e) {
+            return new DataFreshness(null, -1, e.getMessage());
         }
     }
 }
