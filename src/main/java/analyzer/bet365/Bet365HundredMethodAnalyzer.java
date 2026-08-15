@@ -182,7 +182,7 @@ public class Bet365HundredMethodAnalyzer {
         }
     }
 
-    private static final int METHOD_COUNT = 100;
+    private static final int METHOD_COUNT = 10000;
     private static final int TWIN_MIN = 1;   // sonda ən az bu qədər twin
     private static final int TWIN_MAX = 3;   // sonda ən çox bu qədər twin ("2-3 twin qalmalıdı")
 
