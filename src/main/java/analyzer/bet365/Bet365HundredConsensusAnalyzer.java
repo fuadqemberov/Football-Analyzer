@@ -35,6 +35,7 @@ import java.util.stream.Collectors;
  *   • Hər təxminin güvəni = havuzdakı twinlərin neçə faizinin o nəticə ilə bitməsidir.
  *   • EKRANA yalnız ƏN GÜVƏNLİ təxmin çıxır (≥ 99% olduqda "🔒 99% GÜVƏNLİ" işarəsi).
  *   • Güvəni 96%-dən aşağı olan oyunlar tamamilə ignore olunur, ekrana çıxmır.
+ *   • 50-dən az yöntem uyğun gələn oyunlar da ignore olunur (yalnız 50+ yöntem).
  * ═══════════════════════════════════════════════════════════════════════════
  */
 public class Bet365HundredConsensusAnalyzer {
@@ -173,6 +174,7 @@ public class Bet365HundredConsensusAnalyzer {
     private static final double CONFIDENCE_THRESHOLD = 99.0; // "99% güvənli"
     private static final double MIN_DISPLAY_CONFIDENCE = 96.0; // ən güvənli təxmin bundan aşağıdırsa oyun çap olunmur
     private static final int MIN_DISPLAY_TWINS = 15;         // havuzda bundan az twin oyun varsa güvənilir sayılmır, çap olunmur
+    private static final int MIN_METHODS_AGREEING = 50;      // 50-dən az yöntem uyğun gəlirsə oyun ignore olunur
     private static final double MIN_OTHER_PICK_CONFIDENCE = 90.0; // "Digər güclü təxminlər" siyahısında minimum güvən
     private static final int MIN_POOL_TWINS = 10;            // güvən mənalı olsun deyə min. twin sayı
 
@@ -639,6 +641,7 @@ public class Bet365HundredConsensusAnalyzer {
             if (hitQ.isEmpty()) continue;
 
             int methodsAgreeing = hitQ.size();
+            if (methodsAgreeing < MIN_METHODS_AGREEING) continue; // 50-dən az yöntem uyğun gəldi → ekrana çıxmır
             int[] pool = flatten(hitQ);
             if (pool.length < MIN_DISPLAY_TWINS) continue; // 15-dən az twin oyun → güvənilir deyil, çap olunmur
             List<Pick> picks = evaluatePicks(pool);
