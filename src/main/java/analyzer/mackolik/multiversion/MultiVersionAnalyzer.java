@@ -1,13 +1,10 @@
 package analyzer.mackolik.multiversion;
 
+import analyzer.util.MackolikHttpFetcher;
 import analyzer.util.TeamIdsFetcher;
-import org.apache.http.client.config.RequestConfig;
-import org.apache.http.impl.client.CloseableHttpClient;
-import org.apache.http.impl.client.HttpClients;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -26,10 +23,15 @@ import java.util.stream.Collectors;
 public class MultiVersionAnalyzer {
 
     private static final Logger log = LoggerFactory.getLogger(MultiVersionAnalyzer.class);
-    private static final int START_YEAR = 2025;
+    /** En yeni geçmiş sezon — güncel sezondan dinamik (ör. 2026/2027 sezonundaysak 2025). */
+    private static final int START_YEAR = AdvancedScoreScraper.CURRENT_SEASON_START_YEAR - 1;
     private static final int END_YEAR = 2010;
     private static final int[] ANALYSIS_VERSIONS = {1, 2, 3, 4};
     private static final int MIN_COMEBACK_COUNT = 2;
+    /** Eşzamanlı takım analizi sayısı — sınırsız virtual thread sunucuyu boğup timeout'a yol açıyordu. */
+    private static final int NUM_THREADS = 8;
+    /** İki HTTP isteği arasındaki en küçük global boşluk (ms). */
+    private static final long REQUEST_GAP_MS = 40;
 
     /**
      * HT/FT sonucu 1/2 veya 2/1 mi? (Devre arasında önde olan taraf maçı kaybetti = full comeback)
@@ -61,11 +63,11 @@ public class MultiVersionAnalyzer {
 
     private static class MultiVersionTeamProcessorTask implements Callable<MultiVersionResult> {
         private final int teamId;
-        private final RequestConfig requestConfig;
+        private final MackolikHttpFetcher http;
 
-        public MultiVersionTeamProcessorTask(int teamId, RequestConfig requestConfig) {
+        public MultiVersionTeamProcessorTask(int teamId, MackolikHttpFetcher http) {
             this.teamId = teamId;
-            this.requestConfig = requestConfig;
+            this.http = http;
         }
 
         @Override
@@ -75,10 +77,7 @@ public class MultiVersionAnalyzer {
 
             MultiVersionResult multiResult = new MultiVersionResult(teamId);
 
-            try (CloseableHttpClient httpClient = HttpClients.custom()
-                    .setDefaultRequestConfig(requestConfig)
-                    .build()) {
-
+            try {
                 // Her versiyon için analiz yap
                 for (int version : ANALYSIS_VERSIONS) {
                     try {
@@ -86,7 +85,7 @@ public class MultiVersionAnalyzer {
 
                         // Güncel deseni bul (sondan version. maç)
                         AdvancedMatchPattern currentPattern = AdvancedScoreScraper.findLastMatchPattern(
-                                httpClient, teamId, version);
+                                http, teamId, version);
 
                         if (currentPattern == null) {
                             log.warn("[VERSION-{}] No pattern found for team ID: {}", version, teamId);
@@ -99,7 +98,7 @@ public class MultiVersionAnalyzer {
 
                         // Geçmiş sezonlarda ara (version kadar maç sonrasını göster)
                         Map<Integer, List<AdvancedMatchResult>> foundMatches =
-                                searchPastSeasons(httpClient, currentPattern, version);
+                                searchPastSeasons(http, currentPattern, version);
 
                         if (!foundMatches.isEmpty()) {
                             int totalMatches = foundMatches.values().stream().mapToInt(List::size).sum();
@@ -129,7 +128,7 @@ public class MultiVersionAnalyzer {
         }
 
         private Map<Integer, List<AdvancedMatchResult>> searchPastSeasons(
-                CloseableHttpClient httpClient,
+                MackolikHttpFetcher http,
                 AdvancedMatchPattern pattern,
                 int matchesForward) {
 
@@ -137,17 +136,13 @@ public class MultiVersionAnalyzer {
 
             for (int year = START_YEAR; year >= END_YEAR; year--) {
                 String season = year + "/" + (year + 1);
-                try {
-                    List<AdvancedMatchResult> matches =
-                            AdvancedScoreScraper.findHistoricalMatchPatterns(
-                                    httpClient, pattern, season, teamId, matchesForward);
+                List<AdvancedMatchResult> matches =
+                        AdvancedScoreScraper.findHistoricalMatchPatterns(
+                                http, pattern, season, teamId, matchesForward);
 
-                    if (matches != null && !matches.isEmpty()) {
-                        log.debug("Found {} matches in {}", matches.size(), season);
-                        found.put(year, matches);
-                    }
-                } catch (IOException e) {
-                    log.error("IOException in season {} for team {}: {}", season, teamId, e.getMessage());
+                if (matches != null && !matches.isEmpty()) {
+                    log.debug("Found {} matches in {}", matches.size(), season);
+                    found.put(year, matches);
                 }
             }
 
@@ -282,13 +277,12 @@ public class MultiVersionAnalyzer {
             log.info("Loaded {} team IDs for multi-version analysis.", teamIds.size());
 
 
-        RequestConfig requestConfig = RequestConfig.custom()
-                .setConnectTimeout(10000)
-                .setSocketTimeout(20000)
-                .setConnectionRequestTimeout(5000)
-                .build();
+        // Paylaşımlı, retry'lı ve throttle'lı HTTP katmanı + sınırlı thread havuzu:
+        // eski hali (takım başına ayrı client + sınırsız virtual thread) sunucuyu
+        // boğuyor ve "Read timed out" yağmuruna sebep oluyordu.
+        MackolikHttpFetcher http = new MackolikHttpFetcher(NUM_THREADS, REQUEST_GAP_MS);
 
-        ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();
+        ExecutorService executor = Executors.newFixedThreadPool(NUM_THREADS);
         CompletionService<MultiVersionResult> completionService = new ExecutorCompletionService<>(executor);
 
         long startTime = System.currentTimeMillis();
@@ -297,7 +291,7 @@ public class MultiVersionAnalyzer {
         for (String idStr : teamIds) {
             try {
                 int teamId = Integer.parseInt(idStr.trim());
-                completionService.submit(new MultiVersionTeamProcessorTask(teamId, requestConfig));
+                completionService.submit(new MultiVersionTeamProcessorTask(teamId, http));
                 submitted++;
             } catch (NumberFormatException e) {
                 log.warn("Skipping invalid team ID: {}", idStr);
@@ -339,8 +333,8 @@ public class MultiVersionAnalyzer {
         }
 
         long duration = System.currentTimeMillis() - startTime;
-        log.info("Processing complete in {} ms. Found patterns for {} out of {} teams.",
-                duration, foundCount, submitted);
+        log.info("Processing complete in {} ms. Found patterns for {} out of {} teams. Requests: {}",
+                duration, foundCount, submitted, http.statsLine());
 
         executor.shutdown();
         try {
@@ -350,6 +344,7 @@ public class MultiVersionAnalyzer {
         } catch (InterruptedException e) {
             executor.shutdownNow();
         }
+        http.close();
     }
 
 }

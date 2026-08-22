@@ -172,11 +172,11 @@ public class Bet365BttsOverUnderConsensusAnalyzer {
     private static final int METHOD_COUNT = 1000;
     private static final int TWIN_MIN = 1;
     private static final int TWIN_MAX = 3;
-    private static final double CONFIDENCE_THRESHOLD = 70.0; // "99% güvənli"
-    private static final double MIN_DISPLAY_CONFIDENCE = 60.0; // ən güvənli təxmin bundan aşağıdırsa oyun çap olunmur
+    private static final double CONFIDENCE_THRESHOLD = 80.0; // "99% güvənli"
+    private static final double MIN_DISPLAY_CONFIDENCE = 75.0; // ən güvənli təxmin bundan aşağıdırsa oyun çap olunmur
     private static final int MIN_DISPLAY_TWINS = 15;         // havuzda bundan az twin oyun varsa güvənilir sayılmır, çap olunmur
     private static final int MIN_METHODS_AGREEING = 50;      // 50-dən az yöntem uyğun gəlirsə oyun ignore olunur
-    private static final double MIN_OTHER_PICK_CONFIDENCE = 60.0; // "Digər güclü təxminlər" siyahısında minimum güvən
+    private static final double MIN_OTHER_PICK_CONFIDENCE = 70.0; // "Digər güclü təxminlər" siyahısında minimum güvən
     private static final int MIN_POOL_TWINS = 10;            // güvən mənalı olsun deyə min. twin sayı
 
     private static List<Method> buildMethods() {

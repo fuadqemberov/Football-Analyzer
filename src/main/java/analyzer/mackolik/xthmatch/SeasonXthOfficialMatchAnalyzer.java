@@ -1,19 +1,11 @@
 package analyzer.mackolik.xthmatch;
 
+import analyzer.util.MackolikHttpFetcher;
 import analyzer.util.TeamIdsFetcher;
-import org.apache.http.client.config.RequestConfig;
-import org.apache.http.client.methods.CloseableHttpResponse;
-import org.apache.http.client.methods.HttpGet;
-import org.apache.http.impl.client.CloseableHttpClient;
-import org.apache.http.impl.client.HttpClients;
-import org.apache.http.impl.conn.PoolingHttpClientConnectionManager;
-import org.apache.http.util.EntityUtils;
-import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 
-import java.io.IOException;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -56,13 +48,19 @@ import java.util.concurrent.TimeoutException;
 public class SeasonXthOfficialMatchAnalyzer {
 
     private static final String BASE_URL       = "https://arsiv.mackolik.com/Team/Default.aspx?id=%d&season=%s";
-    private static final String CURRENT_SEASON = "2026/2027";
-    private static final int    CURRENT_YEAR   = 2026;   // 2026/2027 sezonunun başlangıç yılı
+    /** Yeni futbol sezonunun başladığı ay (Temmuz). */
+    private static final int    SEASON_START_MONTH = 7;
+    private static final int    CURRENT_YEAR   = computeCurrentSeasonStartYear();
+    private static final String CURRENT_SEASON = CURRENT_YEAR + "/" + (CURRENT_YEAR + 1);
     private static final int    PAST_SEASONS   = 20;     // geride kalan sezon sayısı
     private static final int    NUM_THREADS    = 8;
+    /** İki HTTP isteği arasındaki en küçük global boşluk (ms) — sunucuyu boğmamak için. */
+    private static final long   REQUEST_GAP_MS = 40;
 
-    private static final String USER_AGENT =
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
+    private static int computeCurrentSeasonStartYear() {
+        LocalDate now = LocalDate.now();
+        return now.getMonthValue() >= SEASON_START_MONTH ? now.getYear() : now.getYear() - 1;
+    }
 
     private static final DateTimeFormatter DATE_FMT =
             DateTimeFormatter.ofPattern("d.M.yyyy", Locale.ROOT);
@@ -103,10 +101,10 @@ public class SeasonXthOfficialMatchAnalyzer {
     // =====================================================================
 
     private static class TeamTask implements Callable<String> {
-        private final int                 teamId;
-        private final CloseableHttpClient http;
+        private final int                teamId;
+        private final MackolikHttpFetcher http;
 
-        TeamTask(int teamId, CloseableHttpClient http) {
+        TeamTask(int teamId, MackolikHttpFetcher http) {
             this.teamId = teamId;
             this.http   = http;
         }
@@ -116,7 +114,11 @@ public class SeasonXthOfficialMatchAnalyzer {
             try {
                 // ── 1) Mevcut sezon: X'i belirle ──────────────────────────
                 List<Match> current = fetchSeasonMatches(http, teamId, CURRENT_SEASON);
-                if (current == null || current.isEmpty()) return null;
+                if (current == null) {
+                    System.err.println("   ❌ [ID:" + teamId + "] güncel sezon indirilemedi (retry'lar tükendi)");
+                    return null;
+                }
+                if (current.isEmpty()) return null;
 
                 String teamName = detectTeamName(current);
 
@@ -133,20 +135,20 @@ public class SeasonXthOfficialMatchAnalyzer {
                 List<Hit> hits = new ArrayList<>();
                 for (int year = CURRENT_YEAR - 1; year >= CURRENT_YEAR - PAST_SEASONS; year--) {
                     String season = year + "/" + (year + 1);
-                    try {
-                        List<Match> seasonMatches = fetchSeasonMatches(http, teamId, season);
-                        if (seasonMatches == null || seasonMatches.isEmpty()) continue;
+                    List<Match> seasonMatches = fetchSeasonMatches(http, teamId, season);
+                    if (seasonMatches == null) {
+                        System.err.println("   ❌ [ID:" + teamId + "] " + season + " indirilemedi (retry'lar tükendi)");
+                        continue;
+                    }
+                    if (seasonMatches.isEmpty()) continue;
 
-                        List<Match> official = officialSorted(seasonMatches);
-                        if (official.size() < x) continue;   // o sezon X. resmi maç yok
+                    List<Match> official = officialSorted(seasonMatches);
+                    if (official.size() < x) continue;   // o sezon X. resmi maç yok
 
-                        Match xth  = official.get(x - 1);
-                        String htFt = computeHtFt(xth.ftScore, xth.htScore);
-                        if (htFt != null) {
-                            hits.add(new Hit(season, xth, htFt));
-                        }
-                    } catch (IOException e) {
-                        System.err.println("   ❌ [ID:" + teamId + "] IO hatası " + season + ": " + e.getMessage());
+                    Match xth  = official.get(x - 1);
+                    String htFt = computeHtFt(xth.ftScore, xth.htScore);
+                    if (htFt != null) {
+                        hits.add(new Hit(season, xth, htFt));
                     }
                 }
 
@@ -197,15 +199,16 @@ public class SeasonXthOfficialMatchAnalyzer {
     /**
      * Bir sezonun TÜM maçlarını, her birinin ligi ile birlikte döndürür.
      * (Resmi/hazırlık ayrımı ve sıralama sonradan yapılır.)
+     *
+     * @return maç listesi; sayfa alındı ama fikstür yoksa BOŞ liste;
+     *         sayfa retry'lara rağmen indirilemediyse <b>null</b>.
      */
-    private static List<Match> fetchSeasonMatches(CloseableHttpClient http, int teamId, String season)
-            throws IOException {
+    private static List<Match> fetchSeasonMatches(MackolikHttpFetcher http, int teamId, String season) {
+
+        Document doc = http.fetchDocument(String.format(BASE_URL, teamId, season));
+        if (doc == null) return null;
 
         List<Match> matches = new ArrayList<>();
-        String html = fetchHtml(http, String.format(BASE_URL, teamId, season));
-        if (html == null) return matches;
-
-        Document doc  = Jsoup.parse(html);
         Elements rows = doc.select("#tblFixture > tbody > tr");
         if (rows.isEmpty()) rows = doc.select("#tblFixture > tr");
 
@@ -350,21 +353,6 @@ public class SeasonXthOfficialMatchAnalyzer {
         return el != null ? el.text().trim() : null;
     }
 
-    private static String fetchHtml(CloseableHttpClient http, String url) throws IOException {
-        HttpGet req = new HttpGet(url);
-        req.addHeader("User-Agent", USER_AGENT);
-        req.setConfig(RequestConfig.custom()
-                .setConnectTimeout(10000)
-                .setConnectionRequestTimeout(10000)
-                .setSocketTimeout(15000)
-                .build());
-        try (CloseableHttpResponse resp = http.execute(req)) {
-            int code = resp.getStatusLine().getStatusCode();
-            if (code == 200) return EntityUtils.toString(resp.getEntity());
-            return null;
-        }
-    }
-
     // =====================================================================
     // main
     // =====================================================================
@@ -395,10 +383,7 @@ public class SeasonXthOfficialMatchAnalyzer {
             return;
         }
 
-        PoolingHttpClientConnectionManager cm = new PoolingHttpClientConnectionManager();
-        cm.setMaxTotal(NUM_THREADS + 5);
-        cm.setDefaultMaxPerRoute(NUM_THREADS);
-        CloseableHttpClient http = HttpClients.custom().setConnectionManager(cm).build();
+        MackolikHttpFetcher http = new MackolikHttpFetcher(NUM_THREADS, REQUEST_GAP_MS);
 
         ExecutorService executor = Executors.newFixedThreadPool(NUM_THREADS);
         List<Future<String>> futures = new ArrayList<>();
@@ -432,6 +417,7 @@ public class SeasonXthOfficialMatchAnalyzer {
         System.out.println("\n\n════════════════════════════════════════════════════");
         System.out.printf("✅ TAMAMLANDI  |  Takım: %d  |  Bulunan: %d  |  Süre: %ds%n",
                 processed, found, secs);
+        System.out.println("🌐 İstek özeti: " + http.statsLine());
         System.out.println("════════════════════════════════════════════════════\n");
 
         executor.shutdown();
@@ -441,7 +427,7 @@ public class SeasonXthOfficialMatchAnalyzer {
             executor.shutdownNow();
             Thread.currentThread().interrupt();
         }
-        try { http.close(); } catch (IOException ignored) {}
+        http.close();
         System.exit(0);
     }
 }

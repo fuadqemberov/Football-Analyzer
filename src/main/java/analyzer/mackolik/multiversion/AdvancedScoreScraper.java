@@ -1,18 +1,14 @@
 package analyzer.mackolik.multiversion;
 
 
-import org.apache.http.client.methods.CloseableHttpResponse;
-import org.apache.http.client.methods.HttpGet;
-import org.apache.http.impl.client.CloseableHttpClient;
-import org.apache.http.util.EntityUtils;
-import org.jsoup.Jsoup;
+import analyzer.util.MackolikHttpFetcher;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -20,33 +16,27 @@ public class AdvancedScoreScraper {
 
     private static final Logger log = LoggerFactory.getLogger(AdvancedScoreScraper.class);
     private static final String BASE_URL = "https://arsiv.mackolik.com/Team/Default.aspx?id=%d&season=%s";
-    private static final String CURRENT_SEASON = "2025/2026";
 
-    private static String fetchHtml(CloseableHttpClient httpClient, String url) throws IOException {
-        HttpGet request = new HttpGet(url);
-        request.addHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36");
-        log.debug("Fetching URL: {}", url);
-        try (CloseableHttpResponse response = httpClient.execute(request)) {
-            int statusCode = response.getStatusLine().getStatusCode();
-            if (statusCode == 200) {
-                return EntityUtils.toString(response.getEntity());
-            } else {
-                log.warn("Failed to fetch URL: {}. Status code: {}", url, statusCode);
-                return null;
-            }
-        }
+    /** Yeni futbol sezonunun başladığı ay (Temmuz). */
+    private static final int SEASON_START_MONTH = 7;
+    /** Güncel sezon sistem tarihinden dinamik hesaplanır (ör. Ağustos 2026 → "2026/2027"). */
+    static final int CURRENT_SEASON_START_YEAR = computeCurrentSeasonStartYear();
+    private static final String CURRENT_SEASON = CURRENT_SEASON_START_YEAR + "/" + (CURRENT_SEASON_START_YEAR + 1);
+
+    private static int computeCurrentSeasonStartYear() {
+        LocalDate now = LocalDate.now();
+        return now.getMonthValue() >= SEASON_START_MONTH ? now.getYear() : now.getYear() - 1;
     }
 
     /**
      * Mevcut sezondaki SONDAN N. MAÇI bulur ve bir desen olarak döndürür.
      * @param matchesBack 1 = sondan 1. maç (son maç), 2 = sondan 2. maç, vb.
      */
-    public static AdvancedMatchPattern findLastMatchPattern(CloseableHttpClient httpClient, int teamId, int matchesBack) throws IOException, RuntimeException {
+    public static AdvancedMatchPattern findLastMatchPattern(MackolikHttpFetcher http, int teamId, int matchesBack) throws RuntimeException {
         String currentSeasonUrl = String.format(BASE_URL, teamId, CURRENT_SEASON);
-        String html = fetchHtml(httpClient, currentSeasonUrl);
-        if (html == null) throw new RuntimeException("Could not fetch current season page for team ID: " + teamId);
+        Document doc = http.fetchDocument(currentSeasonUrl);
+        if (doc == null) throw new RuntimeException("Could not fetch current season page for team ID: " + teamId);
 
-        Document doc = Jsoup.parse(html);
         Element tableBody = doc.selectFirst("#tblFixture > tbody");
         if (tableBody == null) throw new RuntimeException("Fixture table not found for team ID: " + teamId);
 
@@ -105,18 +95,20 @@ public class AdvancedScoreScraper {
      * @param matchesForward Kaç maç sonrasını göstereceği (1, 2, 3, 4)
      */
     public static List<AdvancedMatchResult> findHistoricalMatchPatterns(
-            CloseableHttpClient httpClient,
+            MackolikHttpFetcher http,
             AdvancedMatchPattern pattern,
             String seasonYear,
             int teamId,
-            int matchesForward) throws IOException {
+            int matchesForward) {
 
         List<AdvancedMatchResult> foundResults = new ArrayList<>();
         String seasonUrl = String.format(BASE_URL, teamId, seasonYear);
-        String html = fetchHtml(httpClient, seasonUrl);
-        if (html == null) return foundResults;
+        Document doc = http.fetchDocument(seasonUrl);
+        if (doc == null) {
+            log.warn("Season page could not be fetched (retries exhausted): team {}, season {}", teamId, seasonYear);
+            return foundResults;
+        }
 
-        Document doc = Jsoup.parse(html);
         Elements allTableRows = doc.select("#tblFixture > tbody > tr");
 
         List<Element> leagueMatches = new ArrayList<>();

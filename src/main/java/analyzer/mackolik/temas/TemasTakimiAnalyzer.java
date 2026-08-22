@@ -1,18 +1,10 @@
 package analyzer.mackolik.temas;
 
+import analyzer.util.MackolikHttpFetcher;
 import analyzer.util.TeamIdsFetcher;
-import org.apache.http.client.config.RequestConfig;
-import org.apache.http.client.methods.CloseableHttpResponse;
-import org.apache.http.client.methods.HttpGet;
-import org.apache.http.impl.client.CloseableHttpClient;
-import org.apache.http.impl.client.HttpClients;
-import org.apache.http.impl.conn.PoolingHttpClientConnectionManager;
-import org.apache.http.util.EntityUtils;
-import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 
-import java.io.IOException;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -72,7 +64,9 @@ public class TemasTakimiAnalyzer {
 
     private static final int START_YEAR = CURRENT_SEASON_START_YEAR - 1;   // en yeni geçmiş sezon
     private static final int END_YEAR   = 2010;   // en eski taranan sezon
-    private static final int NUM_THREADS = 10;
+    private static final int NUM_THREADS = 8;
+    /** İki HTTP isteği arasındaki en küçük global boşluk (ms) — sunucuyu boğmamak için. */
+    private static final long REQUEST_GAP_MS = 40;
 
     /** Sistem tarihine göre güncel futbol sezonunun başlangıç yılını döndürür. */
     private static int computeCurrentSeasonStartYear() {
@@ -115,10 +109,7 @@ public class TemasTakimiAnalyzer {
             return;
         }
 
-        PoolingHttpClientConnectionManager cm = new PoolingHttpClientConnectionManager();
-        cm.setMaxTotal(NUM_THREADS + 5);
-        cm.setDefaultMaxPerRoute(NUM_THREADS);
-        CloseableHttpClient http = HttpClients.custom().setConnectionManager(cm).build();
+        MackolikHttpFetcher http = new MackolikHttpFetcher(NUM_THREADS, REQUEST_GAP_MS);
 
         System.out.println("🔄 [2/3] " + teamIds.size() + " takım " + NUM_THREADS + " thread ile taranıyor...\n");
         ExecutorService executor = Executors.newFixedThreadPool(NUM_THREADS);
@@ -158,15 +149,13 @@ public class TemasTakimiAnalyzer {
             executor.shutdownNow();
             Thread.currentThread().interrupt();
         }
-        try {
-            http.close();
-        } catch (IOException ignored) {
-        }
+        http.close();
 
         long sure = (System.currentTimeMillis() - globalStart) / 1000;
         System.out.println("\n\n════════════════════════════════════════════════════════");
         System.out.printf("✅ [3/3] TARAMA TAMAMLANDI | %d takım | %d sinyal | %ds%n",
                 processed, signalCount, sure);
+        System.out.println("🌐 İstek özeti: " + http.statsLine());
         System.out.println("════════════════════════════════════════════════════════\n");
 
         printStatistics(tumSinyaller);
@@ -242,9 +231,9 @@ public class TemasTakimiAnalyzer {
     // ─── TAKIM BAŞINA GÖREV ─────────────────────────────────────────────────
     private static class TemasTask implements Callable<TeamResult> {
         private final int teamId;
-        private final CloseableHttpClient http;
+        private final MackolikHttpFetcher http;
 
-        TemasTask(int teamId, CloseableHttpClient http) {
+        TemasTask(int teamId, MackolikHttpFetcher http) {
             this.teamId = teamId;
             this.http   = http;
         }
@@ -261,10 +250,14 @@ public class TemasTakimiAnalyzer {
     }
 
     // ─── ANA ANALİZ ─────────────────────────────────────────────────────────
-    static TeamResult analyzeTeam(CloseableHttpClient http, int teamId) throws IOException {
+    static TeamResult analyzeTeam(MackolikHttpFetcher http, int teamId) {
 
         // 1. Mevcut sezon fikstürü + bugünkü maç
         List<MacData> current = fetchSeasonMatches(http, teamId, CURRENT_SEASON);
+        if (current == null) {
+            System.err.println("   ❌ [ID:" + teamId + "] güncel sezon indirilemedi (retry'lar tükendi)");
+            return null;
+        }
         if (current.isEmpty()) return null;
 
         String teamName = detectTeamNameFromRows(current);
@@ -286,10 +279,9 @@ public class TemasTakimiAnalyzer {
 
         for (int year = START_YEAR; year >= END_YEAR; year--) {
             String season = year + "/" + (year + 1);
-            List<MacData> matches;
-            try {
-                matches = fetchSeasonMatches(http, teamId, season);
-            } catch (IOException e) {
+            List<MacData> matches = fetchSeasonMatches(http, teamId, season);
+            if (matches == null) {
+                System.err.println("   ❌ [ID:" + teamId + "] " + season + " indirilemedi (retry'lar tükendi)");
                 continue;
             }
             if (matches.isEmpty()) continue;
@@ -522,13 +514,16 @@ public class TemasTakimiAnalyzer {
         boolean played;
     }
 
-    private static List<MacData> fetchSeasonMatches(CloseableHttpClient http,
-                                                    int teamId, String season) throws IOException {
-        List<MacData> result = new ArrayList<>();
-        String html = fetchHtml(http, String.format(BASE_URL, teamId, season));
-        if (html == null) return result;
+    /**
+     * @return maç listesi; sayfa alındı ama fikstür yoksa BOŞ liste;
+     *         sayfa retry'lara rağmen indirilemediyse <b>null</b>.
+     */
+    private static List<MacData> fetchSeasonMatches(MackolikHttpFetcher http,
+                                                    int teamId, String season) {
+        Document doc = http.fetchDocument(String.format(BASE_URL, teamId, season));
+        if (doc == null) return null;
 
-        Document doc = Jsoup.parse(html);
+        List<MacData> result = new ArrayList<>();
         Element tbody = doc.selectFirst("#tblFixture > tbody");
         if (tbody == null) return result;
 
@@ -575,25 +570,6 @@ public class TemasTakimiAnalyzer {
             result.add(md);
         }
         return result;
-    }
-
-    private static String fetchHtml(CloseableHttpClient http, String url) throws IOException {
-        HttpGet req = new HttpGet(url);
-        req.addHeader("User-Agent",
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/91.0 Safari/537.36");
-        RequestConfig config = RequestConfig.custom()
-                .setConnectTimeout(10000)
-                .setConnectionRequestTimeout(10000)
-                .setSocketTimeout(15000)
-                .build();
-        req.setConfig(config);
-
-        try (CloseableHttpResponse resp = http.execute(req)) {
-            if (resp.getStatusLine().getStatusCode() == 200) {
-                return EntityUtils.toString(resp.getEntity());
-            }
-            return null;
-        }
     }
 
     private static String extractCell(Element row, String cssSelector) {

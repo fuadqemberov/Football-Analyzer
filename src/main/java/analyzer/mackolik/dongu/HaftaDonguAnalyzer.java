@@ -1,40 +1,22 @@
 package analyzer.mackolik.dongu;
 
+import analyzer.util.MackolikHttpFetcher;
 import analyzer.util.TeamIdsFetcher;
-import org.apache.http.HttpEntity;
-import org.apache.http.client.config.CookieSpecs;
-import org.apache.http.client.config.RequestConfig;
-import org.apache.http.client.methods.CloseableHttpResponse;
-import org.apache.http.client.methods.HttpGet;
-import org.apache.http.config.SocketConfig;
-import org.apache.http.impl.client.CloseableHttpClient;
-import org.apache.http.impl.client.DefaultConnectionKeepAliveStrategy;
-import org.apache.http.impl.client.HttpClients;
-import org.apache.http.impl.conn.PoolingHttpClientConnectionManager;
-import org.apache.http.util.EntityUtils;
-import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 
-import java.io.ByteArrayInputStream;
-import java.io.IOException;
 import java.time.LocalDate;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
-import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * HAFTA DÖNGÜ ANALİZÖRÜ (yıllık + haftalık döngü, döngü uzunluğu DİNAMİK)
@@ -75,10 +57,6 @@ public class HaftaDonguAnalyzer {
     // ─── AYARLAR ────────────────────────────────────────────────────────────
     private static final String BASE_URL = "https://arsiv.mackolik.com/Team/Default.aspx?id=%d&season=%s";
 
-    private static final String USER_AGENT =
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) "
-            + "Chrome/124.0.0.0 Safari/537.36";
-
     /** Yeni futbol sezonunun başladığı ay (Temmuz). */
     private static final int SEASON_START_MONTH = 7;
 
@@ -94,32 +72,16 @@ public class HaftaDonguAnalyzer {
     /** Denenecek en büyük döngü uzunluğu. */
     private static final int MAX_CYCLE_YEARS = LOOKBACK_YEARS / MIN_CYCLE;
 
-    // ─── AĞ AYARLARI (timeout fix) ──────────────────────────────────────────
+    // ─── AĞ AYARLARI ────────────────────────────────────────────────────────
+    // Retry/backoff/throttle/timeout mantığı ortak katmanda: analyzer.util.MackolikHttpFetcher
     /** Eşzamanlı iş parçacığı sayısı (--threads=N ile değiştirilebilir). */
     private static int numThreads = 8;
     /** İki istek arasındaki en küçük global boşluk, ms (--gap=N). */
-    private static long minRequestGapMs = 25;
-
-    private static final int CONNECT_TIMEOUT_MS     = 15_000;
-    private static final int SOCKET_TIMEOUT_MS      = 30_000;   // "Read timed out" burada oluşuyordu
-    private static final int CONN_REQUEST_TIMEOUT_MS = 20_000;
-
-    /** Bir URL için toplam deneme sayısı (1 ilk deneme + 3 retry). */
-    private static final int MAX_ATTEMPTS = 4;
-    private static final long RETRY_BASE_DELAY_MS = 700;
-    private static final long RETRY_MAX_DELAY_MS  = 8_000;
-
-    /** Geçici sayılan ve yeniden denenen HTTP durum kodları. */
-    private static final Set<Integer> RETRYABLE_STATUS =
-            new HashSet<>(Arrays.asList(408, 425, 429, 500, 502, 503, 504));
+    private static long minRequestGapMs = 40;
 
     /** Bir takım analizinin tamamı için üst sınır. */
     private static final int TASK_TIMEOUT_MINUTES = 15;
 
-    // ─── SAYAÇLAR ───────────────────────────────────────────────────────────
-    private static final AtomicInteger FETCH_OK       = new AtomicInteger();
-    private static final AtomicInteger FETCH_RETRY    = new AtomicInteger();
-    private static final AtomicInteger FETCH_FAILED   = new AtomicInteger();
     private static final Object PRINT_LOCK = new Object();
 
     private static int computeCurrentSeasonStartYear() {
@@ -161,8 +123,8 @@ public class HaftaDonguAnalyzer {
 
         System.out.printf("📅 Güncel sezon: %s | Döngü: %d..%d yıl (dinamik) | Taranan: son %d yıl%n",
                 CURRENT_SEASON, MIN_CYCLE_YEARS, MAX_CYCLE_YEARS, LOOKBACK_YEARS);
-        System.out.printf("🌐 Ağ: %d thread | timeout %ds | %d deneme | istek aralığı %dms%n%n",
-                numThreads, SOCKET_TIMEOUT_MS / 1000, MAX_ATTEMPTS, minRequestGapMs);
+        System.out.printf("🌐 Ağ: %d thread | istek aralığı %dms | ortak retry'lı fetcher (MackolikHttpFetcher)%n%n",
+                numThreads, minRequestGapMs);
 
         if (teamIds.isEmpty()) {
             System.out.println("🔄 Günün başlamamış maçlarından takım ID'leri alınıyor...");
@@ -175,7 +137,7 @@ public class HaftaDonguAnalyzer {
             return;
         }
 
-        CloseableHttpClient http = buildHttpClient();
+        MackolikHttpFetcher http = new MackolikHttpFetcher(numThreads, minRequestGapMs);
         ExecutorService executor = Executors.newFixedThreadPool(numThreads);
 
         List<Future<String>> futures = new ArrayList<>();
@@ -217,9 +179,8 @@ public class HaftaDonguAnalyzer {
                 }
             }
             synchronized (PRINT_LOCK) {
-                System.out.printf("\r⏳ İlerleme: %d/%d  |  Sinyal: %d  |  İstek: %d ok / %d retry / %d başarısız   ",
-                        processed, futures.size(), signalCount,
-                        FETCH_OK.get(), FETCH_RETRY.get(), FETCH_FAILED.get());
+                System.out.printf("\r⏳ İlerleme: %d/%d  |  Sinyal: %d  |  İstek: %s   ",
+                        processed, futures.size(), signalCount, http.statsLine());
             }
         }
 
@@ -230,16 +191,12 @@ public class HaftaDonguAnalyzer {
             executor.shutdownNow();
             Thread.currentThread().interrupt();
         }
-        try {
-            http.close();
-        } catch (IOException ignored) {
-        }
+        http.close();
 
         long sure = (System.currentTimeMillis() - globalStart) / 1000;
         System.out.println("\n\n════════════════════════════════════════════════════════");
         System.out.printf("✅ TAMAMLANDI | %d takım | %d hafta-döngü sinyali | %ds%n", processed, signalCount, sure);
-        System.out.printf("🌐 İstek özeti: %d başarılı, %d yeniden deneme, %d kalıcı başarısız%n",
-                FETCH_OK.get(), FETCH_RETRY.get(), FETCH_FAILED.get());
+        System.out.println("🌐 İstek özeti: " + http.statsLine());
         System.out.println("════════════════════════════════════════════════════════\n");
 
         System.exit(0);
@@ -265,42 +222,8 @@ public class HaftaDonguAnalyzer {
         return e.getClass().getSimpleName() + (m != null ? ": " + m : "");
     }
 
-    // ─── HTTP CLIENT (timeout-dayanıklı) ────────────────────────────────────
-    private static CloseableHttpClient buildHttpClient() {
-        PoolingHttpClientConnectionManager cm = new PoolingHttpClientConnectionManager();
-        cm.setMaxTotal(numThreads * 2);
-        // Tüm istekler aynı host'a gidiyor → per-route limit thread sayısından KÜÇÜK olmamalı,
-        // aksi halde thread'ler bağlantı bekler ve connectionRequest timeout alır.
-        cm.setDefaultMaxPerRoute(numThreads * 2);
-        // Havuzdaki bağlantı 2sn'den uzun boştaysa kullanmadan önce doğrula (yarı-kapalı soket = read timeout).
-        cm.setValidateAfterInactivity(2_000);
-        cm.setDefaultSocketConfig(SocketConfig.custom()
-                .setSoTimeout(SOCKET_TIMEOUT_MS)
-                .setSoKeepAlive(true)
-                .setTcpNoDelay(true)
-                .build());
-
-        RequestConfig requestConfig = RequestConfig.custom()
-                .setConnectTimeout(CONNECT_TIMEOUT_MS)
-                .setConnectionRequestTimeout(CONN_REQUEST_TIMEOUT_MS)
-                .setSocketTimeout(SOCKET_TIMEOUT_MS)
-                .setCookieSpec(CookieSpecs.STANDARD)
-                .setRedirectsEnabled(true)
-                .build();
-
-        return HttpClients.custom()
-                .setConnectionManager(cm)
-                .setConnectionManagerShared(false)
-                .setDefaultRequestConfig(requestConfig)
-                .setKeepAliveStrategy(DefaultConnectionKeepAliveStrategy.INSTANCE)
-                .evictExpiredConnections()
-                .evictIdleConnections(30, TimeUnit.SECONDS)
-                .disableAutomaticRetries()   // retry'ı biz yönetiyoruz (aşağıda)
-                .build();
-    }
-
     // ─── ANA ANALİZ ─────────────────────────────────────────────────────────
-    static String analyzeTeam(CloseableHttpClient http, int teamId, boolean showAll) {
+    static String analyzeTeam(MackolikHttpFetcher http, int teamId, boolean showAll) {
 
         // 1. Güncel sezon + bugünkü maç (ilk oynanmamış fikstür) → hedef hafta
         List<MacData> current = fetchSeasonMatches(http, teamId, CURRENT_SEASON);
@@ -371,7 +294,7 @@ public class HaftaDonguAnalyzer {
     }
 
     /** yearsBack yıl önceki sezonda, weekIdx'teki maçın döngü kaydı; veri yoksa/indirilemediyse null. */
-    private static CycleHit hitAt(CloseableHttpClient http, int teamId, int yearsBack,
+    private static CycleHit hitAt(MackolikHttpFetcher http, int teamId, int yearsBack,
                                   int weekIdx, Map<Integer, List<MacData>> cache) {
         int year = CURRENT_SEASON_START_YEAR - yearsBack;
         String season = year + "/" + (year + 1);
@@ -547,17 +470,10 @@ public class HaftaDonguAnalyzer {
      * @return maç listesi; sayfa alındı ama fikstür yoksa BOŞ liste;
      *         sayfa hiç indirilemediyse (timeout vb.) <b>null</b>.
      */
-    private static List<MacData> fetchSeasonMatches(CloseableHttpClient http, int teamId, String season) {
-        byte[] body = fetchBytes(http, String.format(BASE_URL, teamId, season));
-        if (body == null) return null;
-
-        Document doc;
-        try {
-            // charset'i HTML meta etiketinden tespit ettiriyoruz (Türkçe karakterler bozulmasın)
-            doc = Jsoup.parse(new ByteArrayInputStream(body), null, "https://arsiv.mackolik.com/");
-        } catch (IOException e) {
-            return null;
-        }
+    private static List<MacData> fetchSeasonMatches(MackolikHttpFetcher http, int teamId, String season) {
+        // charset tespiti ve retry'lı indirme ortak katmanda
+        Document doc = http.fetchDocument(String.format(BASE_URL, teamId, season));
+        if (doc == null) return null;
 
         List<MacData> result = new ArrayList<>();
         Element tbody = doc.selectFirst("#tblFixture > tbody");
@@ -607,87 +523,6 @@ public class HaftaDonguAnalyzer {
             result.add(md);
         }
         return result;
-    }
-
-    /**
-     * Timeout/geçici hatalarda üstel geri çekilmeyle yeniden dener.
-     * Başarısızsa null döner — çağıran taraf bunu "veri yok" olarak ele alır.
-     */
-    private static byte[] fetchBytes(CloseableHttpClient http, String url) {
-        for (int attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-            throttle();
-            HttpGet req = new HttpGet(url);
-            req.addHeader("User-Agent", USER_AGENT);
-            req.addHeader("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8");
-            req.addHeader("Accept-Language", "tr-TR,tr;q=0.9,en;q=0.8");
-            req.addHeader("Connection", "keep-alive");
-
-            try (CloseableHttpResponse resp = http.execute(req)) {
-                int code = resp.getStatusLine().getStatusCode();
-                HttpEntity entity = resp.getEntity();
-
-                if (code == 200) {
-                    byte[] body = entity != null ? EntityUtils.toByteArray(entity) : new byte[0];
-                    FETCH_OK.incrementAndGet();
-                    return body;
-                }
-
-                // KRİTİK: 200 olmayan cevaplarda gövdeyi tüket, yoksa bağlantı havuza dönmez
-                // ve sonraki istekler "Read timed out" / connection pool timeout alır.
-                EntityUtils.consumeQuietly(entity);
-
-                if (!RETRYABLE_STATUS.contains(code)) {
-                    return null;                       // 404 vb. → tekrar denemenin anlamı yok
-                }
-            } catch (IOException e) {
-                // SocketTimeoutException, ConnectTimeoutException, NoHttpResponseException,
-                // SocketException("Connection reset") ... hepsi buraya düşer.
-                req.abort();
-            } catch (RuntimeException e) {
-                req.abort();
-                return null;
-            }
-
-            if (attempt < MAX_ATTEMPTS) {
-                FETCH_RETRY.incrementAndGet();
-                sleepBackoff(attempt);
-            }
-        }
-        FETCH_FAILED.incrementAndGet();
-        return null;
-    }
-
-    /** Üstel geri çekilme + jitter (sunucuyu daha da boğmamak için). */
-    private static void sleepBackoff(int attempt) {
-        long delay = Math.min(RETRY_MAX_DELAY_MS, RETRY_BASE_DELAY_MS * (1L << (attempt - 1)));
-        delay += ThreadLocalRandom.current().nextLong(200, 600);
-        try {
-            Thread.sleep(delay);
-        } catch (InterruptedException ie) {
-            Thread.currentThread().interrupt();
-        }
-    }
-
-    // ─── GLOBAL THROTTLE ────────────────────────────────────────────────────
-    private static final Object RATE_LOCK = new Object();
-    private static long nextAllowedRequestAt = 0L;
-
-    private static void throttle() {
-        if (minRequestGapMs <= 0) return;
-        long waitMs;
-        synchronized (RATE_LOCK) {
-            long now = System.currentTimeMillis();
-            long slot = Math.max(now, nextAllowedRequestAt);
-            waitMs = slot - now;
-            nextAllowedRequestAt = slot + minRequestGapMs;
-        }
-        if (waitMs > 0) {
-            try {
-                Thread.sleep(waitMs);
-            } catch (InterruptedException ie) {
-                Thread.currentThread().interrupt();
-            }
-        }
     }
 
     private static String extractCell(Element row, String cssSelector) {
