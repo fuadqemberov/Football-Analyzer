@@ -1,10 +1,14 @@
 package analyzer.mackolik.dongu;
 
 import analyzer.util.TeamIdsFetcher;
+import org.apache.http.HttpEntity;
+import org.apache.http.client.config.CookieSpecs;
 import org.apache.http.client.config.RequestConfig;
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpGet;
+import org.apache.http.config.SocketConfig;
 import org.apache.http.impl.client.CloseableHttpClient;
+import org.apache.http.impl.client.DefaultConnectionKeepAliveStrategy;
 import org.apache.http.impl.client.HttpClients;
 import org.apache.http.impl.conn.PoolingHttpClientConnectionManager;
 import org.apache.http.util.EntityUtils;
@@ -12,74 +16,111 @@ import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * HAFTA DÖNGÜ ANALİZÖRÜ (yıllık + haftalık döngü, döngü uzunluğu DİNAMİK)
  *
  * Fikir (Kopenhag örneği, açılış maçına ÖZEL DEĞİL — her hafta için geçerli):
- *   Bir takımın belirli bir HAFTASI (maç günü / matchday), sabit bir YIL döngüsünde
+ *   Bir takımın belirli bir HAFTASI (matchday), sabit bir YIL döngüsünde
  *   aynı HT/FT sürprizini tekrar edebiliyor. Döngü iki boyutlu:
  *     - HAFTALIK: aynı hafta numarası (1., 2., 3. ... hafta)
  *     - YILLIK  : eşit yıl aralığıyla (P yıl); P sabit 7 DEĞİL, keşfedilir.
- *   Kural: aradaki fark her adımda AYNI olmalı (year-P, year-2P, year-3P ...).
- *   7 yalnızca Kopenhag için keşfedilen değerdir; başka takımda 4, 5, 9 ... olabilir.
- *     2012/2013  Kopenhag 4-2 Midtjylland  (İY 0-1) → 2/1  | 6 gol
- *     2019/2020  Odense   2-3 Kopenhag      (İY 2-1) → 1/2  | 5 gol   (fark = 7, sabit)
- *     2026/2027  Kopenhag vs Lyngby         → ⁉️ tahmin: FULL COMEBACK
  *
- * SÜRPRİZ / COMEBACK TANIMI (TemasTakimiAnalyzer ile aynı 2 grup):
+ * SÜRPRİZ / COMEBACK TANIMI:
  *   İlk yarıyı önde kapatan takım maçı KAZANAMAZ:
- *     - FULL COMEBACK      : HT/FT = 1/2 veya 2/1 (önde olan kaybeder)
- *     - BERABERLİK COMEBACK: HT/FT = 1/X veya 2/X (önde olan yakalanır)
+ *     - FULL COMEBACK      : HT/FT = 1/2 veya 2/1
+ *     - BERABERLİK COMEBACK: HT/FT = 1/X veya 2/X
  *
- * Akış:
- *   1. Günün başlamamış maçlarındaki takım ID'leri alınır (veya argümanla verilir).
- *   2. Her takım için güncel sezonda BUGÜNKÜ maç (ilk oynanmamış fikstür) bulunur → hedef hafta.
- *   3. Olası her döngü uzunluğu P denenir ({@value #MIN_CYCLE_YEARS}..LOOKBACK/{@value #MIN_CYCLE}):
- *      year-P, year-2P ... hepsi son {@value #LOOKBACK_YEARS} yıl içinde ve AYNI hafta.
- *   4. Bir P, eğer bütün adımları (boşluksuz) comeback ise ve en az {@value #MIN_CYCLE} adım
- *      içeriyorsa SİNYAL olur. Küçük P'nin katı olan (kapsanan) P'ler elenir.
+ * ─────────────────────────────────────────────────────────────────────────
+ * v2 — AĞ KATMANI SAĞLAMLAŞTIRILDI ("Read timed out" düzeltmeleri):
+ *   1. Socket/connect timeout'ları büyütüldü + client seviyesinde tanımlandı.
+ *   2. Her istek için üstel geri çekilmeli (exponential backoff + jitter) RETRY.
+ *   3. 200 olmayan cevaplarda entity KESİNLİKLE tüketiliyor → bağlantı havuza
+ *      geri dönüyor (bu, art arda gelen "Read timed out" hatalarının ana sebebi).
+ *   4. 429/5xx durum kodları da yeniden deneniyor; 404 gibi kalıcı kodlar denenmiyor.
+ *   5. Ölü/boşta bağlantılar tahliye ediliyor (evictIdle + validateAfterInactivity).
+ *   6. Global istek aralığı (throttle) ile sunucu boğulmuyor.
+ *   7. Tek bir sezonun indirilememesi artık takımın tamamını düşürmüyor;
+ *      "veri yok" olarak işaretlenip döngü SİNYAL sayılmıyor (yanlış pozitif olmaz).
+ *   8. Charset artık HTML meta'sından tespit ediliyor (Türkçe/İzlandaca isimler bozulmuyor).
  *
  * Kullanım:
- *   java ... HaftaDonguAnalyzer                 → günün başlamamış maçlarındaki takımlar
- *   java ... HaftaDonguAnalyzer 5088 2029       → yalnız verilen takım ID'leri
- *   java ... HaftaDonguAnalyzer --all 5088      → boşluklu/eksik döngüleri de yazdır
+ *   java ... HaftaDonguAnalyzer                    → günün başlamamış maçlarındaki takımlar
+ *   java ... HaftaDonguAnalyzer 5088 2029          → yalnız verilen takım ID'leri
+ *   java ... HaftaDonguAnalyzer --all 5088         → boşluklu/eksik döngüleri de yazdır
+ *   java ... HaftaDonguAnalyzer --threads=6        → eşzamanlılığı düşür (timeout alıyorsan)
+ *   java ... HaftaDonguAnalyzer --gap=50           → istekler arası min. ms (nazik tarama)
  */
 public class HaftaDonguAnalyzer {
 
     // ─── AYARLAR ────────────────────────────────────────────────────────────
     private static final String BASE_URL = "https://arsiv.mackolik.com/Team/Default.aspx?id=%d&season=%s";
 
+    private static final String USER_AGENT =
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) "
+            + "Chrome/124.0.0.0 Safari/537.36";
+
     /** Yeni futbol sezonunun başladığı ay (Temmuz). */
     private static final int SEASON_START_MONTH = 7;
 
-    /** Güncel sezonun başlangıç yılı sistem tarihinden dinamik hesaplanır (ör. Temmuz 2026 → 2026). */
     private static final int CURRENT_SEASON_START_YEAR = computeCurrentSeasonStartYear();
-    /** Güncel sezon "yyyy/yyyy" (ör. "2026/2027"). */
     private static final String CURRENT_SEASON = CURRENT_SEASON_START_YEAR + "/" + (CURRENT_SEASON_START_YEAR + 1);
 
     /** Kaç yıl geriye bakılır. */
     private static final int LOOKBACK_YEARS = 20;
-    /** Denenecek en küçük döngü uzunluğu (yıl). 1 = ardışık sezonlar; 2 = gerçek "döngü". */
+    /** Denenecek en küçük döngü uzunluğu (yıl). */
     private static final int MIN_CYCLE_YEARS = 2;
-    /** Bir döngünün sinyal sayılması için gereken en az adım (geçmiş maç) sayısı. */
+    /** Bir döngünün sinyal sayılması için gereken en az adım sayısı. */
     private static final int MIN_CYCLE = 2;
-    /** Denenecek en büyük döngü uzunluğu: en az MIN_CYCLE adım sığabilmeli. */
+    /** Denenecek en büyük döngü uzunluğu. */
     private static final int MAX_CYCLE_YEARS = LOOKBACK_YEARS / MIN_CYCLE;
-    private static final int NUM_THREADS = 10;
+
+    // ─── AĞ AYARLARI (timeout fix) ──────────────────────────────────────────
+    /** Eşzamanlı iş parçacığı sayısı (--threads=N ile değiştirilebilir). */
+    private static int numThreads = 8;
+    /** İki istek arasındaki en küçük global boşluk, ms (--gap=N). */
+    private static long minRequestGapMs = 25;
+
+    private static final int CONNECT_TIMEOUT_MS     = 15_000;
+    private static final int SOCKET_TIMEOUT_MS      = 30_000;   // "Read timed out" burada oluşuyordu
+    private static final int CONN_REQUEST_TIMEOUT_MS = 20_000;
+
+    /** Bir URL için toplam deneme sayısı (1 ilk deneme + 3 retry). */
+    private static final int MAX_ATTEMPTS = 4;
+    private static final long RETRY_BASE_DELAY_MS = 700;
+    private static final long RETRY_MAX_DELAY_MS  = 8_000;
+
+    /** Geçici sayılan ve yeniden denenen HTTP durum kodları. */
+    private static final Set<Integer> RETRYABLE_STATUS =
+            new HashSet<>(Arrays.asList(408, 425, 429, 500, 502, 503, 504));
+
+    /** Bir takım analizinin tamamı için üst sınır. */
+    private static final int TASK_TIMEOUT_MINUTES = 15;
+
+    // ─── SAYAÇLAR ───────────────────────────────────────────────────────────
+    private static final AtomicInteger FETCH_OK       = new AtomicInteger();
+    private static final AtomicInteger FETCH_RETRY    = new AtomicInteger();
+    private static final AtomicInteger FETCH_FAILED   = new AtomicInteger();
+    private static final Object PRINT_LOCK = new Object();
 
     private static int computeCurrentSeasonStartYear() {
         LocalDate now = LocalDate.now();
@@ -95,9 +136,18 @@ public class HaftaDonguAnalyzer {
         boolean showAll = false;
         List<String> teamIds = new ArrayList<>();
         if (args != null) {
-            for (String arg : args) {
-                if ("--all".equalsIgnoreCase(arg.trim())) showAll = true;
-                else teamIds.add(arg);
+            for (String raw : args) {
+                String arg = raw == null ? "" : raw.trim();
+                if (arg.isEmpty()) continue;
+                if ("--all".equalsIgnoreCase(arg)) {
+                    showAll = true;
+                } else if (arg.toLowerCase().startsWith("--threads=")) {
+                    numThreads = Math.max(1, parseIntOr(arg.substring(10), numThreads));
+                } else if (arg.toLowerCase().startsWith("--gap=")) {
+                    minRequestGapMs = Math.max(0, parseIntOr(arg.substring(6), (int) minRequestGapMs));
+                } else {
+                    teamIds.add(arg);
+                }
             }
         }
 
@@ -109,8 +159,10 @@ public class HaftaDonguAnalyzer {
 
         long globalStart = System.currentTimeMillis();
 
-        System.out.printf("📅 Güncel sezon: %s | Döngü uzunluğu: %d..%d yıl (dinamik) | Taranan: son %d yıl%n%n",
+        System.out.printf("📅 Güncel sezon: %s | Döngü: %d..%d yıl (dinamik) | Taranan: son %d yıl%n",
                 CURRENT_SEASON, MIN_CYCLE_YEARS, MAX_CYCLE_YEARS, LOOKBACK_YEARS);
+        System.out.printf("🌐 Ağ: %d thread | timeout %ds | %d deneme | istek aralığı %dms%n%n",
+                numThreads, SOCKET_TIMEOUT_MS / 1000, MAX_ATTEMPTS, minRequestGapMs);
 
         if (teamIds.isEmpty()) {
             System.out.println("🔄 Günün başlamamış maçlarından takım ID'leri alınıyor...");
@@ -123,43 +175,51 @@ public class HaftaDonguAnalyzer {
             return;
         }
 
-        PoolingHttpClientConnectionManager cm = new PoolingHttpClientConnectionManager();
-        cm.setMaxTotal(NUM_THREADS + 5);
-        cm.setDefaultMaxPerRoute(NUM_THREADS);
-        CloseableHttpClient http = HttpClients.custom().setConnectionManager(cm).build();
+        CloseableHttpClient http = buildHttpClient();
+        ExecutorService executor = Executors.newFixedThreadPool(numThreads);
 
-        ExecutorService executor = Executors.newFixedThreadPool(NUM_THREADS);
         List<Future<String>> futures = new ArrayList<>();
         for (String idStr : teamIds) {
+            final int teamId;
             try {
-                int teamId = Integer.parseInt(idStr.trim());
-                boolean all = showAll;
-                futures.add(executor.submit((Callable<String>) () -> {
-                    try {
-                        return analyzeTeam(http, teamId, all);
-                    } catch (Exception e) {
-                        System.err.println("   ❌ [ID:" + teamId + "] Hata: " + e.getMessage());
-                        return null;
-                    }
-                }));
+                teamId = Integer.parseInt(idStr.trim());
             } catch (NumberFormatException e) {
                 System.err.println("   ❌ Geçersiz takım ID: " + idStr);
+                continue;
             }
+            final boolean all = showAll;
+            futures.add(executor.submit((Callable<String>) () -> {
+                try {
+                    return analyzeTeam(http, teamId, all);
+                } catch (Exception e) {
+                    // Ağ hatası artık burada da yutuluyor: tek takım tüm taramayı bozmaz.
+                    printErr("   ⚠️ [ID:" + teamId + "] atlandı: " + kisaHata(e));
+                    return null;
+                }
+            }));
         }
 
         int processed = 0, signalCount = 0;
         for (Future<String> f : futures) {
+            String result = null;
             try {
-                String result = f.get(5, TimeUnit.MINUTES);
-                processed++;
-                if (result != null && !result.isEmpty()) {
-                    signalCount++;
+                result = f.get(TASK_TIMEOUT_MINUTES, TimeUnit.MINUTES);
+            } catch (Exception e) {
+                f.cancel(true);
+                printErr("   ⚠️ Görev zaman aşımı/hata: " + kisaHata(e));
+            }
+            processed++;
+            if (result != null && !result.isEmpty()) {
+                signalCount++;
+                synchronized (PRINT_LOCK) {
+                    System.out.println();
                     System.out.println(result);
                 }
-                System.out.printf("\r⏳ İlerleme: %d/%d  |  Sinyal: %d", processed, futures.size(), signalCount);
-            } catch (Exception e) {
-                processed++;
-                System.err.println("\n   ❌ Görev hatası: " + e.getMessage());
+            }
+            synchronized (PRINT_LOCK) {
+                System.out.printf("\r⏳ İlerleme: %d/%d  |  Sinyal: %d  |  İstek: %d ok / %d retry / %d başarısız   ",
+                        processed, futures.size(), signalCount,
+                        FETCH_OK.get(), FETCH_RETRY.get(), FETCH_FAILED.get());
             }
         }
 
@@ -178,17 +238,73 @@ public class HaftaDonguAnalyzer {
         long sure = (System.currentTimeMillis() - globalStart) / 1000;
         System.out.println("\n\n════════════════════════════════════════════════════════");
         System.out.printf("✅ TAMAMLANDI | %d takım | %d hafta-döngü sinyali | %ds%n", processed, signalCount, sure);
+        System.out.printf("🌐 İstek özeti: %d başarılı, %d yeniden deneme, %d kalıcı başarısız%n",
+                FETCH_OK.get(), FETCH_RETRY.get(), FETCH_FAILED.get());
         System.out.println("════════════════════════════════════════════════════════\n");
 
         System.exit(0);
     }
 
+    private static int parseIntOr(String s, int def) {
+        try {
+            return Integer.parseInt(s.trim());
+        } catch (Exception e) {
+            return def;
+        }
+    }
+
+    private static void printErr(String msg) {
+        synchronized (PRINT_LOCK) {
+            System.out.println();
+            System.err.println(msg);
+        }
+    }
+
+    private static String kisaHata(Exception e) {
+        String m = e.getMessage();
+        return e.getClass().getSimpleName() + (m != null ? ": " + m : "");
+    }
+
+    // ─── HTTP CLIENT (timeout-dayanıklı) ────────────────────────────────────
+    private static CloseableHttpClient buildHttpClient() {
+        PoolingHttpClientConnectionManager cm = new PoolingHttpClientConnectionManager();
+        cm.setMaxTotal(numThreads * 2);
+        // Tüm istekler aynı host'a gidiyor → per-route limit thread sayısından KÜÇÜK olmamalı,
+        // aksi halde thread'ler bağlantı bekler ve connectionRequest timeout alır.
+        cm.setDefaultMaxPerRoute(numThreads * 2);
+        // Havuzdaki bağlantı 2sn'den uzun boştaysa kullanmadan önce doğrula (yarı-kapalı soket = read timeout).
+        cm.setValidateAfterInactivity(2_000);
+        cm.setDefaultSocketConfig(SocketConfig.custom()
+                .setSoTimeout(SOCKET_TIMEOUT_MS)
+                .setSoKeepAlive(true)
+                .setTcpNoDelay(true)
+                .build());
+
+        RequestConfig requestConfig = RequestConfig.custom()
+                .setConnectTimeout(CONNECT_TIMEOUT_MS)
+                .setConnectionRequestTimeout(CONN_REQUEST_TIMEOUT_MS)
+                .setSocketTimeout(SOCKET_TIMEOUT_MS)
+                .setCookieSpec(CookieSpecs.STANDARD)
+                .setRedirectsEnabled(true)
+                .build();
+
+        return HttpClients.custom()
+                .setConnectionManager(cm)
+                .setConnectionManagerShared(false)
+                .setDefaultRequestConfig(requestConfig)
+                .setKeepAliveStrategy(DefaultConnectionKeepAliveStrategy.INSTANCE)
+                .evictExpiredConnections()
+                .evictIdleConnections(30, TimeUnit.SECONDS)
+                .disableAutomaticRetries()   // retry'ı biz yönetiyoruz (aşağıda)
+                .build();
+    }
+
     // ─── ANA ANALİZ ─────────────────────────────────────────────────────────
-    static String analyzeTeam(CloseableHttpClient http, int teamId, boolean showAll) throws IOException {
+    static String analyzeTeam(CloseableHttpClient http, int teamId, boolean showAll) {
 
         // 1. Güncel sezon + bugünkü maç (ilk oynanmamış fikstür) → hedef hafta
         List<MacData> current = fetchSeasonMatches(http, teamId, CURRENT_SEASON);
-        if (current.isEmpty()) return null;
+        if (current == null || current.isEmpty()) return null;   // null → indirilemedi
 
         String teamName = detectTeamNameFromRows(current);
         if (teamName == null) return null;
@@ -205,8 +321,7 @@ public class HaftaDonguAnalyzer {
         MacData target = current.get(weekIdx);
 
         // 2. Her döngü uzunluğu P için aynı haftayı eşit aralıkla geriye tara.
-        //    Geçmiş sezonları yıl-bazlı önbelleğe alarak tekrar indirme yapmıyoruz.
-        Map<Integer, List<MacData>> cache = new HashMap<>();
+        Map<Integer, List<MacData>> cache = new HashMap<>();   // değer null olabilir → indirilemedi
         List<Cycle> adaylar = new ArrayList<>();
 
         for (int p = MIN_CYCLE_YEARS; p <= MAX_CYCLE_YEARS; p++) {
@@ -233,7 +348,7 @@ public class HaftaDonguAnalyzer {
 
         if (adaylar.isEmpty()) return null;
 
-        // 3. Küçük P'nin katı olan (sezon kümesi kapsanan) döngüleri ele: P%Q==0 ise gereksiz.
+        // 3. Küçük P'nin katı olan (kapsanan) döngüleri ele.
         adaylar.sort(Comparator.comparingInt(c -> c.period));
         List<Cycle> secilen = new ArrayList<>();
         for (Cycle c : adaylar) {
@@ -244,7 +359,6 @@ public class HaftaDonguAnalyzer {
             if (!kapsandi) secilen.add(c);
         }
 
-        // Görsel sıralama: kanıtı çok (adım sayısı) ve küçük döngü önce.
         secilen.sort(Comparator
                 .comparingInt((Cycle c) -> c.comebacks).reversed()
                 .thenComparingInt(c -> c.period));
@@ -256,27 +370,24 @@ public class HaftaDonguAnalyzer {
         return out.length() == 0 ? null : out.toString();
     }
 
-    /** yearsBack yıl önceki sezonda, weekIdx'teki (aynı hafta) maçın döngü kaydı; veri yoksa null. */
+    /** yearsBack yıl önceki sezonda, weekIdx'teki maçın döngü kaydı; veri yoksa/indirilemediyse null. */
     private static CycleHit hitAt(CloseableHttpClient http, int teamId, int yearsBack,
                                   int weekIdx, Map<Integer, List<MacData>> cache) {
-        List<MacData> matches = cache.get(yearsBack);
-        if (matches == null) {
-            int year = CURRENT_SEASON_START_YEAR - yearsBack;
-            String season = year + "/" + (year + 1);
-            try {
-                matches = fetchSeasonMatches(http, teamId, season);
-            } catch (IOException e) {
-                matches = new ArrayList<>();
-            }
+        int year = CURRENT_SEASON_START_YEAR - yearsBack;
+        String season = year + "/" + (year + 1);
+
+        List<MacData> matches;
+        if (cache.containsKey(yearsBack)) {
+            matches = cache.get(yearsBack);              // null olabilir (indirilemedi)
+        } else {
+            matches = fetchSeasonMatches(http, teamId, season);
             cache.put(yearsBack, matches);
         }
-        if (weekIdx >= matches.size()) return null;
+        if (matches == null || weekIdx >= matches.size()) return null;
 
         MacData m = matches.get(weekIdx);
         if (!m.played || m.htScore == null) return null;   // İY olmadan HT/FT hesaplanamaz
 
-        int year = CURRENT_SEASON_START_YEAR - yearsBack;
-        String season = year + "/" + (year + 1);
         String htFt = htFtCode(m.htScore, m.ftScore);
         return new CycleHit(season, m, htFt, comebackGrubu(htFt), toplamGol(m.ftScore));
     }
@@ -285,7 +396,7 @@ public class HaftaDonguAnalyzer {
     private static String buildReport(String teamName, int teamId, int weekNo, MacData target, Cycle c) {
 
         StringBuilder sb = new StringBuilder();
-        sb.append("\n\n╔════════════════════════════════════════════════════════════════════╗\n");
+        sb.append("╔════════════════════════════════════════════════════════════════════╗\n");
         sb.append(String.format("║ 🎯 HAFTA-DÖNGÜ SİNYALİ: %s  [ID:%d]%n", teamName, teamId));
         sb.append(String.format("║    Hedef: %d. hafta | Keşfedilen döngü: her %d yılda bir | Taranan: son %d yıl%n",
                 weekNo, c.period, LOOKBACK_YEARS));
@@ -308,7 +419,6 @@ public class HaftaDonguAnalyzer {
                 CURRENT_SEASON, weekNo, target.homeTeam, target.awayTeam, durum));
         sb.append(String.format("║  ⁉️  TAHMİN: %s%n", tahmin));
 
-        // Bu haftanın maçı oynandıysa gerçekleşeni doğrula
         if (target.played && target.htScore != null) {
             String gHtFt = htFtCode(target.htScore, target.ftScore);
             String gGrup = comebackGrubu(gHtFt);
@@ -327,7 +437,6 @@ public class HaftaDonguAnalyzer {
         return sb.toString();
     }
 
-    /** Geçmiş döngü maçları aynı comeback grubundaysa o grubu, değilse genel "comeback" tahminini döndürür. */
     private static String ortakTahmin(List<CycleHit> hits) {
         String ortak = null;
         boolean hepsiCome = true;
@@ -337,13 +446,12 @@ public class HaftaDonguAnalyzer {
             else if (!ortak.equals(a.grup)) ortak = "MIXED";
         }
         if (!hepsiCome || ortak == null) return "belirsiz (geçmiş döngü maçları tutarsız)";
-        if (FULL_COMEBACK.equals(ortak))       return FULL_COMEBACK + " (1/2 və ya 2/1)";
-        if (BERABERLIK_COMEBACK.equals(ortak)) return BERABERLIK_COMEBACK + " (1/X və ya 2/X)";
+        if (FULL_COMEBACK.equals(ortak))       return FULL_COMEBACK + " (1/2 veya 2/1)";
+        if (BERABERLIK_COMEBACK.equals(ortak)) return BERABERLIK_COMEBACK + " (1/X veya 2/X)";
         return "comeback (İY önde olan kazanamaz)";
     }
 
     // ─── HT/FT + GOL HESABI ─────────────────────────────────────────────────
-    /** Skor dizeleri ev-deplasman notasyonuyla HT/FT kodu döndürür, ör. "2/1". */
     static String htFtCode(String htScore, String ftScore) {
         int[] ht = parseScore(htScore);
         int[] ft = parseScore(ftScore);
@@ -357,10 +465,6 @@ public class HaftaDonguAnalyzer {
         return 'X';
     }
 
-    /**
-     * İlk yarıyı önde kapatan takım kazanamadıysa comeback grubunu döndürür.
-     * 1/2, 2/1 → FULL; 1/X, 2/X → BERABERLİK; aksi halde (sürpriz yok) null.
-     */
     static String comebackGrubu(String htFt) {
         if (htFt == null) return null;
         switch (htFt) {
@@ -392,15 +496,14 @@ public class HaftaDonguAnalyzer {
     }
 
     // ─── DÖNGÜ MODELİ ───────────────────────────────────────────────────────
-    /** Belirli bir P (yıl) döngüsünün, aynı haftadaki eşit aralıklı geçmiş maçları. */
     private static class Cycle {
-        final int period;               // yıl farkı (sabit)
-        final List<CycleHit> hits;      // bulunan geçmiş maçlar (boşluklar hariç)
-        final int expected;             // beklenen adım sayısı (lookback içinde)
-        final int missing;              // veri bulunamayan adım sayısı
-        final boolean complete;         // missing == 0
-        final int comebacks;            // comeback olan adım sayısı
-        final boolean signal;           // complete && hepsi comeback && >= MIN_CYCLE
+        final int period;
+        final List<CycleHit> hits;
+        final int expected;
+        final int missing;
+        final boolean complete;
+        final int comebacks;
+        final boolean signal;
 
         Cycle(int period, List<CycleHit> hits, int expected, int missing,
               boolean complete, int comebacks, boolean signal) {
@@ -418,7 +521,7 @@ public class HaftaDonguAnalyzer {
         final String season;
         final MacData match;
         final String htFt;
-        final String grup;      // null → sürpriz yok
+        final String grup;
         final int    toplamGol;
 
         CycleHit(String season, MacData match, String htFt, String grup, int toplamGol) {
@@ -434,19 +537,29 @@ public class HaftaDonguAnalyzer {
     static class MacData {
         String homeTeam;
         String awayTeam;
-        String ftScore;   // oynanmadıysa null
-        String htScore;   // yoksa null
-        String time;      // oynanmadıysa saat/tarih bilgisi (varsa)
+        String ftScore;
+        String htScore;
+        String time;
         boolean played;
     }
 
-    private static List<MacData> fetchSeasonMatches(CloseableHttpClient http,
-                                                    int teamId, String season) throws IOException {
-        List<MacData> result = new ArrayList<>();
-        String html = fetchHtml(http, String.format(BASE_URL, teamId, season));
-        if (html == null) return result;
+    /**
+     * @return maç listesi; sayfa alındı ama fikstür yoksa BOŞ liste;
+     *         sayfa hiç indirilemediyse (timeout vb.) <b>null</b>.
+     */
+    private static List<MacData> fetchSeasonMatches(CloseableHttpClient http, int teamId, String season) {
+        byte[] body = fetchBytes(http, String.format(BASE_URL, teamId, season));
+        if (body == null) return null;
 
-        Document doc = Jsoup.parse(html);
+        Document doc;
+        try {
+            // charset'i HTML meta etiketinden tespit ettiriyoruz (Türkçe karakterler bozulmasın)
+            doc = Jsoup.parse(new ByteArrayInputStream(body), null, "https://arsiv.mackolik.com/");
+        } catch (IOException e) {
+            return null;
+        }
+
+        List<MacData> result = new ArrayList<>();
         Element tbody = doc.selectFirst("#tblFixture > tbody");
         if (tbody == null) return result;
 
@@ -496,22 +609,84 @@ public class HaftaDonguAnalyzer {
         return result;
     }
 
-    private static String fetchHtml(CloseableHttpClient http, String url) throws IOException {
-        HttpGet req = new HttpGet(url);
-        req.addHeader("User-Agent",
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/91.0 Safari/537.36");
-        RequestConfig config = RequestConfig.custom()
-                .setConnectTimeout(10000)
-                .setConnectionRequestTimeout(10000)
-                .setSocketTimeout(15000)
-                .build();
-        req.setConfig(config);
+    /**
+     * Timeout/geçici hatalarda üstel geri çekilmeyle yeniden dener.
+     * Başarısızsa null döner — çağıran taraf bunu "veri yok" olarak ele alır.
+     */
+    private static byte[] fetchBytes(CloseableHttpClient http, String url) {
+        for (int attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+            throttle();
+            HttpGet req = new HttpGet(url);
+            req.addHeader("User-Agent", USER_AGENT);
+            req.addHeader("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8");
+            req.addHeader("Accept-Language", "tr-TR,tr;q=0.9,en;q=0.8");
+            req.addHeader("Connection", "keep-alive");
 
-        try (CloseableHttpResponse resp = http.execute(req)) {
-            if (resp.getStatusLine().getStatusCode() == 200) {
-                return EntityUtils.toString(resp.getEntity());
+            try (CloseableHttpResponse resp = http.execute(req)) {
+                int code = resp.getStatusLine().getStatusCode();
+                HttpEntity entity = resp.getEntity();
+
+                if (code == 200) {
+                    byte[] body = entity != null ? EntityUtils.toByteArray(entity) : new byte[0];
+                    FETCH_OK.incrementAndGet();
+                    return body;
+                }
+
+                // KRİTİK: 200 olmayan cevaplarda gövdeyi tüket, yoksa bağlantı havuza dönmez
+                // ve sonraki istekler "Read timed out" / connection pool timeout alır.
+                EntityUtils.consumeQuietly(entity);
+
+                if (!RETRYABLE_STATUS.contains(code)) {
+                    return null;                       // 404 vb. → tekrar denemenin anlamı yok
+                }
+            } catch (IOException e) {
+                // SocketTimeoutException, ConnectTimeoutException, NoHttpResponseException,
+                // SocketException("Connection reset") ... hepsi buraya düşer.
+                req.abort();
+            } catch (RuntimeException e) {
+                req.abort();
+                return null;
             }
-            return null;
+
+            if (attempt < MAX_ATTEMPTS) {
+                FETCH_RETRY.incrementAndGet();
+                sleepBackoff(attempt);
+            }
+        }
+        FETCH_FAILED.incrementAndGet();
+        return null;
+    }
+
+    /** Üstel geri çekilme + jitter (sunucuyu daha da boğmamak için). */
+    private static void sleepBackoff(int attempt) {
+        long delay = Math.min(RETRY_MAX_DELAY_MS, RETRY_BASE_DELAY_MS * (1L << (attempt - 1)));
+        delay += ThreadLocalRandom.current().nextLong(200, 600);
+        try {
+            Thread.sleep(delay);
+        } catch (InterruptedException ie) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    // ─── GLOBAL THROTTLE ────────────────────────────────────────────────────
+    private static final Object RATE_LOCK = new Object();
+    private static long nextAllowedRequestAt = 0L;
+
+    private static void throttle() {
+        if (minRequestGapMs <= 0) return;
+        long waitMs;
+        synchronized (RATE_LOCK) {
+            long now = System.currentTimeMillis();
+            long slot = Math.max(now, nextAllowedRequestAt);
+            waitMs = slot - now;
+            nextAllowedRequestAt = slot + minRequestGapMs;
+        }
+        if (waitMs > 0) {
+            try {
+                Thread.sleep(waitMs);
+            } catch (InterruptedException ie) {
+                Thread.currentThread().interrupt();
+            }
         }
     }
 
@@ -520,7 +695,7 @@ public class HaftaDonguAnalyzer {
         return el != null ? el.text().trim() : null;
     }
 
-    /** Fikstür satırlarında en sık geçen isim bizim takımdır (her maçta görünür). */
+    /** Fikstür satırlarında en sık geçen isim bizim takımdır. */
     private static String detectTeamNameFromRows(List<MacData> matches) {
         Map<String, Integer> freq = new LinkedHashMap<>();
         for (MacData m : matches) {
