@@ -253,7 +253,7 @@ public class TemasTakimiAnalyzer {
     static TeamResult analyzeTeam(MackolikHttpFetcher http, int teamId) {
 
         // 1. Mevcut sezon fikstürü + bugünkü maç
-        List<MacData> current = fetchSeasonMatches(http, teamId, CURRENT_SEASON);
+        List<MacData> current = fetchSeasonMatches(http, teamId, CURRENT_SEASON, false);
         if (current == null) {
             System.err.println("   ❌ [ID:" + teamId + "] güncel sezon indirilemedi (retry'lar tükendi)");
             return null;
@@ -279,7 +279,7 @@ public class TemasTakimiAnalyzer {
 
         for (int year = START_YEAR; year >= END_YEAR; year--) {
             String season = year + "/" + (year + 1);
-            List<MacData> matches = fetchSeasonMatches(http, teamId, season);
+            List<MacData> matches = fetchSeasonMatches(http, teamId, season, true);
             if (matches == null) {
                 System.err.println("   ❌ [ID:" + teamId + "] " + season + " indirilemedi (retry'lar tükendi)");
                 continue;
@@ -515,12 +515,13 @@ public class TemasTakimiAnalyzer {
     }
 
     /**
+     * @param cacheable geçmiş (değişmez) sezon mu? Güncel sezon için false.
      * @return maç listesi; sayfa alındı ama fikstür yoksa BOŞ liste;
      *         sayfa retry'lara rağmen indirilemediyse <b>null</b>.
      */
     private static List<MacData> fetchSeasonMatches(MackolikHttpFetcher http,
-                                                    int teamId, String season) {
-        Document doc = http.fetchDocument(String.format(BASE_URL, teamId, season));
+                                                    int teamId, String season, boolean cacheable) {
+        Document doc = http.fetchDocument(String.format(BASE_URL, teamId, season), cacheable);
         if (doc == null) return null;
 
         List<MacData> result = new ArrayList<>();

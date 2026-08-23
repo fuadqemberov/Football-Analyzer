@@ -113,7 +113,7 @@ public class SeasonXthOfficialMatchAnalyzer {
         public String call() {
             try {
                 // ── 1) Mevcut sezon: X'i belirle ──────────────────────────
-                List<Match> current = fetchSeasonMatches(http, teamId, CURRENT_SEASON);
+                List<Match> current = fetchSeasonMatches(http, teamId, CURRENT_SEASON, false);
                 if (current == null) {
                     System.err.println("   ❌ [ID:" + teamId + "] güncel sezon indirilemedi (retry'lar tükendi)");
                     return null;
@@ -135,7 +135,7 @@ public class SeasonXthOfficialMatchAnalyzer {
                 List<Hit> hits = new ArrayList<>();
                 for (int year = CURRENT_YEAR - 1; year >= CURRENT_YEAR - PAST_SEASONS; year--) {
                     String season = year + "/" + (year + 1);
-                    List<Match> seasonMatches = fetchSeasonMatches(http, teamId, season);
+                    List<Match> seasonMatches = fetchSeasonMatches(http, teamId, season, true);
                     if (seasonMatches == null) {
                         System.err.println("   ❌ [ID:" + teamId + "] " + season + " indirilemedi (retry'lar tükendi)");
                         continue;
@@ -200,12 +200,14 @@ public class SeasonXthOfficialMatchAnalyzer {
      * Bir sezonun TÜM maçlarını, her birinin ligi ile birlikte döndürür.
      * (Resmi/hazırlık ayrımı ve sıralama sonradan yapılır.)
      *
+     * @param cacheable geçmiş (değişmez) sezon mu? Güncel sezon için false.
      * @return maç listesi; sayfa alındı ama fikstür yoksa BOŞ liste;
      *         sayfa retry'lara rağmen indirilemediyse <b>null</b>.
      */
-    private static List<Match> fetchSeasonMatches(MackolikHttpFetcher http, int teamId, String season) {
+    private static List<Match> fetchSeasonMatches(MackolikHttpFetcher http, int teamId,
+                                                  String season, boolean cacheable) {
 
-        Document doc = http.fetchDocument(String.format(BASE_URL, teamId, season));
+        Document doc = http.fetchDocument(String.format(BASE_URL, teamId, season), cacheable);
         if (doc == null) return null;
 
         List<Match> matches = new ArrayList<>();

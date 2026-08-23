@@ -103,7 +103,8 @@ public class AdvancedScoreScraper {
 
         List<AdvancedMatchResult> foundResults = new ArrayList<>();
         String seasonUrl = String.format(BASE_URL, teamId, seasonYear);
-        Document doc = http.fetchDocument(seasonUrl);
+        // Geçmiş sezon = değişmez veri → disk önbelleğine uygun
+        Document doc = http.fetchDocument(seasonUrl, true);
         if (doc == null) {
             log.warn("Season page could not be fetched (retries exhausted): team {}, season {}", teamId, seasonYear);
             return foundResults;

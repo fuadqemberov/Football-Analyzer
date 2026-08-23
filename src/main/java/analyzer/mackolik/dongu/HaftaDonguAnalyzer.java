@@ -226,7 +226,7 @@ public class HaftaDonguAnalyzer {
     static String analyzeTeam(MackolikHttpFetcher http, int teamId, boolean showAll) {
 
         // 1. Güncel sezon + bugünkü maç (ilk oynanmamış fikstür) → hedef hafta
-        List<MacData> current = fetchSeasonMatches(http, teamId, CURRENT_SEASON);
+        List<MacData> current = fetchSeasonMatches(http, teamId, CURRENT_SEASON, false);
         if (current == null || current.isEmpty()) return null;   // null → indirilemedi
 
         String teamName = detectTeamNameFromRows(current);
@@ -303,7 +303,7 @@ public class HaftaDonguAnalyzer {
         if (cache.containsKey(yearsBack)) {
             matches = cache.get(yearsBack);              // null olabilir (indirilemedi)
         } else {
-            matches = fetchSeasonMatches(http, teamId, season);
+            matches = fetchSeasonMatches(http, teamId, season, true);
             cache.put(yearsBack, matches);
         }
         if (matches == null || weekIdx >= matches.size()) return null;
@@ -470,9 +470,10 @@ public class HaftaDonguAnalyzer {
      * @return maç listesi; sayfa alındı ama fikstür yoksa BOŞ liste;
      *         sayfa hiç indirilemediyse (timeout vb.) <b>null</b>.
      */
-    private static List<MacData> fetchSeasonMatches(MackolikHttpFetcher http, int teamId, String season) {
-        // charset tespiti ve retry'lı indirme ortak katmanda
-        Document doc = http.fetchDocument(String.format(BASE_URL, teamId, season));
+    private static List<MacData> fetchSeasonMatches(MackolikHttpFetcher http, int teamId,
+                                                    String season, boolean cacheable) {
+        // charset tespiti, retry ve (geçmiş sezonlarda) disk önbelleği ortak katmanda
+        Document doc = http.fetchDocument(String.format(BASE_URL, teamId, season), cacheable);
         if (doc == null) return null;
 
         List<MacData> result = new ArrayList<>();

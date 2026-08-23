@@ -268,7 +268,7 @@ public class MultiVersionAnalyzer {
     }
 
 
-    static void main(String[] args) {
+    public static void main(String[] args) {
         List<String> teamIds = TeamIdsFetcher.fetchUnstartedTeamIds();
             if (teamIds.isEmpty()) {
                 log.warn("No team IDs found. Exiting.");

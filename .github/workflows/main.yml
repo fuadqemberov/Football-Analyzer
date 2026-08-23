@@ -9,7 +9,14 @@ on:
 jobs:
   run:
     runs-on: ubuntu-latest
-    timeout-minutes: 150
+    # Adım limitlerinin toplamı (250dk) + derleme/kurulum payı.
+    timeout-minutes: 300
+
+    env:
+      # Geçmiş sezon sayfaları değişmez veridir. Bu dizin adımlar arasında
+      # paylaşıldığı için temas/dongu/xthmatch aynı sayfayı bir kez indirir
+      # (~3 kat az istek → çok daha az timeout).
+      MACKOLIK_CACHE_DIR: ${{ github.workspace }}/.mackolik-cache
 
     steps:
       - name: Checkout
@@ -21,6 +28,25 @@ jobs:
           java-version: '21'
           distribution: 'temurin'
           cache: maven
+
+      # Geçmiş sezonlar değişmediği için önbellek günler arasında da taşınır:
+      # ertesi gün yalnızca güncel sezon + yeni takımların geçmişi indirilir.
+      # Anahtar her çalışmada benzersiz, restore-keys ile en son önbellek geri
+      # yüklenir → her koşu bir öncekinin üstüne ekleyerek büyür.
+      - name: Restore mackolik season cache
+        uses: actions/cache@v4
+        with:
+          path: .mackolik-cache
+          key: mackolik-cache-${{ github.run_id }}
+          restore-keys: |
+            mackolik-cache-
+
+      - name: Prune stale cache entries
+        run: |
+          mkdir -p .mackolik-cache
+          # Koddaki 30 günlük TTL ile aynı: bayat girdiler zaten kullanılmıyor, diskten de silinsin.
+          find .mackolik-cache -type f -mtime +30 -delete || true
+          echo "Önbellek: $(find .mackolik-cache -type f | wc -l) dosya, $(du -sh .mackolik-cache | cut -f1)"
 
       - name: Install Chrome
         run: |
@@ -52,10 +78,13 @@ jobs:
           echo "===== NowGoalHTFT END =====" >> nowgoal_htft.txt
           tail -n 20 nowgoal_htft.txt
 
+      # Mackolik analizörleri 1500+ takım × ~20 sezon tarıyor; 25dk'ya sığmıyordu
+      # ve tarama yarıda kesiliyordu. İlk çalışan temas önbelleği soğuktan
+      # doldurduğu için en geniş bütçe onda.
       - name: 3) TemasTakimiAnalyzer
         run: |
           echo "===== TemasTakimiAnalyzer START =====" > temas.txt
-          timeout -k 30 25m mvn -B exec:java \
+          timeout -k 30 60m mvn -B exec:java \
             -Dexec.mainClass="analyzer.mackolik.temas.TemasTakimiAnalyzer" \
             -Dexec.classpathScope=compile \
             >> temas.txt 2>&1 || echo "[workflow] step timed out or failed (exit $?)" >> temas.txt
@@ -75,7 +104,7 @@ jobs:
       - name: 5) HaftaDonguAnalyzer
         run: |
           echo "===== HaftaDonguAnalyzer START =====" > hafta_dongu.txt
-          timeout -k 30 25m mvn -B exec:java \
+          timeout -k 30 45m mvn -B exec:java \
             -Dexec.mainClass="analyzer.mackolik.dongu.HaftaDonguAnalyzer" \
             -Dexec.classpathScope=compile \
             >> hafta_dongu.txt 2>&1 || echo "[workflow] step timed out or failed (exit $?)" >> hafta_dongu.txt
@@ -85,7 +114,7 @@ jobs:
       - name: 6) SeasonXthOfficialMatchAnalyzer
         run: |
           echo "===== SeasonXthOfficialMatchAnalyzer START =====" > season_xth.txt
-          timeout -k 30 25m mvn -B exec:java \
+          timeout -k 30 45m mvn -B exec:java \
             -Dexec.mainClass="analyzer.mackolik.xthmatch.SeasonXthOfficialMatchAnalyzer" \
             -Dexec.classpathScope=compile \
             >> season_xth.txt 2>&1 || echo "[workflow] step timed out or failed (exit $?)" >> season_xth.txt
@@ -124,7 +153,9 @@ jobs:
             6) SeasonXthOfficialMatchAnalyzer → season_xth.txt
             7) ZincirSurprizAnalyzer          → zincir_surpriz.txt
 
-            Not: Hər analiz üçün 25 dəqiqəlik limit var; bir analiz donsa belə iş dayanmır və email gəlir.
+            Not: Hər analiz üçün vaxt limiti var (mackolik analizləri 45-60 dəq, digərləri 25 dəq);
+            bir analiz donsa belə iş dayanmır və email gəlir.
+            Kəsilmə olubsa faylın sonunda "[workflow] step timed out or failed" sətri görünür.
 
             Log: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           attachments: team_round.txt,nowgoal_htft.txt,temas.txt,league_wide.txt,hafta_dongu.txt,season_xth.txt,zincir_surpriz.txt
