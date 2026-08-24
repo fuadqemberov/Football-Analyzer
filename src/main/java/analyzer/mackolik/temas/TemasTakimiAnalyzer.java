@@ -1,5 +1,6 @@
 package analyzer.mackolik.temas;
 
+import analyzer.util.AyniEslesme;
 import analyzer.util.MackolikHttpFetcher;
 import analyzer.util.TeamIdsFetcher;
 import org.jsoup.nodes.Document;
@@ -425,10 +426,25 @@ public class TemasTakimiAnalyzer {
                 temasMacBugun.homeTeam, temasMacBugun.awayTeam,
                 temasMacBugun.played ? "oynandı: " + temasMacBugun.ftScore : "henüz oynanmadı"));
         sb.append(String.format("║    Güç         : %s → %d farklı sezonda tekrarladı%n", guc, k.seasons.size()));
+
+        // Geçmişteki sürpriz maç, bugün oynanacak maçın TAM AYNI iki takımından
+        // oluşuyorsa (X-Y ↔ Y-X dahil) o kanıt satırı 5 yıldızla işaretlenir.
+        int ayniRakip = 0;
+        for (String[] cift : k.surprizCiftleri) {
+            if (AyniEslesme.ayniCift(cift[0], cift[1], todayMatch.homeTeam, todayMatch.awayTeam)) ayniRakip++;
+        }
+        if (ayniRakip > 0) {
+            sb.append(String.format("║    %s AYNI RAKİP: %d sezonun sürpriz maçı bugünkü maçın aynı iki takımı%n",
+                    AyniEslesme.YILDIZ, ayniRakip));
+        }
+
         sb.append("╠════════════════════════════════════════════════════════════════════╣\n");
         sb.append("║    GEÇMİŞ SEZON KANITLARI:\n");
-        for (String satir : k.hitSatirlari) {
-            sb.append("║    ").append(satir).append("\n");
+        for (int i = 0; i < k.hitSatirlari.size(); i++) {
+            String[] cift = k.surprizCiftleri.get(i);
+            sb.append("║    ").append(k.hitSatirlari.get(i))
+              .append(AyniEslesme.yildiz(cift[0], cift[1], todayMatch.homeTeam, todayMatch.awayTeam))
+              .append("\n");
         }
         sb.append("╚════════════════════════════════════════════════════════════════════╝");
         return sb.toString();
@@ -476,6 +492,8 @@ public class TemasTakimiAnalyzer {
         final Set<String> seasons = new LinkedHashSet<>();
         final List<String> hitSatirlari = new ArrayList<>();
         final List<String> ftSkorlari = new ArrayList<>();   // sürpriz maçların FT skorları (sezon başına 1)
+        /** hitSatirlari ile aynı sırada: sürpriz maçın {ev, deplasman} isimleri (yıldız kontrolü için). */
+        final List<String[]> surprizCiftleri = new ArrayList<>();
 
         TemasKaniti(String temasAdi, int offset, String grup) {
             this.temasAdi = temasAdi;
@@ -488,6 +506,7 @@ public class TemasTakimiAnalyzer {
             // Aynı sezonda aynı çift birden fazla kez düşerse sadece ilkini yaz
             if (!seasons.add(season)) return;
             ftSkorlari.add(surprizMac.ftScore);
+            surprizCiftleri.add(new String[]{surprizMac.homeTeam, surprizMac.awayTeam});
             hitSatirlari.add(String.format(
                     "%-9s | SÜRPRİZ: %s %s (İY: %s) %s → HT/FT %s | TEMAS: %s vs %s [%s]",
                     season,

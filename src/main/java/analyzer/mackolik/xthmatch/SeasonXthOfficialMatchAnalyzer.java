@@ -1,5 +1,6 @@
 package analyzer.mackolik.xthmatch;
 
+import analyzer.util.AyniEslesme;
 import analyzer.util.MackolikHttpFetcher;
 import analyzer.util.TeamIdsFetcher;
 import org.jsoup.nodes.Document;
@@ -186,17 +187,32 @@ public class SeasonXthOfficialMatchAnalyzer {
         }
         sb.append(String.format( "  Son %d sezonda %d. resmi maçta 2/1 - 1/2 sayısı : %d%n",
                 PAST_SEASONS, x, hits.size()));
+
+        // Geçmiş X. maç, oynanacak maçın TAM AYNI iki takımından oluşuyorsa
+        // (X-Y ↔ Y-X dahil) o satır 5 yıldızla işaretlenir.
+        int ayniRakip = 0;
+        if (upcoming != null) {
+            for (Hit h : hits) {
+                if (AyniEslesme.ayniCift(h.match.home, h.match.away, upcoming.home, upcoming.away)) ayniRakip++;
+            }
+        }
+        if (ayniRakip > 0) {
+            sb.append(String.format("  %s AYNI RAKİP: bunlardan %d tanesi bugünkü maçın aynı iki takımı%n",
+                    AyniEslesme.YILDIZ, ayniRakip));
+        }
         sb.append("╚══════════════════════════════════════════════════════════════════╝\n");
 
         for (Hit h : hits) {
             Match m = h.match;
+            String yildiz = upcoming == null ? ""
+                    : AyniEslesme.yildiz(m.home, m.away, upcoming.home, upcoming.away);
             sb.append(String.format(
                     "   ⭐ %-9s | %d. resmi maç | HT/FT: %s%n" +
-                    "        %s  →  %s %s %s   (İY: %s)  [%s]%n",
+                    "        %s  →  %s %s %s   (İY: %s)  [%s]%s%n",
                     h.season, x, h.htFt,
                     m.dateStr, m.home, m.ftScore, m.away,
                     (m.htScore == null || m.htScore.isEmpty()) ? "-" : m.htScore,
-                    m.league));
+                    m.league, yildiz));
         }
         return sb.toString();
     }

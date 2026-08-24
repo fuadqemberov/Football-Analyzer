@@ -18,6 +18,14 @@ jobs:
       # (~3 kat az istek → çok daha az timeout).
       MACKOLIK_CACHE_DIR: ${{ github.workspace }}/.mackolik-cache
 
+      # Çıktı .txt dosyaya yönlendirildiği için Java System.out'u konsol değil,
+      # "native.encoding" (yani runner'ın locale'i) ile yazar. Locale UTF-8
+      # değilse ⭐ ve 🎯 gibi karakterler eke "?" olarak düşer. Aşağıdakiler
+      # hem locale'i hem de JVM'in stdout kodlamasını UTF-8'e sabitler.
+      LANG: C.UTF-8
+      LC_ALL: C.UTF-8
+      MAVEN_OPTS: "-Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dstderr.encoding=UTF-8"
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4

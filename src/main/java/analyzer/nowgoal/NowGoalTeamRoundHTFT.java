@@ -1,5 +1,6 @@
 package analyzer.nowgoal;
 
+import analyzer.util.AyniEslesme;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.bonigarcia.wdm.WebDriverManager;
@@ -229,18 +230,26 @@ public class NowGoalTeamRoundHTFT {
             LeagueData ld = season.equals(fx.seasons.get(0)) ? cur : loadLeague(fx.leagueId, season);
             if (ld == null) continue;
 
-            if (appendRoundHit(sbA, ld, season, round, idA, today)) hitsA++;
-            if (appendRoundHit(sbB, ld, season, round, idB, today)) hitsB++;
+            if (appendRoundHit(sbA, ld, season, round, idA, today, idA, idB)) hitsA++;
+            if (appendRoundHit(sbB, ld, season, round, idB, today, idA, idB)) hitsB++;
         }
 
         // Heç bir takımda bu nümunələrdən yoxdursa çap etmə
         if (hitsA == 0 && hitsB == 0) return;
+
+        // Keçmiş sətirlərdən hər hansı biri bugünkü matçın EYNİ iki takımıdırsa
+        // (X-Y ↔ Y-X) o sətir 5 ulduzla işarələnib; başlıqda da xəbərdarlıq verilir.
+        boolean ayniRakip = sbA.indexOf(AyniEslesme.YILDIZ) >= 0 || sbB.indexOf(AyniEslesme.YILDIZ) >= 0;
 
         synchronized (System.out) {
             System.out.println("==================================================================");
             System.out.println("[LİQA]: " + cur.leagueName + "   |   HƏFTƏ: " + round);
             System.out.println("[BUGÜNKÜ MATÇ]: " + cur.teamName(idA) + "  vs  " + cur.teamName(idB)
                     + "   |   [TARİX]: " + fmt(fx.kickoff) + "  (bugün: " + today + ")");
+            if (ayniRakip) {
+                System.out.println("[" + AyniEslesme.YILDIZ + " EYNİ RƏQİB]: keçmiş sətirlərdə bugünkü matçın "
+                        + "TAM EYNİ iki takımı var (X-Y / Y-X)");
+            }
             printTeamBlock("A takımı (ev)", cur.teamName(idA), round, sbA, hitsA);
             System.out.println();
             printTeamBlock("B takımı (qonaq)", cur.teamName(idB), round, sbB, hitsB);
@@ -265,7 +274,8 @@ public class NowGoalTeamRoundHTFT {
      * Uyğun HT/FT nümunəsidirsə sətri {@code sb}-yə əlavə edir və {@code true} qaytarır.
      */
     static boolean appendRoundHit(StringBuilder sb, LeagueData ld, String season,
-                                  int round, int teamId, LocalDate today) {
+                                  int round, int teamId, LocalDate today,
+                                  int bugunEvId, int bugunQonaqId) {
         Match m = ld.findTeamMatchInRound(round, teamId);
         if (m == null || m.ft == null || m.ht == null) return false;
         // TARİX YOXLAMASI: nəticə yalnız artıq oynanmış matçdan götürülə bilər
@@ -278,8 +288,10 @@ public class NowGoalTeamRoundHTFT {
         // ÇAP ORİJİNAL formadadır: ev takımı vs səfər takımı, HT/FT də orijinal
         // hesaba görə (1 = ev öndə/qalib, 2 = səfər öndə/qalib, X = bərabərə)
         String htftOrig = htftForTeam(m, m.homeId);
-        sb.append(String.format("     [%-9s]  R%-2d  HT/FT: %-3s  |  %s vs %s   HT(%s) FT(%s)%n",
-                season, round, htftOrig, ld.teamName(m.homeId), ld.teamName(m.awayId), m.ht, m.ft));
+        // Keçmiş matç bugünkü matçın eyni cütüdürsə (sıra fərq etmir) 5 ulduz
+        String ulduz = AyniEslesme.yildiz(m.homeId, m.awayId, bugunEvId, bugunQonaqId);
+        sb.append(String.format("     [%-9s]  R%-2d  HT/FT: %-3s  |  %s vs %s   HT(%s) FT(%s)%s%n",
+                season, round, htftOrig, ld.teamName(m.homeId), ld.teamName(m.awayId), m.ht, m.ft, ulduz));
         return true;
     }
 

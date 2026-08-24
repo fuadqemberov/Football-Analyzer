@@ -1,5 +1,6 @@
 package analyzer.mackolik.dongu;
 
+import analyzer.util.AyniEslesme;
 import analyzer.util.MackolikHttpFetcher;
 import analyzer.util.TeamIdsFetcher;
 import org.jsoup.nodes.Document;
@@ -334,11 +335,17 @@ public class HaftaDonguAnalyzer {
                 weekNo, c.period, LOOKBACK_YEARS));
         sb.append("╠════════════════════════════════════════════════════════════════════╣\n");
 
+        // Geçmiş döngü maçı, bugün oynanacak maçın aynı iki takımından oluşuyorsa
+        // (X-Y ↔ Y-X dahil) o satır 5 yıldızla işaretlenir.
+        int ayniRakip = 0;
         for (CycleHit a : c.hits) {
             String etiket = a.grup != null ? a.grup : "sürpriz yok";
-            sb.append(String.format("║  %-9s (%d.h) %s %s %s  (İY %s) → %-4s | %d gol | %s%n",
+            String yildiz = AyniEslesme.yildiz(a.match.homeTeam, a.match.awayTeam,
+                                               target.homeTeam, target.awayTeam);
+            if (!yildiz.isEmpty()) ayniRakip++;
+            sb.append(String.format("║  %-9s (%d.h) %s %s %s  (İY %s) → %-4s | %d gol | %s%s%n",
                     a.season, weekNo, a.match.homeTeam, a.match.ftScore, a.match.awayTeam,
-                    a.match.htScore, a.htFt, a.toplamGol, etiket));
+                    a.match.htScore, a.htFt, a.toplamGol, etiket, yildiz));
         }
 
         sb.append("║  ──────────────────────────────────────────────────────────────────\n");
@@ -349,6 +356,10 @@ public class HaftaDonguAnalyzer {
                 : (target.time != null ? target.time : "henüz oynanmadı");
         sb.append(String.format("║  %-9s (%d.h) %s vs %s  (%s)%n",
                 CURRENT_SEASON, weekNo, target.homeTeam, target.awayTeam, durum));
+        if (ayniRakip > 0) {
+            sb.append(String.format("║  %s AYNI RAKİP: %d döngü maçı bugünkü maçın TAM AYNI iki takımı (X-Y / Y-X)%n",
+                    AyniEslesme.YILDIZ, ayniRakip));
+        }
         sb.append(String.format("║  ⁉️  TAHMİN: %s%n", tahmin));
 
         if (target.played && target.htScore != null) {
