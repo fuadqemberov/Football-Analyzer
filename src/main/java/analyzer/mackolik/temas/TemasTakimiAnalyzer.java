@@ -229,6 +229,27 @@ public class TemasTakimiAnalyzer {
     }
 
     // ─── TAKIM BAŞINA GÖREV ─────────────────────────────────────────────────
+    /** AllInOneTactics ucun tek komandaliq giris noktasi; signal yoxdursa null. */
+    public static String analyzeSingleTeam(MackolikHttpFetcher http, int teamId) {
+        return analyzeSingleTeam(http, teamId, null);
+    }
+
+    /**
+     * AllInOneTactics için tek takımlık giriş noktası.
+     *
+     * @param beklenenRakip sorulan maçtaki DİĞER takımın adı. Verilirse analizör
+     *        yalnızca gerçekten o maç için sinyal üretir; takım sayfasındaki
+     *        oynanmamış ilk maç başka bir rakiple ise null döner.
+     */
+    public static String analyzeSingleTeam(MackolikHttpFetcher http, int teamId, String beklenenRakip) {
+        try {
+            TeamResult result = analyzeTeam(http, teamId, beklenenRakip);
+            return result == null || result.output.isEmpty() ? null : result.output;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
     private static class TemasTask implements Callable<TeamResult> {
         private final int teamId;
         private final MackolikHttpFetcher http;
@@ -250,7 +271,28 @@ public class TemasTakimiAnalyzer {
     }
 
     // ─── ANA ANALİZ ─────────────────────────────────────────────────────────
+
+    /** Konsol akışı: "bugünkü maç" = takımın oynanmamış İLK lig maçı. */
     static TeamResult analyzeTeam(MackolikHttpFetcher http, int teamId) {
+        return analyzeTeam(http, teamId, null);
+    }
+
+    /**
+     * @param beklenenRakip hangi maçın sorulduğu. <b>null</b> ise eski davranış
+     *        (oynanmamış ilk maç) geçerlidir.
+     *
+     * <p>Bu parametre neden gerekli: analizör "bugünkü maç" olarak takım
+     * sayfasındaki oynanmamış İLK maçı alıyor ve bunun ÇAĞIRANIN sorduğu maç olup
+     * olmadığını hiç kontrol etmiyordu. Konsol aracında sorun değildi (takım
+     * listesi zaten günün fikstüründen geliyordu), ama tek maç sorulduğunda
+     * BAŞKA bir maç için sinyal üretiyordu:
+     * <pre>
+     *   Sorulan  : Man City vs Bournemouth   (bu maç çoktan oynanmıştı)
+     *   Raporlanan: "Bugünkü Maç : Crystal Palace vs Man City"
+     * </pre>
+     * Artık istenen rakip tutmuyorsa sinyal üretilmez.
+     */
+    static TeamResult analyzeTeam(MackolikHttpFetcher http, int teamId, String beklenenRakip) {
 
         // 1. Mevcut sezon fikstürü + bugünkü maç
         List<MacData> current = fetchSeasonMatches(http, teamId, CURRENT_SEASON, false);
@@ -272,6 +314,13 @@ public class TemasTakimiAnalyzer {
         }
         if (todayIdx < 0) return null;
         MacData todayMatch = current.get(todayIdx);
+
+        // Sorulan maç bu mu? Değilse sinyal üretme — yanlış maça ait sinyal,
+        // sinyal olmamasından daha kötüdür.
+        if (beklenenRakip != null) {
+            String bugunkuRakip = opponentOf(todayMatch, teamName);
+            if (bugunkuRakip == null || !teamsMatch(bugunkuRakip, beklenenRakip)) return null;
+        }
 
         // 2. Geçmiş sezonları tara → (temas takımı, offset, comeback grubu) kanıt havuzu
         //    key = normalize(temasAdı) + "|" + offset + "|" + grup
@@ -322,6 +371,10 @@ public class TemasTakimiAnalyzer {
         String macAdi = todayMatch.homeTeam + " vs " + todayMatch.awayTeam;
         for (TemasKaniti k : kanitlar.values()) {
             if (k.seasons.size() < MIN_SEZON_TEKRARI) continue;
+
+            // Değişmez kural: bir takım kendi kendisinin temas takımı olamaz.
+            // İsim eşleştirme sıkılaştırıldı, yine de bu ucuz kontrol son emniyet.
+            if (teamsMatch(k.temasAdi, teamName)) continue;
 
             // Bugünkü maç, temas maçına göre "offset" konumunda mı?
             // temasIdx + offset == todayIdx  →  temasIdx = todayIdx - offset
@@ -598,9 +651,18 @@ public class TemasTakimiAnalyzer {
         return null;
     }
 
+    /**
+     * Maçtaki rakip. Her iki taraf da isme uyuyorsa ayrım güvenilir değildir
+     * (aynı şehrin iki kulübü gibi) — yanlış rakip döndürmektense hiç döndürmemek
+     * doğrusu, çünkü yanlış rakip "takım kendi kendisinin rakibi" gibi saçma
+     * sonuçlar üretir.
+     */
     private static String opponentOf(MacData m, String teamName) {
-        if (teamsMatch(m.homeTeam, teamName)) return m.awayTeam;
-        if (teamsMatch(m.awayTeam, teamName)) return m.homeTeam;
+        boolean homeIsUs = teamsMatch(m.homeTeam, teamName);
+        boolean awayIsUs = teamsMatch(m.awayTeam, teamName);
+        if (homeIsUs && awayIsUs) return null;
+        if (homeIsUs) return m.awayTeam;
+        if (awayIsUs) return m.homeTeam;
         return null;
     }
 
@@ -623,26 +685,80 @@ public class TemasTakimiAnalyzer {
         return ascii.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]", "");
     }
 
-    /** Sezonlar arası kısaltma farklarına dayanıklı isim eşleştirme. */
+    /**
+     * Sezonlar arası kısaltma farklarına dayanıklı isim eşleştirme
+     * ("Man City" ↔ "Manchester City").
+     *
+     * <p><b>DİKKAT — burada eskiden "herhangi BİR ortak kelime yeterli" kuralı vardı</b>
+     * ve bu, farklı kulüpleri birbirine karıştırıyordu:
+     * <ul>
+     *   <li>"Man City" ↔ "Man Utd" — ortak <i>Man</i> yüzünden eşleşiyordu</li>
+     *   <li>"Man City" ↔ "Norwich City" — ortak <i>City</i> yüzünden eşleşiyordu</li>
+     * </ul>
+     * Sonuç: takım kendi kendisinin "temas takımı" olarak raporlanıyor, kanıt
+     * satırlarındaki temas (Norwich City) ile başlıktaki temas (Man City) tutmuyordu.
+     *
+     * <p>Yeni kural: <b>kısa ismin HER kelimesi</b> uzun isimde karşılık bulmalı.
+     * "Man City" vs "Man Utd" → <i>city</i> karşılıksız → eşleşmez.
+     * "Man City" vs "Manchester City" → <i>man</i> ⊂ <i>manchester</i>, <i>city</i> = <i>city</i> → eşleşir.
+     *
+     * <p>Bu kural bilerek DAHA SIKI: yanlış eşleşme saçma sinyal üretir, kaçırılan
+     * eşleşme ise yalnızca bir sinyalin çıkmamasına yol açar.
+     */
     static boolean teamsMatch(String teamA, String teamB) {
         if (teamA == null || teamB == null) return false;
         String a = normalize(teamA);
         String b = normalize(teamB);
         if (a.isEmpty() || b.isEmpty()) return false;
         if (a.equals(b)) return true;
-        if (a.contains(b) || b.contains(a)) return true;
 
-        for (String tA : teamA.trim().split("\\s+")) {
-            String nA = normalize(tA);
-            if (nA.length() < 3) continue;
-            for (String tB : teamB.trim().split("\\s+")) {
-                String nB = normalize(tB);
-                if (nB.length() < 3) continue;
-                if (nA.equals(nB)) return true;
-                if (nA.length() >= 4 && nB.startsWith(nA)) return true;
-                if (nB.length() >= 4 && nA.startsWith(nB)) return true;
+        // Biri diğerinin içinde geçiyorsa: "inter" ⊂ "internazionale".
+        // 5 karakterlik alt sınır, "man" gibi kısa parçaların her şeye uymasını engeller.
+        if (Math.min(a.length(), b.length()) >= 5 && (a.contains(b) || b.contains(a))) return true;
+
+        List<String> tokensA = nameTokens(teamA);
+        List<String> tokensB = nameTokens(teamB);
+        if (tokensA.isEmpty() || tokensB.isEmpty()) return false;
+
+        List<String> shorter = tokensA.size() <= tokensB.size() ? tokensA : tokensB;
+        List<String> longer  = (shorter == tokensA) ? tokensB : tokensA;
+
+        for (String token : shorter) {
+            boolean matched = false;
+            for (String other : longer) {
+                if (tokenMatches(token, other)) {
+                    matched = true;
+                    break;
+                }
             }
+            if (!matched) return false;
         }
-        return false;
+        return true;
+    }
+
+    /**
+     * Ön ek kuralının yakalayamadığı yaygın kısaltmalar. "utd" ile "united"
+     * ne eşit ne de biri diğerinin başlangıcı, ama aynı kelime.
+     * Yeni bir karşılık gerekirse buraya bir satır eklemek yeterli.
+     */
+    private static final Map<String, String> ISIM_KISALTMALARI = Map.of(
+            "utd", "united",
+            "wolves", "wolverhampton",
+            "spurs", "tottenham");
+
+    /** İsmi anlamlı kelimelere ayırır; 3 harften kısa parçalar ("AŞ", "JK") atılır. */
+    private static List<String> nameTokens(String name) {
+        List<String> tokens = new ArrayList<>();
+        for (String part : name.trim().split("\\s+")) {
+            String normalized = normalize(part);
+            if (normalized.length() < 3) continue;
+            tokens.add(ISIM_KISALTMALARI.getOrDefault(normalized, normalized));
+        }
+        return tokens;
+    }
+
+    /** Aynı kelime mi: eşit ya da biri diğerinin başlangıcı ("man" → "manchester"). */
+    private static boolean tokenMatches(String a, String b) {
+        return a.equals(b) || b.startsWith(a) || a.startsWith(b);
     }
 }

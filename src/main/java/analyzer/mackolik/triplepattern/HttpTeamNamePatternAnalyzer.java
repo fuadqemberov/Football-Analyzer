@@ -38,6 +38,15 @@ public class HttpTeamNamePatternAnalyzer {
 
     // -----------------------------------------------------------------------
 
+    /** AllInOneTactics ucun tek komandaliq giris noktasi; signal yoxdursa null. */
+    public static String analyzeSingleTeam(CloseableHttpClient http, int teamId) {
+        try {
+            return new TeamNamePatternTask(teamId, http).call();
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
     private static class TeamNamePatternTask implements Callable<String> {
         private final int teamId;
         private final CloseableHttpClient http;

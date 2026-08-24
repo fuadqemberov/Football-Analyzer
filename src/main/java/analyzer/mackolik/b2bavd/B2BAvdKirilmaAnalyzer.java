@@ -1,5 +1,6 @@
 package analyzer.mackolik.b2bavd;
 
+import analyzer.util.TeamIdsFetcher;
 import org.apache.http.client.config.RequestConfig;
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpGet;
@@ -12,26 +13,17 @@ import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 
 import java.io.IOException;
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
-import java.time.Duration;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 /**
  * B2B &amp; AVD BAĞLANTISI - KIRILMA NOKTALARI ANALİZÖRÜ
@@ -78,7 +70,6 @@ public class B2BAvdKirilmaAnalyzer {
 
     // ─── AYARLAR ────────────────────────────────────────────────────────────
     private static final String BASE_URL     = "https://arsiv.mackolik.com/Team/Default.aspx?id=%d&season=%s";
-    private static final String LIVEDATA_URL = "https://vd.mackolik.com/livedata?group=0";
 
     /** Yeni futbol sezonunun başladığı ay (Temmuz). */
     private static final int SEASON_START_MONTH = 7;
@@ -192,41 +183,26 @@ public class B2BAvdKirilmaAnalyzer {
 
     // ─── GÜNÜN MAÇ ÇİFTLERİ ─────────────────────────────────────────────────
     /** Başlamamış maçları (evId, depId) çiftleri olarak döndürür. */
+    /**
+     * Günün başlamamış maç çiftleri. Eskiden burada {@code livedata?group=0} kendi
+     * deseniyle okunuyordu; o adres günün programı değil canlı maç tahtası olduğu için
+     * sabah saatlerinde HİÇ başlamamış maç döndürmüyordu. Ortak okuma artık
+     * {@link TeamIdsFetcher} içinde ({@code group=all} + tarih süzgeci).
+     */
     static List<int[]> fetchUnstartedMatchPairs() {
-        List<int[]> pairs = new ArrayList<>();
-        Set<String> seen = new LinkedHashSet<>();
-        try {
-            HttpClient client = HttpClient.newBuilder()
-                    .followRedirects(HttpClient.Redirect.NORMAL)
-                    .connectTimeout(Duration.ofSeconds(10))
-                    .build();
-            HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create(LIVEDATA_URL))
-                    .header("User-Agent",
-                            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0 Safari/537.36")
-                    .GET()
-                    .build();
-            HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-            String body = response.body();
-            int mIndex = body.indexOf("\"m\":[[");
-            if (mIndex == -1) return pairs;
-
-            // TeamIdsFetcher ile aynı desen: 0 → maç henüz başlamamış
-            Pattern p = Pattern.compile("\\[\\d+,(\\d+),\"[^\"]*\",(\\d+),\"[^\"]*\",0,\"\",");
-            Matcher m = p.matcher(body.substring(mIndex));
-            while (m.find()) {
-                String key = m.group(1) + "-" + m.group(2);
-                if (seen.add(key)) {
-                    pairs.add(new int[]{Integer.parseInt(m.group(1)), Integer.parseInt(m.group(2))});
-                }
-            }
-        } catch (Exception e) {
-            System.err.println("❌ API Hatası: " + e.getMessage());
-        }
-        return pairs;
+        return TeamIdsFetcher.fetchUnstartedMatchPairs();
     }
 
     // ─── ANA ANALİZ ─────────────────────────────────────────────────────────
+    /** AllInOneTactics ucun tek oyunluq giris noktasi; signal yoxdursa null. */
+    public static String analyzeSinglePair(CloseableHttpClient http, int evId, int depId) {
+        try {
+            return analyzePair(http, evId, depId);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
     static String analyzePair(CloseableHttpClient http, int evId, int depId) throws IOException {
         TakimProfili ev  = buildProfil(http, evId);
         TakimProfili dep = buildProfil(http, depId);

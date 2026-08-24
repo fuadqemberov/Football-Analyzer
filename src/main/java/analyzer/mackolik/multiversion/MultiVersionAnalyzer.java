@@ -61,6 +61,16 @@ public class MultiVersionAnalyzer {
     }
 
 
+    /** AllInOneTactics ucun tek komandaliq giris noktasi; signal yoxdursa null. */
+    public static String analyzeSingleTeam(MackolikHttpFetcher http, int teamId) {
+        try {
+            MultiVersionResult result = new MultiVersionTeamProcessorTask(teamId, http).call();
+            return result == null || !result.hasAnyResults() ? null : result.toString();
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
     private static class MultiVersionTeamProcessorTask implements Callable<MultiVersionResult> {
         private final int teamId;
         private final MackolikHttpFetcher http;

@@ -24,6 +24,15 @@ public class HttpTripleMatchPatternAnalyzer {
     private static final int END_YEAR = 2014;
     private static final int NUM_THREADS = 10;
 
+    /** AllInOneTactics ucun tek komandaliq giris noktasi; signal yoxdursa null. */
+    public static String analyzeSingleTeam(CloseableHttpClient httpClient, int teamId) {
+        try {
+            return new TeamTriplePatternTask(teamId, httpClient).call();
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
     private static class TeamTriplePatternTask implements Callable<String> {
         private final int teamId;
         private final CloseableHttpClient httpClient;

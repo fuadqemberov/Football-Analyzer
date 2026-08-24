@@ -1,5 +1,6 @@
 package analyzer.mackolik.before_after_pattern;
 
+import analyzer.util.TeamIdsFetcher;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
@@ -82,32 +83,45 @@ public class MackolikHalfTimePatternFinder {
     // ─────────────────────────────────────────────────────────────
     // API'den Maç ID'lerini Çek
     // ─────────────────────────────────────────────────────────────
+    /**
+     * Günün BAŞLAMAMIŞ maçlarının ID'leri.
+     *
+     * <p>Eskiden burada {@code livedata?group=0} gövdesinden {@code \[(\d{7}),} deseniyle
+     * 7 haneli her sayı toplanıyordu. İki sorun vardı: (1) {@code group=0} günün programı
+     * değil canlı maç tahtasıdır, sabah saatlerinde akşamki maçlar orada olmaz;
+     * (2) desen "m" dizisinin dışındaki (canlı olay) satırlardan da ID topluyor, üstelik
+     * başlamış/bitmiş maçları ayırmıyordu. Ortak okuma artık {@link TeamIdsFetcher}
+     * içinde ({@code group=all} + durum ve tarih süzgeci).
+     */
     private static Set<String> fetchMatchIdsFromAPI() {
-        Set<String> ids = new LinkedHashSet<>();
-        try {
-            String apiUrl = "https://vd.mackolik.com/livedata?group=0";
-            HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create(apiUrl))
-                    .header("User-Agent", USER_AGENT)
-                    .GET()
-                    .build();
-            HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-
-            Pattern p = Pattern.compile("\\[(\\d{7}),");
-            Matcher m = p.matcher(response.body());
-            while (m.find()) ids.add(m.group(1));
-
-            System.out.println("Toplam " + ids.size() + " adet maç ID'si bulundu.");
-        } catch (Exception e) {
-            System.err.println("❌ API Hatası: " + e.getMessage());
-        }
+        Set<String> ids = new LinkedHashSet<>(TeamIdsFetcher.fetchUnstartedMatchIds());
+        System.out.println("Toplam " + ids.size() + " adet başlamamış maç ID'si bulundu.");
         return ids;
     }
 
     // ─────────────────────────────────────────────────────────────
     // Maç Analizi
     // ─────────────────────────────────────────────────────────────
+    /**
+     * AllInOneTactics için tek maçlık giriş noktası. Aynı analiz çalışır; tek fark
+     * sonucun global listeye yazılmak yerine geri döndürülmesidir. Sinyal yoksa null.
+     */
+    public static String analyzeSingleMatch(String matchId) {
+        try {
+            return analyzeMatchInternal(matchId);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /** main() akışı: sonucu global listeye ekler. */
     private static void analyzeMatch(String matchId) {
+        String signal = analyzeMatchInternal(matchId);
+        if (signal != null) matchedPatterns.add(signal);
+    }
+
+    /** Tek maçın analizi; eşik aşılmazsa null. */
+    private static String analyzeMatchInternal(String matchId) {
         int maxRetry = 3;
         int attempt = 0;
 
@@ -130,7 +144,7 @@ public class MackolikHalfTimePatternFinder {
                     Document doc = Jsoup.parse(response.body());
 
                     Elements forms = doc.select("div.md:has(div.detail-title:contains(Form Durumu))");
-                    if (forms.size() < 2) return;
+                    if (forms.size() < 2) return null;
 
                     TableAnalysis home = parseForm(forms.get(0), matchId);
                     TableAnalysis away = parseForm(forms.get(1), matchId);
@@ -138,8 +152,7 @@ public class MackolikHalfTimePatternFinder {
                     MatchResult result = new MatchResult(matchUrl, home.teamName, away.teamName);
                     checkPatterns(home, away, result);
                     checkTriplePattern(home, away, result);
-                    evaluateResult(result);
-                    return;
+                    return renderResult(result);
 
                 } finally {
                     semaphore.release();
@@ -151,16 +164,17 @@ public class MackolikHalfTimePatternFinder {
                         Thread.sleep(1000L * attempt);
                     } catch (InterruptedException ie) {
                         Thread.currentThread().interrupt();
-                        return;
+                        return null;
                     }
                 }
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
-                return;
+                return null;
             } catch (Exception e) {
-                return;
+                return null;
             }
         }
+        return null;
     }
 
     // ─────────────────────────────────────────────────────────────
@@ -437,9 +451,10 @@ public class MackolikHalfTimePatternFinder {
     // Yardımcı Metodlar
     // ─────────────────────────────────────────────────────────────
     // 3 yöntemden en az 2'si bulunduysa sonuca ekle; 3'ü birden bulunduysa BINGOOO!
-    private static void evaluateResult(MatchResult r) {
+    /** Sonucu metne çevirir; 3 yöntemden en az 2'si tutmadıysa null. */
+    private static String renderResult(MatchResult r) {
         int count = (r.foundTriple ? 1 : 0) + (r.foundCross ? 1 : 0) + (r.foundSequence ? 1 : 0);
-        if (count < 2) return;
+        if (count < 2) return null;
 
         String header = (count == 3)
                 ? "🎰🎰🎰 BİNGOOO!!! 3/3 PATTERN 🎰🎰🎰"
@@ -458,7 +473,7 @@ public class MackolikHalfTimePatternFinder {
         }
         sb.append("   Taktik: 2/1 VEYA 1/2 Oyna!\n");
         sb.append("   Link: ").append(r.url);
-        matchedPatterns.add(sb.toString());
+        return sb.toString();
     }
 
     private static void printProgress(int completed, int total) {

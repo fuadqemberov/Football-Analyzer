@@ -44,6 +44,18 @@ public class OnlyLeagueVirtualThreadedAnalyzer {
     //  Görev
     // ═══════════════════════════════════════════════════════════════════════════
 
+    /**
+     * AllInOneTactics ucun tek komandaliq giris noktasi: eyni tapsiriq, sadece
+     * havuz/ExecutorService olmadan. Signal yoxdursa null.
+     */
+    public static String analyzeSingleTeam(CloseableHttpClient httpClient, int teamId) {
+        try {
+            return new TeamProcessorTask(teamId, httpClient).call();
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
     private static class TeamProcessorTask implements Callable<String> {
 
         private final int teamId;

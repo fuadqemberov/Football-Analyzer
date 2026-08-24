@@ -61,6 +61,16 @@ public class LeagueWidePatternAnalyzer {
     //  Per-team task
     // ═══════════════════════════════════════════════════════════════════════
 
+    /** AllInOneTactics ucun tek komandaliq giris noktasi; signal yoxdursa null. */
+    public static String analyzeSingleTeam(CloseableHttpClient http, int teamId,
+                                           LeagueWidePatternMatcher.MatchMode mode) {
+        try {
+            return new TeamTask(teamId, http, mode).call();
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
     private static class TeamTask implements Callable<String> {
 
         private final int teamId;

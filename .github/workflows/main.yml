@@ -2,8 +2,8 @@ name: Daily All Analyzers
 
 on:
   schedule:
-    
-    - cron: '30 6 * * *'
+    # 9 saat geri çekildi: eski 06:30 UTC → 21:30 UTC (bir önceki gün).
+    - cron: '30 21 * * *'
   workflow_dispatch:
 
 jobs:
@@ -25,7 +25,10 @@ jobs:
       - name: Set up Java 21
         uses: actions/setup-java@v4
         with:
-          java-version: '21'
+          # 22, pom.xml'deki maven.compiler.source/target ile aynı olmalı: kod
+          # adsız değişken (catch (Exception _)) kullanıyor, bu Java 22'de kesinleşti.
+          # JDK 21 ile derleme "release 22" isteğini karşılayamaz.
+          java-version: '22'
           distribution: 'temurin'
           cache: maven
 
@@ -91,17 +94,7 @@ jobs:
           echo "===== TemasTakimiAnalyzer END =====" >> temas.txt
           tail -n 20 temas.txt
 
-      - name: 4) LeagueWidePatternAnalyzer
-        run: |
-          echo "===== LeagueWidePatternAnalyzer START =====" > league_wide.txt
-          timeout -k 30 25m mvn -B exec:java \
-            -Dexec.mainClass="analyzer.mackolik.triplepattern.LeagueWidePatternAnalyzer" \
-            -Dexec.classpathScope=compile \
-            >> league_wide.txt 2>&1 || echo "[workflow] step timed out or failed (exit $?)" >> league_wide.txt
-          echo "===== LeagueWidePatternAnalyzer END =====" >> league_wide.txt
-          tail -n 20 league_wide.txt
-
-      - name: 5) HaftaDonguAnalyzer
+      - name: 4) HaftaDonguAnalyzer
         run: |
           echo "===== HaftaDonguAnalyzer START =====" > hafta_dongu.txt
           timeout -k 30 45m mvn -B exec:java \
@@ -111,7 +104,7 @@ jobs:
           echo "===== HaftaDonguAnalyzer END =====" >> hafta_dongu.txt
           tail -n 20 hafta_dongu.txt
 
-      - name: 6) SeasonXthOfficialMatchAnalyzer
+      - name: 5) SeasonXthOfficialMatchAnalyzer
         run: |
           echo "===== SeasonXthOfficialMatchAnalyzer START =====" > season_xth.txt
           timeout -k 30 45m mvn -B exec:java \
@@ -121,15 +114,15 @@ jobs:
           echo "===== SeasonXthOfficialMatchAnalyzer END =====" >> season_xth.txt
           tail -n 20 season_xth.txt
 
-      - name: 7) ZincirSurprizAnalyzer
+      - name: 6) SezonDenklemiAnalyzer
         run: |
-          echo "===== ZincirSurprizAnalyzer START =====" > zincir_surpriz.txt
-          timeout -k 30 25m mvn -B exec:java \
-            -Dexec.mainClass="analyzer.mackolik.triplepattern.ZincirSurprizAnalyzer" \
+          echo "===== SezonDenklemiAnalyzer START =====" > sezon_denklemi.txt
+          timeout -k 30 45m mvn -B exec:java \
+            -Dexec.mainClass="analyzer.mackolik.triplepattern.SezonDenklemiAnalyzer" \
             -Dexec.classpathScope=compile \
-            >> zincir_surpriz.txt 2>&1 || echo "[workflow] step timed out or failed (exit $?)" >> zincir_surpriz.txt
-          echo "===== ZincirSurprizAnalyzer END =====" >> zincir_surpriz.txt
-          tail -n 20 zincir_surpriz.txt
+            >> sezon_denklemi.txt 2>&1 || echo "[workflow] step timed out or failed (exit $?)" >> sezon_denklemi.txt
+          echo "===== SezonDenklemiAnalyzer END =====" >> sezon_denklemi.txt
+          tail -n 20 sezon_denklemi.txt
 
       - name: Send email
         if: always()
@@ -139,23 +132,22 @@ jobs:
           server_port: 465
           username: ${{ secrets.MAIL_USERNAME }}
           password: ${{ secrets.MAIL_PASSWORD }}
-          subject: "Daily All 7 Analyzers - #${{ github.run_number }}"
+          subject: "Daily All 6 Analyzers - #${{ github.run_number }}"
           to: ${{ secrets.MAIL_TO }}
           from: GitHub Actions <${{ secrets.MAIL_USERNAME }}>
           body: |
-            Günlük 7 analiz tamamlandı (12:30 Bakı).
+            Günlük 6 analiz tamamlandı (01:30 Bakı).
 
             1) NowGoalTeamRoundHTFT           → team_round.txt
             2) NowGoalHTFT                    → nowgoal_htft.txt
             3) TemasTakimiAnalyzer            → temas.txt
-            4) LeagueWidePatternAnalyzer      → league_wide.txt
-            5) HaftaDonguAnalyzer             → hafta_dongu.txt
-            6) SeasonXthOfficialMatchAnalyzer → season_xth.txt
-            7) ZincirSurprizAnalyzer          → zincir_surpriz.txt
+            4) HaftaDonguAnalyzer             → hafta_dongu.txt
+            5) SeasonXthOfficialMatchAnalyzer → season_xth.txt
+            6) SezonDenklemiAnalyzer          → sezon_denklemi.txt
 
             Not: Hər analiz üçün vaxt limiti var (mackolik analizləri 45-60 dəq, digərləri 25 dəq);
             bir analiz donsa belə iş dayanmır və email gəlir.
             Kəsilmə olubsa faylın sonunda "[workflow] step timed out or failed" sətri görünür.
 
             Log: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          attachments: team_round.txt,nowgoal_htft.txt,temas.txt,league_wide.txt,hafta_dongu.txt,season_xth.txt,zincir_surpriz.txt
+          attachments: team_round.txt,nowgoal_htft.txt,temas.txt,hafta_dongu.txt,season_xth.txt,sezon_denklemi.txt

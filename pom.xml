@@ -10,8 +10,15 @@
 
     <!-- Versiyonları tek bir yerden yönetmek için properties eklendi -->
     <properties>
-        <maven.compiler.source>21</maven.compiler.source>
-        <maven.compiler.target>21</maven.compiler.target>
+        <!--
+            22, çünkü kodda "catch (Exception _)" gibi ADSIZ DEĞİŞKENLER kullanılıyor
+            (bet365 paketinde 7 dosyada 43 yerde). Bu özellik Java 22'de KESİNLEŞTİ;
+            21'de yalnızca preview olduğu için "unnamed variables are a preview feature"
+            hatası veriyordu. 22 ile ne derlemede ne de çalıştırmada --enable-preview
+            gerekmiyor.
+        -->
+        <maven.compiler.source>22</maven.compiler.source>
+        <maven.compiler.target>22</maven.compiler.target>
         <selenium.version>4.27.0</selenium.version> <!-- CDP hatasını çözecek güncel sürüm -->
         <poi.version>5.2.5</poi.version>
         <slf4j.version>2.0.13</slf4j.version>
@@ -213,7 +220,14 @@
                 <configuration>
                     <source>${maven.compiler.source}</source>
                     <target>${maven.compiler.target}</target>
-                    <compilerArgs>--enable-preview</compilerArgs>
+                    <!--
+                        Buradaki <compilerArgs>--enable-preview</compilerArgs> kaldırıldı.
+                        İki sebep: (1) yazım hatalıydı — bu eleman <arg> alt elemanları
+                        bekler, düz metin dikkate alınmaz; (2) 22'ye çıkıldığı için artık
+                        gereksiz. Preview ile derlenen sınıflar ÇALIŞTIRIRKEN de
+                        --enable-preview ister; iş akışı ise "mvn exec:java" komutunu bu
+                        bayrak olmadan çağırıyor, yani preview yolu zaten kırılgandı.
+                    -->
                 </configuration>
             </plugin>
 

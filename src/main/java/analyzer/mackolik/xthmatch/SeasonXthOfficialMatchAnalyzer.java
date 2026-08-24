@@ -100,6 +100,15 @@ public class SeasonXthOfficialMatchAnalyzer {
     // Takım başına görev
     // =====================================================================
 
+    /** AllInOneTactics ucun tek komandaliq giris noktasi; signal yoxdursa null. */
+    public static String analyzeSingleTeam(MackolikHttpFetcher http, int teamId) {
+        try {
+            return new TeamTask(teamId, http).call();
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
     private static class TeamTask implements Callable<String> {
         private final int                teamId;
         private final MackolikHttpFetcher http;

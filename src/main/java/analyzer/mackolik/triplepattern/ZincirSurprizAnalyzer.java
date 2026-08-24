@@ -1,6 +1,7 @@
 package analyzer.mackolik.triplepattern;
 
 import analyzer.mackolik.triplepattern.LeagueSeasonFetcher.LeagueRef;
+import analyzer.util.TeamIdsFetcher;
 import org.apache.http.client.config.RequestConfig;
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpGet;
@@ -79,56 +80,60 @@ public class ZincirSurprizAnalyzer {
     //  Bugünkü fikstür (livedata) — cütlər (evId, evAd, deplasmanId, deplasmanAd)
     // ═══════════════════════════════════════════════════════════════════════
 
-    /** Bir oyun cütü: kim kiminlə oynayır. */
+    /**
+     * Bir oyun cütü: kim kiminlə oynayır. Proqramdan gələn oyunlarda liqa da
+     * bilinir ({@code seasonId}), əl ilə verilən cütlərdə isə 0 olur.
+     */
     static final class Fixture {
         final int homeId;
         final String homeName;
         final int awayId;
         final String awayName;
+        final String leagueName;   // "Türkiye · Süper Lig"; bilinmirsə boş
+        final int seasonId;        // 0 = bilinmir
+        final String seasonLabel;  // "2026/2027" və ya təqvim ili "2026"; bilinmirsə boş
 
-        Fixture(int homeId, String homeName, int awayId, String awayName) {
-            this.homeId = homeId;
-            this.homeName = homeName;
-            this.awayId = awayId;
-            this.awayName = awayName;
+        Fixture(int homeId, String homeName, int awayId, String awayName,
+                String leagueName, int seasonId, String seasonLabel) {
+            this.homeId      = homeId;
+            this.homeName    = homeName;
+            this.awayId      = awayId;
+            this.awayName    = awayName;
+            this.leagueName  = leagueName;
+            this.seasonId    = seasonId;
+            this.seasonLabel = seasonLabel;
+        }
+
+        /** Əl ilə verilən cüt — liqa sonradan komanda səhifəsindən tapılır. */
+        static Fixture manual(int homeId, int awayId) {
+            return new Fixture(homeId, "Ev#" + homeId, awayId, "Dep#" + awayId, "", 0, "");
         }
 
         @Override
         public String toString() {
-            return homeName + " (" + homeId + ") vs " + awayName + " (" + awayId + ")";
+            return homeName + " (" + homeId + ") vs " + awayName + " (" + awayId + ")"
+                    + (leagueName.isEmpty() ? "" : " | " + leagueName);
         }
     }
 
-    private static final String LIVEDATA_URL = "https://vd.mackolik.com/livedata?group=0";
     private static final String USER_AGENT =
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
 
     /**
-     * Feed sətri: [matchId, evId, "evAd", deplasmanId, "deplasmanAd", status, "statusMətn", ...].
-     * Başlamamış oyun: status = 0, statusMətn = "" (TeamIdsFetcher-dəki qəlibin cütlü variantı).
+     * Bugünün başlamamış oyunları. Əvvəllər burada {@code livedata?group=0} öz reqex-i
+     * ilə oxunurdu; həmin ünvan günün proqramı deyil, canlı oyun lövhəsidir və səhər
+     * saatlarında heç bir başlamamış oyun qaytarmırdı. Ortaq oxuma indi
+     * {@link TeamIdsFetcher}-dədir ({@code group=all} + tarix süzgəci) və sətirdəki
+     * liqa bloku sayəsində seasonId də hazır gəlir.
      */
-    private static final Pattern UNSTARTED_FIXTURE =
-            Pattern.compile("\\[\\d+,(\\d+),\"([^\"]*)\",(\\d+),\"([^\"]*)\",0,\"\",");
-
-    static List<Fixture> fetchTodayFixtures(CloseableHttpClient http) {
+    static List<Fixture> fetchTodayFixtures() {
         List<Fixture> fixtures = new ArrayList<>();
-        try {
-            String body = fetchText(http, LIVEDATA_URL);
-            if (body == null) return fixtures;
-
-            int mIndex = body.indexOf("\"m\":[[");
-            String scope = mIndex >= 0 ? body.substring(mIndex) : body;
-
-            Matcher m = UNSTARTED_FIXTURE.matcher(scope);
-            while (m.find()) {
-                int homeId = Integer.parseInt(m.group(1));
-                int awayId = Integer.parseInt(m.group(3));
-                fixtures.add(new Fixture(homeId, m.group(2), awayId, m.group(4)));
-            }
-            log.info("Bugün başlamamış {} oyun tapıldı.", fixtures.size());
-        } catch (IOException e) {
-            log.error("livedata alınmadı: {}", e.getMessage());
+        for (TeamIdsFetcher.Fixture fixture : TeamIdsFetcher.fetchUnstartedFixtures()) {
+            fixtures.add(new Fixture(fixture.homeId, fixture.homeName,
+                    fixture.awayId, fixture.awayName,
+                    fixture.leagueName, fixture.seasonId, fixture.seasonLabel));
         }
+        log.info("Bugün başlamamış {} oyun tapıldı.", fixtures.size());
         return fixtures;
     }
 
@@ -290,6 +295,14 @@ public class ZincirSurprizAnalyzer {
     //  Bir oyun cütü üçün tapşırıq
     // ═══════════════════════════════════════════════════════════════════════
 
+    /**
+     * AllInOneTactics üçün tək oyunluq giriş nöqtəsi. Liqa/sezon məlum deyilsə
+     * komanda səhifəsindən tapılır; siqnal yoxdursa null.
+     */
+    public static String analyzeSinglePair(CloseableHttpClient http, int homeId, int awayId) {
+        return new FixtureTask(Fixture.manual(homeId, awayId), http).call();
+    }
+
     private static final class FixtureTask implements Callable<String> {
 
         private final Fixture fixture;
@@ -311,21 +324,31 @@ public class ZincirSurprizAnalyzer {
         }
 
         private String analyze() throws IOException {
-            LeagueRef league = resolveLeagueWithFallback(fixture.homeId);
-            if (league == null) league = resolveLeagueWithFallback(fixture.awayId);
-            if (league == null) {
-                log.debug("Oyun {}: liqa təyin edilmədi", fixture);
-                return null;
+            int seasonId      = fixture.seasonId;
+            String leagueName = fixture.leagueName;
+            String feedLabel  = fixture.seasonLabel;
+
+            // Proqramdan gələn oyunlarda liqa artıq bilinir; yalnız əl ilə verilən
+            // cütlər üçün komanda səhifəsi yoxlanılır (oyun başına 4-8 artıq sorğu).
+            if (seasonId <= 0) {
+                LeagueRef league = resolveLeagueWithFallback(fixture.homeId);
+                if (league == null) league = resolveLeagueWithFallback(fixture.awayId);
+                if (league == null) {
+                    log.debug("Oyun {}: liqa təyin edilmədi", fixture);
+                    return null;
+                }
+                seasonId   = league.seasonId;
+                leagueName = league.leagueName;
+                feedLabel  = league.seasonLabel;
             }
 
-            Map<String, Integer> seasonIndex = LeagueSeasonFetcher.fetchSeasonIndex(http, league.seasonId);
+            Map<String, Integer> seasonIndex = LeagueSeasonFetcher.fetchSeasonIndex(http, seasonId);
             if (seasonIndex.isEmpty()) return null;
 
-            String currentLabel = newestLabel(seasonIndex);
+            String currentLabel = labelOf(seasonIndex, seasonId, feedLabel);
             if (currentLabel == null) return null;
 
-            List<LeagueMatch> season = LeagueSeasonFetcher.fetchLeagueSeason(
-                    http, seasonIndex.get(currentLabel), currentLabel);
+            List<LeagueMatch> season = LeagueSeasonFetcher.fetchLeagueSeason(http, seasonId, currentLabel);
             if (season.isEmpty()) return null;
 
             // Hər iki istiqamət: ev sahibi proqonist ola bilər, deplasman da.
@@ -335,9 +358,22 @@ public class ZincirSurprizAnalyzer {
                     fixture.awayId, fixture.awayName, fixture.homeId, fixture.homeName);
 
             StringBuilder sb = new StringBuilder();
-            if (fromHome != null) sb.append(fromHome.render(league.leagueName + " " + currentLabel));
-            if (fromAway != null) sb.append(fromAway.render(league.leagueName + " " + currentLabel));
+            if (fromHome != null) sb.append(fromHome.render(leagueName + " " + currentLabel));
+            if (fromAway != null) sb.append(fromAway.render(leagueName + " " + currentLabel));
             return sb.length() == 0 ? null : sb.toString();
+        }
+
+        /**
+         * {@code seasonId}-nin puan durumu siyahısındakı etiketi. Etiket sezon feed-inin
+         * tarix parslamasını dəyişdiyi üçün (Avropa sezonu ↔ təqvim ili) təxmin edilmir;
+         * indeksdə yoxdursa ən yeni etiketə düşülür.
+         */
+        private String labelOf(Map<String, Integer> seasonIndex, int seasonId, String feedLabel) {
+            for (Map.Entry<String, Integer> entry : seasonIndex.entrySet()) {
+                if (entry.getValue() == seasonId) return entry.getKey();
+            }
+            if (feedLabel != null && !feedLabel.isEmpty()) return feedLabel;
+            return newestLabel(seasonIndex);
         }
 
         private LeagueRef resolveLeagueWithFallback(int teamId) throws IOException {
@@ -396,7 +432,7 @@ public class ZincirSurprizAnalyzer {
 
         List<Fixture> fixtures = parseFixtureArgs(args);
         boolean manual = !fixtures.isEmpty();
-        if (fixtures.isEmpty()) fixtures = fetchTodayFixtures(http);
+        if (fixtures.isEmpty()) fixtures = fetchTodayFixtures();
 
         // SLF4J konfiqindən asılı olmayaraq görünsün deyə xülasə birbaşa stdout-a.
         System.out.println("════════ SKOR ZİNCİRİ — SÜRPRİZ DEDEKTORU ════════");
@@ -465,7 +501,7 @@ public class ZincirSurprizAnalyzer {
             try {
                 int homeId = Integer.parseInt(parts[0].trim());
                 int awayId = Integer.parseInt(parts[1].trim());
-                fixtures.add(new Fixture(homeId, "Ev#" + homeId, awayId, "Dep#" + awayId));
+                fixtures.add(Fixture.manual(homeId, awayId));
             } catch (NumberFormatException e) {
                 log.warn("Keçərsiz ID cütü: {}", arg);
             }

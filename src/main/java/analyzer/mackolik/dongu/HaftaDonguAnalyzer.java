@@ -223,6 +223,15 @@ public class HaftaDonguAnalyzer {
     }
 
     // ─── ANA ANALİZ ─────────────────────────────────────────────────────────
+    /** AllInOneTactics ucun tek komandaliq giris noktasi; signal yoxdursa null. */
+    public static String analyzeSingleTeam(MackolikHttpFetcher http, int teamId) {
+        try {
+            return analyzeTeam(http, teamId, false);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
     static String analyzeTeam(MackolikHttpFetcher http, int teamId, boolean showAll) {
 
         // 1. Güncel sezon + bugünkü maç (ilk oynanmamış fikstür) → hedef hafta
