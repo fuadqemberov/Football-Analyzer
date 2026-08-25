@@ -14,19 +14,19 @@
             22, çünkü kodda "catch (Exception _)" gibi ADSIZ DEĞİŞKENLER kullanılıyor
             (bet365 paketinde 7 dosyada 43 yerde). Bu özellik Java 22'de KESİNLEŞTİ;
             21'de yalnızca preview olduğu için "unnamed variables are a preview feature"
-            hatası veriyordu. 22 ile ne derlemede ne de çalıştırmada --enable-preview
-            gerekmiyor.
+            hatası veriyordu. 22 ile ne derlemede ne de çalıştırmada enable-preview
+            flag-i gerekmiyor.
         -->
         <maven.compiler.source>22</maven.compiler.source>
         <maven.compiler.target>22</maven.compiler.target>
-        <selenium.version>4.27.0</selenium.version> <!-- CDP hatasını çözecek güncel sürüm -->
+        <selenium.version>4.27.0</selenium.version>
         <poi.version>5.2.5</poi.version>
         <slf4j.version>2.0.13</slf4j.version>
     </properties>
 
     <dependencies>
         <!-- ========================================== -->
-        <!-- 1. WEB OTOMASYON (SELENIUM & PLAYWRIGHT)   -->
+        <!-- 1. WEB OTOMASYON (SELENIUM and PLAYWRIGHT) -->
         <!-- ========================================== -->
         <dependency>
             <groupId>org.seleniumhq.selenium</groupId>
@@ -59,16 +59,7 @@
         </dependency>
 
         <!-- ========================================== -->
-        <!-- 3. LOGLAMA (SLF4J ÇATIŞMALARI GİDERİLDİ)   -->
-        <!-- ========================================== -->
-<!--        <dependency>-->
-<!--            <groupId>org.slf4j</groupId>-->
-<!--            <artifactId>slf4j-api</artifactId>-->
-<!--            <version>${slf4j.version}</version>-->
-<!--        </dependency>-->
-
-        <!-- ========================================== -->
-        <!-- 4. HTTP VE JSON İŞLEMLERİ                  -->
+        <!-- 3. HTTP VE JSON İŞLEMLERİ                  -->
         <!-- ========================================== -->
         <dependency>
             <groupId>org.apache.httpcomponents</groupId>
@@ -102,7 +93,7 @@
         </dependency>
 
         <!-- ========================================== -->
-        <!-- 5. VERİ BİLİMİ & YAPAY ZEKA (SPARK & XGB)  -->
+        <!-- 4. VERİ BİLİMİ and YAPAY ZEKA (SPARK and XGB) -->
         <!-- ========================================== -->
         <dependency>
             <groupId>org.apache.spark</groupId>
@@ -121,7 +112,7 @@
         </dependency>
 
         <!-- ========================================== -->
-        <!-- 6. UTILS VE YARDIMCI ARAÇLAR               -->
+        <!-- 5. UTILS VE YARDIMCI ARAÇLAR               -->
         <!-- ========================================== -->
         <dependency>
             <groupId>commons-io</groupId>
@@ -135,7 +126,7 @@
         </dependency>
 
         <!-- ========================================== -->
-        <!-- 7. SPRING FRAMEWORK VE TEST                -->
+        <!-- 6. SPRING FRAMEWORK VE TEST                -->
         <!-- ========================================== -->
         <dependency>
             <groupId>org.springframework</groupId>
@@ -161,11 +152,6 @@
         <dependency>
             <groupId>org.apache.logging.log4j</groupId>
             <artifactId>log4j-api</artifactId>
-            <version>2.22.0</version>
-        </dependency>
-        <dependency>
-            <groupId>org.apache.logging.log4j</groupId>
-            <artifactId>log4j-core</artifactId>
             <version>2.22.0</version>
         </dependency>
         <dependency>
@@ -198,17 +184,10 @@
         </dependency>
 
         <dependency>
-            <groupId>com.opencsv</groupId>
-            <artifactId>opencsv</artifactId>
-            <version>5.8</version>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+            <version>2.17.2</version>
         </dependency>
-
-             <dependency>
-    <groupId>com.fasterxml.jackson.core</groupId>
-    <artifactId>jackson-databind</artifactId>
-    <version>2.17.2</version>
-</dependency>
-
     </dependencies>
 
     <build>
@@ -221,21 +200,20 @@
                     <source>${maven.compiler.source}</source>
                     <target>${maven.compiler.target}</target>
                     <!--
-                        Buradaki <compilerArgs>--enable-preview</compilerArgs> kaldırıldı.
-                        İki sebep: (1) yazım hatalıydı — bu eleman <arg> alt elemanları
-                        bekler, düz metin dikkate alınmaz; (2) 22'ye çıkıldığı için artık
-                        gereksiz. Preview ile derlenen sınıflar ÇALIŞTIRIRKEN de
-                        --enable-preview ister; iş akışı ise "mvn exec:java" komutunu bu
-                        bayrak olmadan çağırıyor, yani preview yolu zaten kırılgandı.
+                        Buradaki compilerArgs enable-preview arg-i kaldırıldı.
+                        İki sebep: (1) yazım hatalıydı; (2) 22'ye çıkıldığı için artık
+                        gereksiz. Preview ile derlenen sınıflar çalıştırırken de
+                        enable-preview ister; iş akışı ise mvn exec:java komutunu bu
+                        bayrak olmadan çağırıyor.
                     -->
                 </configuration>
             </plugin>
 
-                 <plugin>
-    <groupId>org.codehaus.mojo</groupId>
-    <artifactId>exec-maven-plugin</artifactId>
-    <version>3.5.0</version>
-</plugin>
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>exec-maven-plugin</artifactId>
+                <version>3.5.0</version>
+            </plugin>
 
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
