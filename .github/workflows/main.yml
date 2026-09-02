@@ -2,8 +2,8 @@ name: Daily All Analyzers
 
 on:
   schedule:
-    # 9 saat geri çekildi: eski 06:30 UTC → 21:30 UTC (bir önceki gün).
-    - cron: '30 19 * * *'
+    # Hər gün Bakı vaxtı ilə 06:00 (02:00 UTC)
+    - cron: '0 2 * * *'
   workflow_dispatch:
 
 jobs:
