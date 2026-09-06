@@ -30,13 +30,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Java 22
+      - name: Set up Java 21
         uses: actions/setup-java@v4
         with:
-          # 22, pom.xml'deki maven.compiler.source/target ile aynı olmalı: kod
-          # adsız değişken (catch (Exception _)) kullanıyor, bu Java 22'de kesinleşti.
-          # JDK 21 ile derleme "release 22" isteğini karşılayamaz.
-          java-version: '22'
+          # 21, pom.xml'deki maven.compiler.release ile aynı olmalı. Adsız değişken
+          # (catch (Exception _)) kullanımları "ignored" olarak değiştirildiği için
+          # artık Java 22'ye gerek yok.
+          java-version: '21'
           distribution: 'temurin'
           cache: maven
 

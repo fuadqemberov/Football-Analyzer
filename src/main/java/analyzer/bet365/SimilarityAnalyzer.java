@@ -108,16 +108,16 @@ public class SimilarityAnalyzer {
                 if (ht != null && ht.contains("-")) {
                     String[] p = ht.split("-");
                     if (p.length == 2) {
-                        try { rec.htHome = Integer.parseInt(p[0].trim()); } catch (Exception _) {}
-                        try { rec.htAway = Integer.parseInt(p[1].trim()); } catch (Exception _) {}
+                        try { rec.htHome = Integer.parseInt(p[0].trim()); } catch (Exception ignored) {}
+                        try { rec.htAway = Integer.parseInt(p[1].trim()); } catch (Exception ignored) {}
                     }
                 }
                 String ft = rs.getString("ft_ms");
                 if (ft != null && ft.contains("-")) {
                     String[] p = ft.split("-");
                     if (p.length == 2) {
-                        try { rec.ftHome = Integer.parseInt(p[0].trim()); } catch (Exception _) {}
-                        try { rec.ftAway = Integer.parseInt(p[1].trim()); } catch (Exception _) {}
+                        try { rec.ftHome = Integer.parseInt(p[0].trim()); } catch (Exception ignored) {}
+                        try { rec.ftAway = Integer.parseInt(p[1].trim()); } catch (Exception ignored) {}
                     }
                 }
 
@@ -133,7 +133,7 @@ public class SimilarityAnalyzer {
 
     private double parseOdds(String s) {
         if (s == null || s.isEmpty() || s.equals("-")) return 0.0;
-        try { return Double.parseDouble(s.replace(',', '.')); } catch (Exception _) { return 0.0; }
+        try { return Double.parseDouble(s.replace(',', '.')); } catch (Exception ignored) { return 0.0; }
     }
 
     // ═══════════════════════════════════════════════════════════════════════

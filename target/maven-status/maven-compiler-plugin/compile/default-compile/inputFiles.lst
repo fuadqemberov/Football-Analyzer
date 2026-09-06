@@ -8,6 +8,7 @@ D:\Workspace\Football-Analyzer\src\main\java\analyzer\extras\TurboAzScraper.java
 D:\Workspace\Football-Analyzer\src\main\java\analyzer\mackolik\patternfinder\OnlyLeagueScraper.java
 D:\Workspace\Football-Analyzer\src\main\java\analyzer\mackolik\multiversion\AdvancedScoreScraper.java
 D:\Workspace\Football-Analyzer\src\main\java\analyzer\flashscore\MatchData.java
+D:\Workspace\Football-Analyzer\src\main\java\analyzer\mackolik\triplepattern\SezonDenklemiAnalyzer.java
 D:\Workspace\Football-Analyzer\src\main\java\analyzer\bet365\Bet365RuleSearch.java
 D:\Workspace\Football-Analyzer\src\main\java\analyzer\flashscore\MatchDetailScraper.java
 D:\Workspace\Football-Analyzer\src\main\java\analyzer\bet365\Bet365FilterFinderOptimized.java
@@ -19,11 +20,13 @@ D:\Workspace\Football-Analyzer\src\main\java\analyzer\mackolik\patternfinder\Mat
 D:\Workspace\Football-Analyzer\src\main\java\analyzer\util\TeamIdsFetcher.java
 D:\Workspace\Football-Analyzer\src\main\java\analyzer\bet365\Bet365DailyAutoAnalyzer.java
 D:\Workspace\Football-Analyzer\src\main\java\analyzer\mackolik\triplepattern\LeagueWidePatternAnalyzer.java
+D:\Workspace\Football-Analyzer\src\main\java\analyzer\util\AyniEslesme.java
 D:\Workspace\Football-Analyzer\src\main\java\analyzer\extras\instagram.java
 D:\Workspace\Football-Analyzer\src\main\java\analyzer\mackolik\triplepattern\LeagueSeasonFetcher.java
 D:\Workspace\Football-Analyzer\src\main\java\analyzer\mackolik\triplepattern\TeamNameMatchResult.java
 D:\Workspace\Football-Analyzer\src\main\java\analyzer\bet365\Bet365HundredMethodAnalyzer.java
 D:\Workspace\Football-Analyzer\src\main\java\analyzer\bet365\Bet365BttsOverUnderConsensusAnalyzer.java
+D:\Workspace\Football-Analyzer\src\main\java\analyzer\bet365\Bet365HundredTwinAlgorithmsAnalyzer.java
 D:\Workspace\Football-Analyzer\src\main\java\analyzer\mackolik\triplepattern\HttpTeamNamePatternFetcher.java
 D:\Workspace\Football-Analyzer\src\main\java\analyzer\flashscore\AppLauncher.java
 D:\Workspace\Football-Analyzer\src\main\java\analyzer\mackolik\triplepattern\ThreeMatchPattern.java
@@ -36,6 +39,7 @@ D:\Workspace\Football-Analyzer\src\main\java\analyzer\mackolik\multiversion\Mult
 D:\Workspace\Football-Analyzer\src\main\java\analyzer\bet365\Bet365UltraConsensusAnalyzer.java
 D:\Workspace\Football-Analyzer\src\main\java\analyzer\mackolik\triplepattern\LeagueMatch.java
 D:\Workspace\Football-Analyzer\src\main\java\analyzer\mackolik\triplepattern\TeamNamePattern.java
+D:\Workspace\Football-Analyzer\src\main\java\analyzer\allinonetactics\AllInOneTactics.java
 D:\Workspace\Football-Analyzer\src\main\java\analyzer\extras\FlashscoreHTFT.java
 D:\Workspace\Football-Analyzer\src\main\java\analyzer\flashscore\MainAppRunner.java
 D:\Workspace\Football-Analyzer\src\main\java\analyzer\mackolik\before_after_pattern\MackolikHalfTimePatternFinder.java
@@ -51,6 +55,7 @@ D:\Workspace\Football-Analyzer\src\main\java\analyzer\flashscore\MatchListScrape
 D:\Workspace\Football-Analyzer\src\main\java\analyzer\mackolik\dongu\HaftaDonguAnalyzer.java
 D:\Workspace\Football-Analyzer\src\main\java\analyzer\mackolik\triplepattern\HttpTeamNamePatternAnalyzer.java
 D:\Workspace\Football-Analyzer\src\main\java\analyzer\mackolik\triplepattern\LeagueWidePatternMatcher.java
+D:\Workspace\Football-Analyzer\src\main\java\analyzer\oranavcisi\OranAvcisiAnalyzer.java
 D:\Workspace\Football-Analyzer\src\main\java\analyzer\nowgoal\NowGoalHTFT.java
 D:\Workspace\Football-Analyzer\src\main\java\analyzer\bet365\Bet365HundredConsensusAnalyzer.java
 D:\Workspace\Football-Analyzer\src\main\java\analyzer\bet365\ImportCsvToPostgres.java

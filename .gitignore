@@ -4,6 +4,9 @@
 # Log file
 *.log
 
+# Bet365HundredTwinAlgorithmsAnalyzer çıxış logları
+twin_100_algo_*.txt
+
 # BlueJ files
 *.ctxt
 

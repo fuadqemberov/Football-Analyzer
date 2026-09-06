@@ -1,17 +1,12 @@
 package analyzer.mackolik.triplepattern;
 
-import org.apache.http.client.config.RequestConfig;
-import org.apache.http.client.methods.CloseableHttpResponse;
-import org.apache.http.client.methods.HttpGet;
-import org.apache.http.impl.client.CloseableHttpClient;
-import org.apache.http.util.EntityUtils;
-import org.jsoup.Jsoup;
+import analyzer.util.MackolikHttpFetcher;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
@@ -32,12 +27,39 @@ import java.util.Map;
  *     exact → contains → shared token → prefix abbreviation.
  *     Fixes: "S.Bratislava" vs "Slovan Bratislava", "Atl." vs "Atletico", etc.
  *  4. collectLeagueRows() — robust fallback when competition CSS class is absent.
+ *
+ * FIX SUMMARY (v4) — ağ katmanı:
+ *  5. Sayfa çekme işi {@link MackolikHttpFetcher}'a devredildi. Eski ham
+ *     HttpClient kullanımı retry/throttle içermiyordu; 200 olmayan cevaplarda
+ *     gövde tüketilmediği için bağlantılar havuza dönmüyordu. Sonuç:
+ *     "Cannot fetch current season" ve "Read timed out" hataları yüzlerce takımda.
+ *  6. Sayfa indirilemediğinde artık RuntimeException fırlatılmıyor; null dönülüyor
+ *     (çağıran taraf bunu "veri yok" olarak ele alır, stack trace çöpü olmaz).
+ *  7. Geçmiş (değişmez) sezon sayfaları disk önbelleğine uygun olarak isteniyor.
  */
 public class HttpTeamNamePatternFetcher {
 
     private static final Logger log = LoggerFactory.getLogger(HttpTeamNamePatternFetcher.class);
     private static final String BASE_URL       = "https://arsiv.mackolik.com/Team/Default.aspx?id=%d&season=%s";
-    private static final String CURRENT_SEASON = "2025/2026";
+
+    /** Yeni futbol sezonunun başladığı ay (Temmuz). Bu aydan itibaren yıl/(yıl+1) sezonundayız. */
+    private static final int SEASON_START_MONTH = 7;
+
+    /**
+     * Güncel sezonun başlangıç yılı sistem tarihinden hesaplanır (ör. Temmuz 2026 → 2026).
+     * Sabit yazılmaz: eskiden "2025/2026" gömülüydü ve sezon dönünce analizör geçen sezonun
+     * fikstürüne bakıp oynanmış maçları "yaklaşan maç" sanıyordu.
+     */
+    static final int CURRENT_SEASON_START_YEAR = computeCurrentSeasonStartYear();
+
+    /** Güncel sezon "yyyy/yyyy" formatında (ör. "2026/2027"). */
+    private static final String CURRENT_SEASON =
+            CURRENT_SEASON_START_YEAR + "/" + (CURRENT_SEASON_START_YEAR + 1);
+
+    private static int computeCurrentSeasonStartYear() {
+        LocalDate now = LocalDate.now();
+        return now.getMonthValue() >= SEASON_START_MONTH ? now.getYear() : now.getYear() - 1;
+    }
 
     // -----------------------------------------------------------------------
     // Public API
@@ -45,14 +67,17 @@ public class HttpTeamNamePatternFetcher {
 
     /**
      * Step 1: Build the current-season TeamNamePattern for a team.
+     *
+     * @return desen; sayfa indirilemediyse ya da başlamamış maç yoksa <b>null</b>
      */
-    public static TeamNamePattern buildCurrentPattern(CloseableHttpClient http, int teamId) throws IOException {
+    public static TeamNamePattern buildCurrentPattern(MackolikHttpFetcher http, int teamId) {
 
-        System.out.println("       [ID:" + teamId + "] Mevcut sezon (2025/2026) fetch ediliyor...");
-        String html = fetchHtml(http, String.format(BASE_URL, teamId, CURRENT_SEASON));
-        if (html == null) throw new RuntimeException("Cannot fetch current season for team " + teamId);
-
-        Document doc = Jsoup.parse(html);
+        // Güncel sezon gün içinde değişir → asla önbelleklenmez.
+        Document doc = http.fetchDocument(String.format(BASE_URL, teamId, CURRENT_SEASON), false);
+        if (doc == null) {
+            log.warn("Cannot fetch current season for team {}", teamId);
+            return null;
+        }
 
         Element tableBody = doc.selectFirst("#tblFixture > tbody");
         if (tableBody == null) {
@@ -60,7 +85,13 @@ public class HttpTeamNamePatternFetcher {
             return null;
         }
 
-        List<Element> rows = collectLeagueRows(tableBody);
+        // ERTELENMİŞ/GEÇERSİZ SATIRLAR ATILIR. Mackolik ertelenen maçı "P - P"
+        // skoruyla gösteriyor; bu sayıya çevrilemediği için eskiden "başlamamış maç"
+        // sanılıyor ve aylar önceki ertelenmiş bir maç "yaklaşan maç" seçiliyordu.
+        List<Element> rows = new ArrayList<>();
+        for (Element row : collectLeagueRows(tableBody)) {
+            if (rowState(row) != RowState.INVALID) rows.add(row);
+        }
 
         // ── Detect team name FROM THE ROWS (not the page title) ─────────────
         // The page title may use the full official name ("Polonia Warszawa U19")
@@ -69,44 +100,20 @@ public class HttpTeamNamePatternFetcher {
         // appears in every match, so it will have the highest frequency.
         String titleFallback = extractTeamName(doc);
         String teamName = detectTeamNameFromRows(rows, titleFallback);
-        System.out.println("       [ID:" + teamId + "] Takım adı (tablodan): '" + teamName + "'");
+        log.debug("Team {} name from rows: '{}'", teamId, teamName);
 
         // ── Find first unstarted match ───────────────────────────────────────
+        // Tarihi geçmişte kalan "oynanmamış" satırlar da atlanır: fikstürde
+        // kalmış artık satırlar yaklaşan maç sayılmamalı.
         int unstartedIdx = -1;
         for (int i = 0; i < rows.size(); i++) {
-            Element row     = rows.get(i);
-            Element scoreEl = row.selectFirst("td:nth-child(5) b a");
-
-            if (scoreEl == null) {
-                String home = extractCell(row, "td:nth-child(3)");
-                String away = extractCell(row, "td:nth-child(7)");
-                if (home != null && !home.isEmpty() && away != null && !away.isEmpty()) {
-                    unstartedIdx = i;
-                    break;
-                }
-                continue;
-            }
-
-            String score      = scoreEl.text().trim();
-            String normalized = score.replaceAll("\\s*-\\s*", "-");
-            String[] parts    = normalized.split("-");
-
-            if (score.isEmpty() || score.equalsIgnoreCase("v") || parts.length != 2) {
-                unstartedIdx = i;
-                break;
-            }
-            try {
-                Integer.parseInt(parts[0].trim());
-                Integer.parseInt(parts[1].trim());
-                // valid score → played, continue
-            } catch (NumberFormatException e) {
-                unstartedIdx = i;
-                break;
-            }
+            if (rowState(rows.get(i)) != RowState.SCHEDULED) continue;
+            if (isPastDate(extractCell(rows.get(i), "td:nth-child(1)"))) continue;
+            unstartedIdx = i;
+            break;
         }
 
         if (unstartedIdx < 0) {
-            System.out.println("       ⚠️  Başlamamış maç bulunamadı");
             log.warn("No unstarted match found for team {}", teamId);
             return null;
         }
@@ -150,17 +157,19 @@ public class HttpTeamNamePatternFetcher {
      *         Returns all matches that satisfy HT/FT = 1/2 or 2/1.
      */
     public static List<TeamNameMatchResult> searchHistoricalSeason(
-            CloseableHttpClient http,
+            MackolikHttpFetcher http,
             TeamNamePattern pattern,
             String seasonYear,
-            int teamId) throws IOException {
+            int teamId) {
 
         List<TeamNameMatchResult> results = new ArrayList<>();
-        String html = fetchHtml(http, String.format(BASE_URL, teamId, seasonYear));
-        if (html == null) return results;
 
-        Document doc   = Jsoup.parse(html);
-        Element  tbody = doc.selectFirst("#tblFixture > tbody");
+        // Geçmiş sezon verisi değişmez → disk önbelleğine uygun.
+        boolean cacheable = !CURRENT_SEASON.equals(seasonYear);
+        Document doc = http.fetchDocument(String.format(BASE_URL, teamId, seasonYear), cacheable);
+        if (doc == null) return results;
+
+        Element tbody = doc.selectFirst("#tblFixture > tbody");
         if (tbody == null) return results;
 
         List<Element> rows = collectLeagueRows(tbody);
@@ -202,8 +211,12 @@ public class HttpTeamNamePatternFetcher {
                     TeamNameMatchResult res = new TeamNameMatchResult(
                             teamId, pattern.teamName, seasonYear,
                             combo.label,
-                            subList(histPrev, combo.prevCount),
-                            subList(histNext, combo.nextCount),
+                            // ÖNCEKİ rakipler maçtan geriye doğru sayılır → SON n tanesi.
+                            // SONRAKİ rakipler maçtan ileriye doğru sayılır → İLK n tanesi.
+                            // (Eskiden ikisi de tailList idi; karşılaştırma histNext[0..n) ile
+                            //  yapılırken ekrana histNext'in SON n'i basılıyordu.)
+                            tailList(histPrev, combo.prevCount),
+                            headList(histNext, combo.nextCount),
                             target.homeTeam, target.awayTeam,
                             target.ftScore, target.htScore,
                             htFt,
@@ -218,20 +231,19 @@ public class HttpTeamNamePatternFetcher {
 
     // -----------------------------------------------------------------------
     // Combination definitions
+    //
+    // YALNIZCA 3'LÜ ARAMA: bir taraf kullanılacaksa tam 3 maçla kullanılır.
+    // PREV1/PREV2/NEXT1/NEXT2 gibi zayıf kombinasyonlar kaldırıldı — eldeki
+    // veriyi eksik kullanıp yanıltıcı sinyal üretiyorlardı.
+    //
+    // Sonuç olarak 3 önceki rakibi olmayan bir takım PREV tarafından, 3 sonraki
+    // rakibi olmayan da NEXT tarafından eşleşemez.
     // -----------------------------------------------------------------------
 
     private static final List<CombinationDef> COMBINATIONS = Arrays.asList(
             new CombinationDef("PREV3",       3, 0),
             new CombinationDef("NEXT3",       0, 3),
-            new CombinationDef("PREV3+NEXT1", 3, 1),
-            new CombinationDef("PREV3+NEXT2", 3, 2),
-            new CombinationDef("PREV3+NEXT3", 3, 3),
-            new CombinationDef("PREV2+NEXT1", 2, 1),
-            new CombinationDef("PREV2+NEXT2", 2, 2),
-            new CombinationDef("PREV2+NEXT3", 2, 3),
-            new CombinationDef("PREV1+NEXT1", 1, 1),
-            new CombinationDef("PREV1+NEXT2", 1, 2),
-            new CombinationDef("PREV1+NEXT3", 1, 3)
+            new CombinationDef("PREV3+NEXT3", 3, 3)
     );
 
     private static class CombinationDef {
@@ -249,6 +261,13 @@ public class HttpTeamNamePatternFetcher {
                         List<String> histPrev, List<String> histNext) {
             if (histPrev.size() < prevCount || histNext.size() < nextCount) return false;
             if (curPrev.size()  < prevCount || curNext.size()  < nextCount) return false;
+
+            // ELDEKİ VERİ EKSİK KULLANILAMAZ: bir taraf kullanılıyorsa TAMAMI kullanılmalı.
+            // Aksi halde 2 önceki rakip varken PREV1 ile eşleşip "1 maçla bulundu" gibi
+            // zayıf/yanıltıcı sinyal üretiliyordu. Taraf hiç kullanılmıyorsa (count=0)
+            // kısıt yok — NEXT3 gibi tek taraflı kombinasyonlar geçerli kalır.
+            if (prevCount > 0 && prevCount != curPrev.size()) return false;
+            if (nextCount > 0 && nextCount != curNext.size()) return false;
 
             for (int i = 0; i < prevCount; i++) {
                 String cur  = curPrev.get(curPrev.size()   - prevCount + i);
@@ -375,6 +394,66 @@ public class HttpTeamNamePatternFetcher {
         return titleFallback;
     }
 
+    /** Bir fikstür satırının durumu. */
+    private enum RowState {
+        /** Geçerli sayısal skor var → oynanmış. */
+        PLAYED,
+        /** Skor "v" ya da boş → henüz oynanmamış, yaklaşan maç adayı. */
+        SCHEDULED,
+        /** Ertelendi ("P - P"), iptal, ya da takım adı okunamayan satır. */
+        INVALID
+    }
+
+    /**
+     * Satırın durumunu skor hücresinden belirler.
+     *
+     * Kritik nokta: ertelenen maç Mackolik'te "P - P" skoruyla görünür. Eski kod
+     * bunu sayıya çeviremeyince "başlamamış maç" sayıyordu; sonuçta aylar önce
+     * ertelenmiş bir maç güncel desenin hedefi oluyordu. Artık INVALID sayılıp
+     * tamamen eleniyor — hem hedef seçiminden hem de önceki/sonraki rakip
+     * listelerinden. (Geçmiş sezon tarafında zaten yalnızca sayısal skorlu
+     * satırlar okunuyor, dolayısıyla iki taraf tutarlı.)
+     */
+    private static RowState rowState(Element row) {
+        String home = extractCell(row, "td:nth-child(3)");
+        String away = extractCell(row, "td:nth-child(7)");
+        if (home == null || home.isEmpty() || away == null || away.isEmpty()) return RowState.INVALID;
+
+        Element scoreEl = row.selectFirst("td:nth-child(5) b a");
+        if (scoreEl == null) return RowState.SCHEDULED;
+
+        String score = scoreEl.text().trim();
+        if (score.isEmpty() || score.equalsIgnoreCase("v")) return RowState.SCHEDULED;
+
+        String[] parts = score.replaceAll("\\s*-\\s*", "-").split("-");
+        if (parts.length != 2) return RowState.INVALID;
+        try {
+            Integer.parseInt(parts[0].trim());
+            Integer.parseInt(parts[1].trim());
+            return RowState.PLAYED;
+        } catch (NumberFormatException e) {
+            return RowState.INVALID;   // "P - P" → ertelendi
+        }
+    }
+
+    /**
+     * Tarih hücresi ("6.09.2026") bugünden önce mi?
+     * Ayrıştırılamazsa <b>false</b> döner — şüpheli durumda satırı elemeyiz.
+     */
+    private static boolean isPastDate(String text) {
+        if (text == null) return false;
+        String[] parts = text.trim().split("\\.");
+        if (parts.length != 3) return false;
+        try {
+            int day   = Integer.parseInt(parts[0].trim());
+            int month = Integer.parseInt(parts[1].trim());
+            int year  = Integer.parseInt(parts[2].trim());
+            return LocalDate.of(year, month, day).isBefore(LocalDate.now());
+        } catch (RuntimeException e) {
+            return false;
+        }
+    }
+
     private static List<Element> collectLeagueRows(Element tableBody) {
         List<Element> rows = new ArrayList<>();
         boolean inFirstLeague = false;
@@ -426,27 +505,6 @@ public class HttpTeamNamePatternFetcher {
         return "Unknown";
     }
 
-    private static String fetchHtml(CloseableHttpClient http, String url) throws IOException {
-        HttpGet req = new HttpGet(url);
-        req.addHeader("User-Agent",
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/91.0 Safari/537.36");
-
-        RequestConfig config = RequestConfig.custom()
-                .setConnectTimeout(10000)
-                .setConnectionRequestTimeout(10000)
-                .setSocketTimeout(15000)
-                .build();
-        req.setConfig(config);
-
-        log.debug("GET {}", url);
-        try (CloseableHttpResponse resp = http.execute(req)) {
-            int code = resp.getStatusLine().getStatusCode();
-            if (code == 200) return EntityUtils.toString(resp.getEntity());
-            log.warn("HTTP {} for {}", code, url);
-            return null;
-        }
-    }
-
     // -----------------------------------------------------------------------
     // Team name matching
     // -----------------------------------------------------------------------
@@ -472,11 +530,27 @@ public class HttpTeamNamePatternFetcher {
     /**
      * Returns true if teamA and teamB refer to the same club.
      *
-     * Strategy:
-     *  1. Exact normalized match
-     *  2. One normalized string contains the other
-     *  3. Any token of A (len>=3) exactly matches any token of B
-     *  4. Any token of A is a prefix of any token of B (len>=4), or vice versa
+     * ESKİ KURAL HATALIYDI: "A'nın herhangi bir kelimesi B'nin herhangi bir
+     * kelimesine eşitse aynı takım" deniyordu. Bu yüzden ortak jenerik kelime
+     * taşıyan FARKLI kulüpler eşleşiyordu:
+     *     Real Madrid = Real Betis = Real Sociedad   ("Real")
+     *     Sporting = Sporting Gijon                  ("Sporting")
+     *
+     * YENİ KURAL — kelime dizisi hizalaması:
+     *  1. Normalize edilmiş adlar birebir aynı.
+     *  2. Kelime sayısı eşitse HER pozisyon uyuşmalı. Kısaltma yalnızca İLK
+     *     kelimede ön ek olarak kabul edilir ("S.Bratislava" = "Slovan Bratislava",
+     *     "Atl.Madrid" = "Atletico Madrid", "R.Sociedad" = "Real Sociedad").
+     *     Diğer pozisyonlar birebir eşit olmalı — böylece "Sporting B" ile
+     *     "Sporting Braga" ya da "Real Madrid" ile "Real Betis" eşleşmez.
+     *  3. Kelime sayısı farklıysa EŞLEŞMEZ. "Kısa ad uzun adın içinde geçiyorsa
+     *     aynı takımdır" kuralı denendi ve KALDIRILDI: aynı ligde
+     *     "Zalgiris" (Vilnius) ile "Kauno Zalgiris" FARKLI kulüpler, ama
+     *     yapı olarak "Verona" / "Hellas Verona" ile birebir aynı. İkisini
+     *     yalnızca isimden ayırmak mümkün değil; yanlış sinyal üretmektense
+     *     sinyal kaçırmayı tercih ediyoruz.
+     *     (Boşluk/noktalama farkları zaten 1. kuralda normalize ediliyor:
+     *      "AC Milan" = "ACMilan".)
      */
     static boolean teamsMatch(String teamA, String teamB) {
         if (teamA == null || teamB == null) return false;
@@ -484,44 +558,88 @@ public class HttpTeamNamePatternFetcher {
         String b = normalize(teamB);
         if (a.isEmpty() || b.isEmpty()) return false;
 
-        // 1. Exact
+        // 1. Birebir aynı
         if (a.equals(b)) return true;
 
-        // 2. One contains the other
-        if (a.contains(b) || b.contains(a)) return true;
-
-        // 3 & 4. Token-level matching
         List<String> tokensA = tokens(teamA);
         List<String> tokensB = tokens(teamB);
+        if (tokensA.isEmpty() || tokensB.isEmpty()) return false;
 
-        for (String tA : tokensA) {
-            String nA = normalize(tA);
-            if (nA.length() < 3) continue;
-            for (String tB : tokensB) {
-                String nB = normalize(tB);
-                if (nB.length() < 3) continue;
-                if (nA.equals(nB)) return true;
-                if (nA.length() >= 4 && nB.startsWith(nA)) return true;
-                if (nB.length() >= 4 && nA.startsWith(nB)) return true;
-            }
-        }
+        // 1b. Takım niteleyicileri (II, B, U19, (K) …) birebir aynı olmalı:
+        //     "Barcelona II" ile "Barcelona", "Arsenal (K)" ile "Arsenal" AYNI KULÜP DEĞİLDİR.
+        if (!squadMarkers(tokensA).equals(squadMarkers(tokensB))) return false;
 
-        return false;
+        // 2. Aynı kelime sayısı → pozisyon pozisyon hizalama
+        // 3. Farklı kelime sayısı → eşleşmez (bkz. javadoc)
+        return tokensA.size() == tokensB.size() && alignsPositionally(tokensA, tokensB);
     }
 
-    /** Splits a name into whitespace-delimited tokens, stripping punctuation. */
+    /**
+     * Yedek takım / yaş grubu / kadın takımı niteleyicileri. Bunlar kulübü
+     * değil TAKIMI belirler; biri varken diğerinde yoksa aynı takım değildir.
+     */
+    private static final java.util.Set<String> SQUAD_MARKERS = new java.util.HashSet<>(Arrays.asList(
+            "ii", "iii", "b", "c", "k",
+            "u17", "u18", "u19", "u20", "u21", "u23",
+            "res", "reserve", "reserves", "akademi", "akademia", "academy",
+            "amator", "amateur", "jr", "junior"));
+
+    /**
+     * Addaki niteleyici kelimeler ("Barcelona II" → {ii}, "Barcelona" → {}).
+     *
+     * İLK kelime hiçbir zaman niteleyici sayılmaz: niteleyici daima kulüp adından
+     * SONRA gelir ("Arsenal (K)", "Barcelona II"), ilk kelime ise kısaltılmış bir
+     * baş harf olabilir ("K.Zalgiris" → K, "B. Yeniçarşı" → B).
+     */
+    private static java.util.Set<String> squadMarkers(List<String> tokenList) {
+        java.util.Set<String> found = new java.util.HashSet<>();
+        for (int i = 1; i < tokenList.size(); i++) {
+            String n = normalize(tokenList.get(i));
+            if (SQUAD_MARKERS.contains(n)) found.add(n);
+        }
+        return found;
+    }
+
+    /**
+     * Eşit uzunluktaki iki kelime dizisi aynı kulübü mü gösteriyor?
+     * İlk kelimede kısaltma (ön ek) serbest, diğer kelimeler birebir eşit olmalı.
+     */
+    private static boolean alignsPositionally(List<String> tokensA, List<String> tokensB) {
+        for (int i = 0; i < tokensA.size(); i++) {
+            String x = normalize(tokensA.get(i));
+            String y = normalize(tokensB.get(i));
+            if (x.isEmpty() || y.isEmpty()) return false;
+            if (x.equals(y)) continue;
+            // Kısaltma yalnızca ilk kelimede: "S." → "Slovan", "Atl." → "Atletico"
+            if (i == 0 && (x.startsWith(y) || y.startsWith(x))) continue;
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * Adı kelimelere böler. Boşluğun yanı sıra NOKTALAMA da ayırıcıdır:
+     * "P.Warszawa U19" → [P, Warszawa, U19]. Nokta ayırıcı sayılmazsa
+     * "PWarszawa" tek kelime olur ve "Polonia Warszawa U19" ile hizalanamaz.
+     */
     private static List<String> tokens(String name) {
         List<String> result = new ArrayList<>();
         if (name == null) return result;
-        for (String part : name.trim().split("\\s+")) {
-            String clean = part.replaceAll("[^a-zA-Z0-9]", "");
-            if (!clean.isEmpty()) result.add(clean);
+        for (String part : name.trim().split("[^\\p{L}\\p{N}]+")) {
+            if (!part.isEmpty()) result.add(part);
         }
         return result;
     }
 
-    private static List<String> subList(List<String> list, int count) {
+    /** Listenin SON {@code count} elemanı — önceki rakipler için. */
+    private static List<String> tailList(List<String> list, int count) {
         int from = Math.max(0, list.size() - count);
         return new ArrayList<>(list.subList(from, list.size()));
+    }
+
+    /** Listenin İLK {@code count} elemanı — sonraki rakipler için. */
+    private static List<String> headList(List<String> list, int count) {
+        int to = Math.min(list.size(), count);
+        return new ArrayList<>(list.subList(0, to));
     }
 }

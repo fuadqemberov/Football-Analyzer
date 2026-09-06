@@ -319,7 +319,7 @@ public class Bet365BttsOverUnderConsensusAnalyzer {
 
             page.navigate("https://www.flashscore.co.uk/football/");
             try { page.locator("#onetrust-accept-btn-handler")
-                    .click(new Locator.ClickOptions().setTimeout(3000)); } catch (Exception _) {}
+                    .click(new Locator.ClickOptions().setTimeout(3000)); } catch (Exception ignored) {}
             page.waitForSelector("div[id^='g_1_'].event__match",
                     new Page.WaitForSelectorOptions().setTimeout(15000));
 
@@ -335,7 +335,7 @@ public class Bet365BttsOverUnderConsensusAnalyzer {
                     mi.away = row.locator(".event__awayParticipant").innerText().trim();
                     mi.date = LocalDate.now().toString();
                     matches.add(mi);
-                } catch (Exception _) {}
+                } catch (Exception ignored) {}
             }
         } catch (Exception e) {
             System.err.println("❌ Scraper hatası: " + e.getMessage());
@@ -344,7 +344,7 @@ public class Bet365BttsOverUnderConsensusAnalyzer {
         ExecutorService pool = Executors.newFixedThreadPool(16);
         List<Future<?>> futures = new ArrayList<>();
         for (MatchInfo mi : matches) futures.add(pool.submit(() -> fetchOddsForMatch(mi)));
-        for (Future<?> f : futures) { try { f.get(); } catch (Exception _) {} }
+        for (Future<?> f : futures) { try { f.get(); } catch (Exception ignored) {} }
         pool.shutdown();
         System.out.println("✅ " + matches.size() + " maçın oranları çekildi.\n");
         return matches;
@@ -359,7 +359,7 @@ public class Bet365BttsOverUnderConsensusAnalyzer {
                     .header("User-Agent", "Mozilla/5.0").GET().build();
             HttpResponse<String> resp = HTTP_CLIENT.send(req, HttpResponse.BodyHandlers.ofString());
             if (resp.statusCode() == 200 && resp.body().startsWith("{")) parseOdds(mi, resp.body());
-        } catch (Exception _) {}
+        } catch (Exception ignored) {}
     }
 
     private void parseOdds(MatchInfo mi, String jsonBody) {
@@ -482,7 +482,7 @@ public class Bet365BttsOverUnderConsensusAnalyzer {
         try {
             if (!item.isNull("opening")) return item.getString("opening");
             if (!item.isNull("value")) return item.getString("value");
-        } catch (Exception _) {}
+        } catch (Exception ignored) {}
         return "-";
     }
 
@@ -494,7 +494,7 @@ public class Bet365BttsOverUnderConsensusAnalyzer {
             if (raw == null || raw.isEmpty() || "-".equals(raw)) continue;
             float value;
             try { value = Float.parseFloat(raw.replace(',', '.')); }
-            catch (NumberFormatException _) { continue; }
+            catch (NumberFormatException ignored) { continue; }
 
             Map<Integer, int[]> byVal = colIndex.get(col.sqlColumn);
             if (byVal == null) continue;
@@ -652,12 +652,12 @@ public class Bet365BttsOverUnderConsensusAnalyzer {
         if (p.length != 2) return new int[]{-1, -1};
         try {
             return new int[]{Integer.parseInt(p[0].trim()), Integer.parseInt(p[1].trim())};
-        } catch (NumberFormatException _) { return new int[]{-1, -1}; }
+        } catch (NumberFormatException ignored) { return new int[]{-1, -1}; }
     }
 
     public static void main(String[] args) {
         Bet365BttsOverUnderConsensusAnalyzer analyzer = new Bet365BttsOverUnderConsensusAnalyzer();
         analyzer.run();
-        try { analyzer.conn.close(); } catch (Exception _) {}
+        try { analyzer.conn.close(); } catch (Exception ignored) {}
     }
 }

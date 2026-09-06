@@ -207,7 +207,7 @@ public class AllInOneTactics {
         tactics.add(teamTactic("YALNIZ LİG QƏLİBİ",
                 (ctx, id) -> OnlyLeagueVirtualThreadedAnalyzer.analyzeSingleTeam(ctx.apache, id)));
         tactics.add(teamTactic("KOMANDA ADI QƏLİBİ",
-                (ctx, id) -> HttpTeamNamePatternAnalyzer.analyzeSingleTeam(ctx.apache, id)));
+                (ctx, id) -> HttpTeamNamePatternAnalyzer.analyzeSingleTeam(ctx.fetcher, id)));
         tactics.add(teamTactic("ÜÇLÜ MAÇ QƏLİBİ",
                 (ctx, id) -> HttpTripleMatchPatternAnalyzer.analyzeSingleTeam(ctx.apache, id)));
 

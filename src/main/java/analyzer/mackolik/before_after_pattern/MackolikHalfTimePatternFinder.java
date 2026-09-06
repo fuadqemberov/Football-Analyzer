@@ -39,7 +39,7 @@ public class MackolikHalfTimePatternFinder {
 
     private static final Semaphore semaphore = new Semaphore(20);
 
-    static void main(String[] args) throws Exception {
+    public static void main(String[] args) throws Exception {
         long startTime = System.currentTimeMillis();
         System.out.println("🚀 Sistem başlatıldı");
         System.out.println("📊 Paralel istek limiti: 20\n");
