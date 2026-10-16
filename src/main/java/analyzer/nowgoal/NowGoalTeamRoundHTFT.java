@@ -3,27 +3,13 @@ package analyzer.nowgoal;
 import analyzer.util.AyniEslesme;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.github.bonigarcia.wdm.WebDriverManager;
-import org.openqa.selenium.By;
-import org.openqa.selenium.WebDriver;
-import org.openqa.selenium.WebElement;
-import org.openqa.selenium.chrome.ChromeDriver;
-import org.openqa.selenium.chrome.ChromeOptions;
 
-import java.io.ByteArrayInputStream;
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
-import java.nio.charset.StandardCharsets;
-import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -31,7 +17,6 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.TreeSet;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -40,7 +25,6 @@ import java.util.logging.LogManager;
 import java.util.logging.Logger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import java.util.zip.GZIPInputStream;
 
 /**
  * NowGoalTeamRoundHTFT
@@ -82,8 +66,7 @@ public class NowGoalTeamRoundHTFT {
     static final int    MIN_SEASON_YEAR = 2010;   // 2010/2011 sezonuna qədər geri get
     static final int    SEASON_LOOKBACK = 20;     // sezon siyahısı endpoint-i sınanda ehtiyat
     static final int    THREADS         = 50;     // liqa/matç yükləmələrinin paralelliyi
-    static final String BASE            = "https://football.nowgoal26.com";
-    static final String LIVE_BASE       = "https://live8.nowgoal26.com";
+    // Domen NowGoalClient-də redirect-dən avtomatik tapılır (nowgoal26 → nowgoal50 ...)
 
     // Yalnız bu HT/FT nümunələri çap olunur (A takımı perspektivindən)
     static final Set<String> WANTED = Set.of("2/1", "1/2", "1/X", "2/X");
@@ -99,10 +82,6 @@ public class NowGoalTeamRoundHTFT {
     static final DateTimeFormatter SITE_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
     // ─────────────────────────────────────────────────────────
 
-    static final HttpClient HTTP = HttpClient.newBuilder()
-            .connectTimeout(Duration.ofSeconds(10))
-            .executor(Executors.newVirtualThreadPerTaskExecutor())
-            .build();
     static final ObjectMapper JSON = new ObjectMapper();
 
     // ── ANA METOD ─────────────────────────────────────────────
@@ -143,29 +122,7 @@ public class NowGoalTeamRoundHTFT {
 
     // ── SELENIUM: Yalnız liqa ID-lərini çək (NowGoalHTFT ilə eyni) ──
     static List<Integer> fetchLeagueIdsViaBrowser() {
-        WebDriverManager.chromedriver().setup();
-        ChromeOptions opts = new ChromeOptions();
-        opts.addArguments("--headless", "--disable-gpu", "--no-sandbox",
-                "--disable-dev-shm-usage", "--blink-settings=imagesEnabled=false",
-                "--log-level=3", "--silent");
-        WebDriver driver = new ChromeDriver(opts);
-        Set<Integer> ids = new TreeSet<>();
-        try {
-            driver.get(LIVE_BASE + "/");
-            Thread.sleep(5000);
-            for (WebElement el : driver.findElements(By.cssSelector("[sclassid]"))) {
-                try {
-                    String v = el.getAttribute("sclassid");
-                    if (v != null && !v.isBlank()) ids.add(Integer.parseInt(v.trim()));
-                } catch (Exception ignored) {}
-            }
-        } catch (Exception e) {
-            System.out.println("Selenium xetasi: " + e.getMessage());
-        } finally {
-            try { driver.quit(); } catch (Exception ignored) {}
-        }
-        System.out.println("DOM-dan tapilan ID sayi: " + ids.size());
-        return new ArrayList<>(ids);
+        return NowGoalClient.fetchLeagueIds();
     }
 
     // ── BUGÜNKÜ MATÇLARI LİQA JSON-LARINDAN YIĞ ───────────────
@@ -372,7 +329,7 @@ public class NowGoalTeamRoundHTFT {
     // ── JSON YÜKLƏ (NowGoalHTFT ilə eyni endpoint) ────────────
     static LeagueData loadLeague(int ligId, String season) {
         try {
-            String raw = get(BASE + "/jsData/matchResult/json/" + season + "/s" + ligId + "_en.json");
+            String raw = get(NowGoalClient.base() + "/jsData/matchResult/json/" + season + "/s" + ligId + "_en.json");
             return new LeagueData(JSON.readTree(raw));
         } catch (Exception e) { return null; }
     }
@@ -381,17 +338,14 @@ public class NowGoalTeamRoundHTFT {
     static List<String> loadSeasons(int ligId) {
         Set<String> list = new LinkedHashSet<>();
         try {
-            String raw = get(BASE + "/jsData/leagueSeason/sea" + ligId + ".json");
+            String raw = get(NowGoalClient.base() + "/jsData/leagueSeason/sea" + ligId + ".json");
             JsonNode node = JSON.readTree(raw).get("SeasonList");
             if (node != null) for (JsonNode s : node) list.add(s.asText());
         } catch (Exception ignored) {}
         if (!list.isEmpty()) return new ArrayList<>(list);
 
         // ── EHTİYAT: cari sezon açarını sınayaraq tap, sonra geriyə düz ──
-        String[] candidates = {
-                "2025-2026", "2026", "2025/26",
-                "2024-2025", "2025", "2024/25"
-        };
+        String[] candidates = NowGoalClient.seasonCandidates();
         String cur = null;
         for (String c : candidates) {
             if (loadLeague(ligId, c) != null) { cur = c; break; }
@@ -422,26 +376,7 @@ public class NowGoalTeamRoundHTFT {
 
     // ── HTTP GET: gzip + BOM (NowGoalHTFT-dən) ────────────────
     static String get(String url) throws Exception {
-        HttpRequest req = HttpRequest.newBuilder()
-                .uri(URI.create(url))
-                .timeout(Duration.ofSeconds(15))
-                .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
-                .header("Referer",    BASE + "/")
-                .header("Accept",     "text/html,application/json,*/*")
-                .GET().build();
-
-        HttpResponse<byte[]> resp = HTTP.send(req, HttpResponse.BodyHandlers.ofByteArray());
-        if (resp.statusCode() != 200) throw new RuntimeException("HTTP " + resp.statusCode());
-
-        byte[] b = resp.body();
-        if (b.length >= 2 && (b[0] & 0xFF) == 0x1F && (b[1] & 0xFF) == 0x8B) {
-            try (var gis = new GZIPInputStream(new ByteArrayInputStream(b))) {
-                b = gis.readAllBytes();
-            }
-        }
-        if (b.length >= 3 && b[0] == (byte) 0xEF && b[1] == (byte) 0xBB && b[2] == (byte) 0xBF)
-            b = Arrays.copyOfRange(b, 3, b.length);
-        return new String(b, StandardCharsets.UTF_8);
+        return NowGoalClient.get(url);
     }
 
     // ── BUGÜNKÜ MATÇ (liqa JSON-undan) ────────────────────────
