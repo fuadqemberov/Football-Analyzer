@@ -28,6 +28,7 @@ import java.security.NoSuchAlgorithmException;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -104,6 +105,12 @@ public final class MackolikHttpFetcher implements AutoCloseable {
     private final AtomicInteger fetchRetry  = new AtomicInteger();
     private final AtomicInteger fetchFailed = new AtomicInteger();
     private final AtomicInteger cacheHit    = new AtomicInteger();
+    /**
+     * Yeniden denenmeyen (kalıcı) HTTP kodları → adet. Eskiden 403/404 hiçbir
+     * sayaca yazılmıyordu; sunucu tüm istekleri 403 ile reddettiğinde özet
+     * "0 ok / 0 retry / 0 başarısız" görünüyor ve sorun gizleniyordu.
+     */
+    private final ConcurrentHashMap<Integer, AtomicInteger> permanentStatus = new ConcurrentHashMap<>();
 
     private final Object rateLock = new Object();
     private long nextAllowedRequestAt = 0L;
@@ -222,7 +229,14 @@ public final class MackolikHttpFetcher implements AutoCloseable {
                 EntityUtils.consumeQuietly(entity);
 
                 if (!RETRYABLE_STATUS.contains(code)) {
-                    return null;                       // 404 vb. → tekrar denemenin anlamı yok
+                    // 403/404 vb. → tekrar denemenin anlamı yok, ama görünür olsun:
+                    // her kodun İLK görülüşü loglanır, hepsi özet satırında sayılır.
+                    fetchFailed.incrementAndGet();
+                    if (permanentStatus.computeIfAbsent(code, k -> new AtomicInteger())
+                                       .getAndIncrement() == 0) {
+                        System.err.println("⚠️ HTTP " + code + " (yeniden denenmiyor): " + url);
+                    }
+                    return null;
                 }
                 cooldown();                            // 429/5xx → sunucu yorgun, herkes beklesin
             } catch (IOException e) {
@@ -232,6 +246,7 @@ public final class MackolikHttpFetcher implements AutoCloseable {
                 cooldown();                            // timeout burst'ü → herkes beklesin
             } catch (RuntimeException e) {
                 req.abort();
+                fetchFailed.incrementAndGet();
                 return null;
             }
 
@@ -365,7 +380,13 @@ public final class MackolikHttpFetcher implements AutoCloseable {
     public String statsLine() {
         String base = String.format("%d ok / %d retry / %d başarısız",
                 fetchOk.get(), fetchRetry.get(), fetchFailed.get());
-        return cacheDir == null ? base : base + " / " + cacheHit.get() + " önbellek";
+        if (cacheDir != null) base += " / " + cacheHit.get() + " önbellek";
+        if (!permanentStatus.isEmpty()) {
+            StringBuilder sb = new StringBuilder(base).append(" (");
+            permanentStatus.forEach((code, n) -> sb.append("HTTP ").append(code).append('×').append(n.get()).append(' '));
+            base = sb.toString().trim() + ")";
+        }
+        return base;
     }
 
     @Override
