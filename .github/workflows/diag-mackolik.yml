@@ -1,0 +1,59 @@
+name: Diag mackolik (temporary)
+on:
+  push:
+    branches: [diag-mackolik]
+permissions:
+  contents: write
+jobs:
+  diag:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Probe
+        run: |
+          UA='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36'
+          probe() { # label url extra-curl-args...
+            local label="$1" url="$2"; shift 2
+            echo "################ $label :: $url"
+            curl -sS -m 25 -o body.bin -D hdr.txt "$@" "$url" 2>&1 | head -3
+            head -25 hdr.txt
+            echo "--- body ($(wc -c < body.bin) bytes):"
+            (gunzip -c body.bin 2>/dev/null || cat body.bin) | tr -s ' \r\n\t' ' ' | head -c 1200; echo
+            grep -c tblFixture body.bin || true
+          }
+          {
+          echo "runner ip: $(curl -s -m 10 https://api.ipify.org)"; curl -s -m 10 "https://ipinfo.io/json" | tr -d '\n'; echo
+          T='https://arsiv.mackolik.com/Team/Default.aspx?id=451&season=2026/2027'
+          probe "plain curl" "$T"
+          probe "browser UA" "$T" -A "$UA"
+          probe "full browser headers" "$T" -A "$UA" --compressed \
+            -H 'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8' \
+            -H 'Accept-Language: tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7' \
+            -H 'Referer: https://arsiv.mackolik.com/' -H 'Upgrade-Insecure-Requests: 1' \
+            -H 'Sec-Fetch-Dest: document' -H 'Sec-Fetch-Mode: navigate' -H 'Sec-Fetch-Site: same-origin' -H 'Sec-Fetch-User: ?1' \
+            -H 'sec-ch-ua: "Chromium";v="130", "Google Chrome";v="130", "Not?A_Brand";v="99"' -H 'sec-ch-ua-mobile: ?0' -H 'sec-ch-ua-platform: "Windows"'
+          probe "arsiv root" "https://arsiv.mackolik.com/" -A "$UA"
+          probe "arsiv http" "http://arsiv.mackolik.com/Team/Default.aspx?id=451&season=2026/2027" -A "$UA"
+          probe "FixtureHandler weeks" "https://arsiv.mackolik.com/AjaxHandlers/FixtureHandler.aspx?command=getWeeks&id=70381" -A "$UA"
+          probe "Puan durumu" "https://arsiv.mackolik.com/Puan-Durumu/s=70381/lig" -A "$UA"
+          probe "Head2Head" "https://arsiv.mackolik.com/Match/Head2Head.aspx?id=4300000" -A "$UA"
+          probe "vd livedata" "https://vd.mackolik.com/livedata?group=all" -A "$UA"
+          probe "www root" "https://www.mackolik.com/" -A "$UA"
+          probe "www takim" "https://www.mackolik.com/takim/galatasaray/fikstur/1y4e7ozr3fzxqk3yepdbvldsk" -A "$UA"
+          echo "################ DNS"; getent hosts arsiv.mackolik.com vd.mackolik.com www.mackolik.com
+          } > results.txt 2>&1
+      - name: Headless Chrome probe
+        run: |
+          {
+          echo "################ CHROME"
+          google-chrome --version || true
+          timeout 60 google-chrome --headless=new --no-sandbox --disable-gpu --virtual-time-budget=15000 \
+            --dump-dom 'https://arsiv.mackolik.com/Team/Default.aspx?id=451&season=2026/2027' 2>/dev/null > dom.html || true
+          echo "dom bytes: $(wc -c < dom.html)  tblFixture: $(grep -c tblFixture dom.html)"
+          tr -s ' \r\n\t' ' ' < dom.html | head -c 1500; echo
+          } >> results.txt 2>&1
+      - name: Commit results
+        run: |
+          git config user.name diag-bot; git config user.email diag@users.noreply.github.com
+          git add -f results.txt && git commit -m "diag results" && git push
