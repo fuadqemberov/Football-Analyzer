@@ -7,7 +7,7 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 30
     env:
       LANG: C.UTF-8
       LC_ALL: C.UTF-8
@@ -18,33 +18,38 @@ jobs:
         with: { java-version: '21', distribution: 'temurin', cache: maven }
       - name: Compile
         run: mvn -B -q compile -DskipTests > compile.txt 2>&1 || { tail -50 compile.txt; exit 1; }
-      - name: Rate-limit probe
+      - name: Tor load probe
         run: |
           mkdir -p out
+          sudo apt-get install -y -qq tor >/dev/null 2>&1
+          sudo systemctl stop tor || true
+          printf 'SocksPort 9050\nSocksPort 9051\nSocksPort 9052\nSocksPort 9053\nSocksPort 9054\nSocksPort 9055\nSocksPort 9056\nSocksPort 9057\nControlPort 9151\nCookieAuthentication 0\nDataDirectory /tmp/tordata\n' > torrc
+          tor -f torrc > tor.log 2>&1 &
+          for i in $(seq 1 60); do grep -q "Bootstrapped 100" tor.log && break; sleep 2; done; tail -1 tor.log
           UA='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
-          ids=(1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 34 35 36 37 38 39 40 41 42 43 44 45 46 47 48 49 50 51 52 53 54 55 56 57 58 59 60 61 62 63 64 65 66 67 68 69 70 71 72 73 74 75 76 77 78 79 80)
-          req() { curl -s -m 30 -A "$UA" -o /dev/null -D h.txt -w '%{http_code}' "https://arsiv2.mackolik.com/Team/Default.aspx?id=$1&season=$2"; }
-          recover() { local t0=$(date +%s); while true; do c=$(req 451 2019/2020); [ "$c" = 200 ] && break; sleep 5; [ $(( $(date +%s)-t0 )) -gt 300 ] && { echo "no recovery in 300s"; break; }; done; echo "recovered after $(( $(date +%s)-t0 ))s"; }
-          run() { # label gap season
-            local ok=0 lim=0 first=""; local t0=$(date +%s)
-            for i in "${ids[@]}"; do c=$(req $i $3); [ "$c" = 200 ] && ok=$((ok+1)); if [ "$c" = 429 ]; then lim=$((lim+1)); [ -z "$first" ] && { first=$i; cp h.txt h429.txt; }; fi; sleep $2; done
-            echo "[$1] gap=$2s  200=$ok 429=$lim  first429_at_req=$first  elapsed=$(( $(date +%s)-t0 ))s"
-            [ -n "$first" ] && grep -iE '^(retry-after|x-rate|ratelimit|server|cache)' h429.txt
-            [ -n "$first" ] && recover
+          worker() { # port host season
+            local p=$1 h=$2 se=$3 ok=0 r429=0 r403=0 oth=0 t0=$(date +%s)
+            local ip=$(curl -s -m 20 --socks5 127.0.0.1:$p https://api.ipify.org)
+            for i in $(seq 1 45); do
+              id=$(( (p-9050)*100 + i ))
+              c=$(curl -s -m 40 -A "$UA" --socks5 127.0.0.1:$p -o b.$p -w '%{http_code}' "https://$h/Team/Default.aspx?id=$id&season=$se")
+              case $c in 200) ok=$((ok+1));; 429) r429=$((r429+1));; 403) r403=$((r403+1));; *) oth=$((oth+1));; esac
+            done
+            echo "port $p exit=$ip host=$h  200=$ok 429=$r429 403=$r403 other=$oth  $(( $(date +%s)-t0 ))s"
           }
           {
-          run burst 0 2024/2025
-          run gap0.5 0.5 2023/2024
-          run gap1 1 2022/2023
-          run gap2 2 2021/2022
-          echo "--- 4 parallel, gap 0"
-          t0=$(date +%s); for i in $(seq 1 40); do req $((i+100)) 2020/2021 & if (( i % 4 == 0 )); then wait; fi; done | sort | uniq -c; wait; echo "elapsed $(( $(date +%s)-t0 ))s"
-          } > out/rate.txt 2>&1
+          echo "== arsiv (orig) via 8 tor ports in parallel, 45 req each"
+          t0=$(date +%s); for p in 9050 9051 9052 9053 9054 9055 9056 9057; do worker $p arsiv.mackolik.com 2024/2025 & done; wait; echo "total $(( $(date +%s)-t0 ))s"
+          echo "== arsiv2 via 8 tor ports in parallel, 45 req each"
+          t0=$(date +%s); for p in 9050 9051 9052 9053 9054 9055 9056 9057; do worker $p arsiv2.mackolik.com 2023/2024 & done; wait; echo "total $(( $(date +%s)-t0 ))s"
+          echo "== direct arsiv2 after 60s idle (was this IP limited earlier? new runner = fresh IP)"
+          for i in 1 2 3; do curl -s -m 30 -A "$UA" -o /dev/null -w '%{http_code} ' "https://arsiv2.mackolik.com/Team/Default.aspx?id=$((900+i))&season=2022/2023"; done; echo
+          } > out/tor.txt 2>&1
       - name: Summarize & commit
         if: always()
         run: |
           {
-          echo "compile: $(grep -c ERROR compile.txt 2>/dev/null) error lines"; cat out/rate.txt
+          echo "compile: $(grep -c ERROR compile.txt 2>/dev/null) error lines"; cat out/tor.txt
           for f in out/*.txt; do
             echo "################ $f ($(wc -l < $f) lines)"
             echo "403 lines: $(grep -c '403' $f)  host-switch: $(grep -c 'hostuna keçilir' $f)"
