@@ -1,0 +1,31 @@
+SLF4J(W): No SLF4J providers were found.
+SLF4J(W): Defaulting to no-operation (NOP) logger implementation
+SLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.
+SLF4J(W): Class path contains SLF4J bindings targeting slf4j-api versions 1.7.x or earlier.
+SLF4J(W): Ignoring binding found at [jar:file:/home/runner/.m2/repository/org/slf4j/slf4j-log4j12/1.7.30/slf4j-log4j12-1.7.30.jar!/org/slf4j/impl/StaticLoggerBinder.class]
+SLF4J(W): See https://www.slf4j.org/codes.html#ignoredBindings for an explanation.
+💾 Geçmiş sezon önbelleği: /home/runner/work/Football-Analyzer/Football-Analyzer/.mackolik-cache
+🧅 Tor çıxışı aktiv: 16 SOCKS portu [9060, 9061, 9062, 9063, 9064, 9065, 9066, 9067, 9068, 9069, 9070, 9071, 9072, 9073, 9074, 9075] | NEWNYM: ControlPort 9151
+════════ SEZON DENKLEMİ — QƏLİB DEDEKTORU ════════
+Denklem: [Ə əvvəlki rəqib] → ★hədəf → [S sonrakı rəqib] + orta halqanın körpüsü (V)
+Keçmiş sezon sayı : 10
+Filtr             : yalnız sürprizlə bitmiş denklemlər
+Mənbə: livedata proqramı (27/10/2026) — 248 başlamamış oyun.
+Fərqli liqa       : 81
+   İspanya · Kral Kupası 1.Tur                   18 oyun
+   İngiltere · Ulusal Lig N / S Kuzey            11 oyun
+   İngiltere · Ulusal Lig N / S Güney            11 oyun
+   İngiltere · Non League Premier Güney Merkez   10 oyun
+   Hollanda · KNVB Kupası 1.Tur                  9 oyun
+   İngiltere · Ulusal Lig                        9 oyun
+   Almanya · DFB Kupası 2.Tur                    8 oyun
+   İngiltere · Non League Premier Güney          8 oyun
+   İtalya · Serie B                              7 oyun
+   İngiltere · Non League Premier Isthmian       7 oyun
+   … və daha 71 liqa
+248 oyun analiz edilir...
+
+⚠️ Keçici xəta: HTTP 429 (Tor çıxışı dəyişdirilir)
+🌐 Mackolik istek özeti: 1172 ok / 0 retry / 0 başarısız / 0 önbellek [host: arsiv2.mackolik.com → arsiv.mackolik.com | Tor: 16 zolaq, 2 IP dəyişmə, NEWNYM×0] {keçici: HTTP 429 (Tor çıxışı dəyişdirilir)×2}
+[exit 124]
+[elapsed 600s]

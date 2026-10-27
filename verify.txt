@@ -1,0 +1,67 @@
+compile: 0 error lines
+################ out/HaftaDonguAnalyzer.txt (170 lines)
+⏳ İlerleme: 280/498  |  Sinyal: 11  |  İstek: 1763 ok / 1 retry / 0 başarısız / 2672 önbellek [host: arsiv2.mackolik.com → arsiv.mackolik.com | Tor: 16 zolaq, 62 IP dəyişmə, NEWNYM×6] {keçici: SocketTimeoutException: Read timed out×1; HTTP 429 (Tor çıxışı dəyişdirilir)×57}   
+⏳ İlerleme: 281/498  |  Sinyal: 11  |  İstek: 1763 ok / 1 retry / 0 başarısız / 2672 önbellek [host: arsiv2.mackolik.com → arsiv.mackolik.com | Tor: 16 zolaq, 62 IP dəyişmə, NEWNYM×6] {keçici: SocketTimeoutException: Read timed out×1; HTTP 429 (Tor çıxışı dəyişdirilir)×57}   
+⏳ İlerleme: 282/498  |  Sinyal: 11  |  İstek: 1763 ok / 1 retry / 0 başarısız / 2672 önbellek [host: arsiv2.mackolik.com → arsiv.mackolik.com | Tor: 16 zolaq, 62 IP dəyişmə, NEWNYM×6] {keçici: SocketTimeoutException: Read timed out×1; HTTP 429 (Tor çıxışı dəyişdirilir)×57}   
+⏳ İlerleme: 283/498  |  Sinyal: 11  |  İstek: 1763 ok / 1 retry / 0 başarısız / 2672 önbellek [host: arsiv2.mackolik.com → arsiv.mackolik.com | Tor: 16 zolaq, 62 IP dəyişmə, NEWNYM×6] {keçici: SocketTimeoutException: Read timed out×1; HTTP 429 (Tor çıxışı dəyişdirilir)×57}   
+⏳ İlerleme: 284/498  |  Sinyal: 11  |  İstek: 1763 ok / 1 retry / 0 başarısız / 2672 önbellek [host: arsiv2.mackolik.com → arsiv.mackolik.com | Tor: 16 zolaq, 62 IP dəyişmə, NEWNYM×6] {keçici: SocketTimeoutException: Read timed out×1; HTTP 429 (Tor çıxışı dəyişdirilir)×57}   
+⏳ İlerleme: 285/498  |  Sinyal: 11  |  İstek: 1763 ok / 1 retry / 0 başarısız / 2672 önbellek [host: arsiv2.mackolik.com → arsiv.mackolik.com | Tor: 16 zolaq, 62 IP dəyişmə, NEWNYM×6] {keçici: SocketTimeoutException: Read timed out×1; HTTP 429 (Tor çıxışı dəyişdirilir)×57}   
+⏳ İlerleme: 286/498  |  Sinyal: 11  |  İstek: 1763 ok / 1 retry / 0 başarısız / 2672 önbellek [host: arsiv2.mackolik.com → arsiv.mackolik.com | Tor: 16 zolaq, 62 IP dəyişmə, NEWNYM×6] {keçici: SocketTimeoutException: Read timed out×1; HTTP 429 (Tor çıxışı dəyişdirilir)×57}   
+⏳ İlerleme: 287/498  |  Sinyal: 11  |  İstek: 1769 ok / 1 retry / 0 başarısız / 2672 önbellek [host: arsiv2.mackolik.com → arsiv.mackolik.com | Tor: 16 zolaq, 62 IP dəyişmə, NEWNYM×6] {keçici: SocketTimeoutException: Read timed out×1; HTTP 429 (Tor çıxışı dəyişdirilir)×57}   
+⏳ İlerleme: 288/498  |  Sinyal: 11  |  İstek: 1805 ok / 1 retry / 0 başarısız / 2672 önbellek [host: arsiv2.mackolik.com → arsiv.mackolik.com | Tor: 16 zolaq, 62 IP dəyişmə, NEWNYM×6] {keçici: SocketTimeoutException: Read timed out×1; HTTP 429 (Tor çıxışı dəyişdirilir)×57}   
+⏳ İlerleme: 289/498  |  Sinyal: 11  |  İstek: 1839 ok / 1 retry / 0 başarısız / 2672 önbellek [host: arsiv2.mackolik.com → arsiv.mackolik.com | Tor: 16 zolaq, 64 IP dəyişmə, NEWNYM×6] {keçici: SocketTimeoutException: Read timed out×1; HTTP 429 (Tor çıxışı dəyişdirilir)×59}   
+⏳ İlerleme: 290/498  |  Sinyal: 11  |  İstek: 1855 ok / 1 retry / 0 başarısız / 2672 önbellek [host: arsiv2.mackolik.com → arsiv.mackolik.com | Tor: 16 zolaq, 64 IP dəyişmə, NEWNYM×6] {keçici: SocketTimeoutException: Read timed out×1; HTTP 429 (Tor çıxışı dəyişdirilir)×59}   
+⏳ İlerleme: 291/498  |  Sinyal: 11  |  İstek: 1882 ok / 1 retry / 0 başarısız / 2672 önbellek [host: arsiv2.mackolik.com → arsiv.mackolik.com | Tor: 16 zolaq, 64 IP dəyişmə, NEWNYM×6] {keçici: SocketTimeoutException: Read timed out×1; HTTP 429 (Tor çıxışı dəyişdirilir)×59}   
+⏳ İlerleme: 292/498  |  Sinyal: 11  |  İstek: 1882 ok / 1 retry / 0 başarısız / 2672 önbellek [host: arsiv2.mackolik.com → arsiv.mackolik.com | Tor: 16 zolaq, 64 IP dəyişmə, NEWNYM×6] {keçici: SocketTimeoutException: Read timed out×1; HTTP 429 (Tor çıxışı dəyişdirilir)×59}   
+⏳ İlerleme: 293/498  |  Sinyal: 11  |  İstek: 1882 ok / 1 retry / 0 başarısız / 2672 önbellek [host: arsiv2.mackolik.com → arsiv.mackolik.com | Tor: 16 zolaq, 64 IP dəyişmə, NEWNYM×6] {keçici: SocketTimeoutException: Read timed out×1; HTTP 429 (Tor çıxışı dəyişdirilir)×59}   
+⏳ İlerleme: 294/498  |  Sinyal: 11  |  İstek: 1891 ok / 1 retry / 0 başarısız / 2672 önbellek [host: arsiv2.mackolik.com → arsiv.mackolik.com | Tor: 16 zolaq, 64 IP dəyişmə, NEWNYM×6] {keçici: SocketTimeoutException: Read timed out×1; HTTP 429 (Tor çıxışı dəyişdirilir)×59}   
+⏳ İlerleme: 295/498  |  Sinyal: 11  |  İstek: 1895 ok / 1 retry / 0 başarısız / 2672 önbellek [host: arsiv2.mackolik.com → arsiv.mackolik.com | Tor: 16 zolaq, 64 IP dəyişmə, NEWNYM×6] {keçici: SocketTimeoutException: Read timed out×1; HTTP 429 (Tor çıxışı dəyişdirilir)×59}   
+⏳ İlerleme: 296/498  |  Sinyal: 11  |  İstek: 1927 ok / 1 retry / 0 başarısız / 2672 önbellek [host: arsiv2.mackolik.com → arsiv.mackolik.com | Tor: 16 zolaq, 64 IP dəyişmə, NEWNYM×6] {keçici: SocketTimeoutException: Read timed out×1; HTTP 429 (Tor çıxışı dəyişdirilir)×59}   
+⏳ İlerleme: 297/498  |  Sinyal: 11  |  İstek: 1958 ok / 1 retry / 0 başarısız / 2672 önbellek [host: arsiv2.mackolik.com → arsiv.mackolik.com | Tor: 16 zolaq, 66 IP dəyişmə, NEWNYM×6] {keçici: SocketTimeoutException: Read timed out×1; HTTP 429 (Tor çıxışı dəyişdirilir)×61}   
+⏳ İlerleme: 298/498  |  Sinyal: 11  |  İstek: 1988 ok / 1 retry / 0 başarısız / 2672 önbellek [host: arsiv2.mackolik.com → arsiv.mackolik.com | Tor: 16 zolaq, 66 IP dəyişmə, NEWNYM×6] {keçici: SocketTimeoutException: Read timed out×1; HTTP 429 (Tor çıxışı dəyişdirilir)×61}   
+⏳ İlerleme: 299/498  |  Sinyal: 11  |  İstek: 2015 ok / 1 retry / 0 başarısız / 2672 önbellek [host: arsiv2.mackolik.com → arsiv.mackolik.com | Tor: 16 zolaq, 66 IP dəyişmə, NEWNYM×6] {keçici: SocketTimeoutException: Read timed out×1; HTTP 429 (Tor çıxışı dəyişdirilir)×61}   
+⏳ İlerleme: 300/498  |  Sinyal: 11  |  İstek: 2015 ok / 1 retry / 0 başarısız / 2672 önbellek [host: arsiv2.mackolik.com → arsiv.mackolik.com | Tor: 16 zolaq, 66 IP dəyişmə, NEWNYM×6] {keçici: SocketTimeoutException: Read timed out×1; HTTP 429 (Tor çıxışı dəyişdirilir)×61}   
+⏳ İlerleme: 301/498  |  Sinyal: 11  |  İstek: 2015 ok / 1 retry / 0 başarısız / 2672 önbellek [host: arsiv2.mackolik.com → arsiv.mackolik.com | Tor: 16 zolaq, 66 IP dəyişmə, NEWNYM×6] {keçici: SocketTimeoutException: Read timed out×1; HTTP 429 (Tor çıxışı dəyişdirilir)×61}   
+⏳ İlerleme: 302/498  |  Sinyal: 11  |  İstek: 2015 ok / 1 retry / 0 başarısız / 2672 önbellek [host: arsiv2.mackolik.com → arsiv.mackolik.com | Tor: 16 zolaq, 66 IP dəyişmə, NEWNYM×6] {keçici: SocketTimeoutException: Read timed out×1; HTTP 429 (Tor çıxışı dəyişdirilir)×61}   
+⏳ İlerleme: 303/498  |  Sinyal: 11  |  İstek: 2018 ok / 1 retry / 0 başarısız / 2672 önbellek [host: arsiv2.mackolik.com → arsiv.mackolik.com | Tor: 16 zolaq, 66 IP dəyişmə, NEWNYM×6] {keçici: SocketTimeoutException: Read timed out×1; HTTP 429 (Tor çıxışı dəyişdirilir)×61}   [exit 124]
+[elapsed 600s]
+İstek: 2018 ok / 1 retry / 0 başarısız / 2672 önbellek [host: arsiv2.mackolik.com → arsiv.mackolik.com | Tor: 16 zolaq, 66 IP dəyişmə, NEWNYM×6] {keçici: SocketTimeoutException: Read timed out×1; HTTP 429 (Tor çıxışı dəyişdirilir)×61}   [exit 124]
+################ out/SeasonXthOfficialMatchAnalyzer.txt (464 lines)
+⏳ İlerleme: 64/514 | Bulunan: 32
+⏳ İlerleme: 65/514 | Bulunan: 32
+⏳ İlerleme: 66/514 | Bulunan: 32
+⏳ İlerleme: 67/514 | Bulunan: 32
+⏳ İlerleme: 68/514 | Bulunan: 33
+⏳ İlerleme: 69/514 | Bulunan: 34
+⏳ İlerleme: 70/514 | Bulunan: 34
+⏳ İlerleme: 71/514 | Bulunan: 34
+⏳ İlerleme: 72/514 | Bulunan: 34
+⏳ İlerleme: 73/514 | Bulunan: 34
+⏳ İlerleme: 74/514 | Bulunan: 34
+⏳ İlerleme: 75/514 | Bulunan: 35
+⏳ İlerleme: 76/514 | Bulunan: 36
+⏳ İlerleme: 77/514 | Bulunan: 36
+⏳ İlerleme: 78/514 | Bulunan: 36
+⏳ İlerleme: 79/514 | Bulunan: 36
+⏳ İlerleme: 80/514 | Bulunan: 37
+⏳ İlerleme: 81/514 | Bulunan: 37
+⏳ İlerleme: 82/514 | Bulunan: 38
+⏳ İlerleme: 83/514 | Bulunan: 38
+⏳ İlerleme: 84/514 | Bulunan: 39
+⏳ İlerleme: 85/514 | Bulunan: 40
+⏳ İlerleme: 86/514 | Bulunan: 40
+⏳ İlerleme: 87/514 | Bulunan: 40[exit 124]
+[elapsed 600s]
+################ out/SezonDenklemiAnalyzer.txt (31 lines)
+🧅 Tor çıxışı aktiv: 16 SOCKS portu [9060, 9061, 9062, 9063, 9064, 9065, 9066, 9067, 9068, 9069, 9070, 9071, 9072, 9073, 9074, 9075] | NEWNYM: ControlPort 9151
+⚠️ Keçici xəta: HTTP 429 (Tor çıxışı dəyişdirilir)
+🌐 Mackolik istek özeti: 1172 ok / 0 retry / 0 başarısız / 0 önbellek [host: arsiv2.mackolik.com → arsiv.mackolik.com | Tor: 16 zolaq, 2 IP dəyişmə, NEWNYM×0] {keçici: HTTP 429 (Tor çıxışı dəyişdirilir)×2}
+[exit 124]
+[elapsed 600s]
+################ out/TemasTakimiAnalyzer.txt (7173 lines)
+🧅 Tor çıxışı aktiv: 16 SOCKS portu [9060, 9061, 9062, 9063, 9064, 9065, 9066, 9067, 9068, 9069, 9070, 9071, 9072, 9073, 9074, 9075] | NEWNYM: ControlPort 9151
+⚠️ Keçici xəta: HTTP 429 (Tor çıxışı dəyişdirilir)
+⏳ İlerleme: 103/502  |  Sinyal: 62⚠️ Keçici xəta: SSLHandshakeException: Remote host terminated the handshake ← https://arsiv2.mackolik.com/Team/Default.aspx?id=2757&season=2012/2013
+⏳ İlerleme: 104/502  |  Sinyal: 63⚠️ Keçici xəta: NoHttpResponseException: The target server failed to respond ← https://arsiv2.mackolik.com/Team/Default.aspx?id=1166&season=2013/2014
+⏳ İlerleme: 202/502  |  Sinyal: 129[exit 124]
+[elapsed 601s]

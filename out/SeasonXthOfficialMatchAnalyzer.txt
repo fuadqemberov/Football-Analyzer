@@ -1,0 +1,464 @@
+
+╔════════════════════════════════════════════════════╗
+║   X. RESMİ MAÇ  HT/FT (2/1 - 1/2)  ANALİZİ          ║
+╚════════════════════════════════════════════════════╝
+
+🔄 Bugünün başlamamış maçlarından takım ID'leri çekiliyor...
+Programda 257 başlamamış maç var; 27/10/2026 için 257 maç alındı.
+Başlamamış maçlardan toplam 514 adet benzersiz Takım ID'si alındı.
+✅ 514 benzersiz takım bulundu.
+
+💾 Geçmiş sezon önbelleği: /home/runner/work/Football-Analyzer/Football-Analyzer/.mackolik-cache
+🧅 Tor çıxışı aktiv: 16 SOCKS portu [9060, 9061, 9062, 9063, 9064, 9065, 9066, 9067, 9068, 9069, 9070, 9071, 9072, 9073, 9074, 9075] | NEWNYM: ControlPort 9151
+SLF4J(W): No SLF4J providers were found.
+SLF4J(W): Defaulting to no-operation (NOP) logger implementation
+SLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.
+SLF4J(W): Class path contains SLF4J bindings targeting slf4j-api versions 1.7.x or earlier.
+SLF4J(W): Ignoring binding found at [jar:file:/home/runner/.m2/repository/org/slf4j/slf4j-log4j12/1.7.30/slf4j-log4j12-1.7.30.jar!/org/slf4j/impl/StaticLoggerBinder.class]
+SLF4J(W): See https://www.slf4j.org/codes.html#ignoredBindings for an explanation.
+
+╔══════════════════════════════════════════════════════════════════╗
+  ✅ Elazığspor (ID: 16)
+  Şimdi oynayacağı RESMİ maç sırası : 9. maç
+  Oynanacak maç : 27.10.2026  Elazığspor vs Erciyes 38 FSK  [Türkiye Kupa]
+  Son 20 sezonda 9. resmi maçta 2/1 - 1/2 sayısı : 2
+╚══════════════════════════════════════════════════════════════════╝
+   ⭐ 2023/2024 | 9. resmi maç | HT/FT: 2/1
+        5.11.2023  →  Elazığspor 3-2 E. Anadolu SF   (İY: 0-2)  [Türkiye 3. Lig]
+   ⭐ 2007/2008 | 9. resmi maç | HT/FT: 2/1
+        16.09.2007  →  Altay 4-3 Elazığspor   (İY: 1-3)  [Türkiye 1. Lig]
+
+⏳ İlerleme: 1/514 | Bulunan: 1⏳ İlerleme: 2/514 | Bulunan: 1⏳ İlerleme: 3/514 | Bulunan: 1
+╔══════════════════════════════════════════════════════════════════╗
+  ✅ Van Spor FK (ID: 600)
+  Şimdi oynayacağı RESMİ maç sırası : 13. maç
+  Oynanacak maç : 27.10.2026  Orduspor 1967 vs Van Spor FK  [Türkiye Kupa]
+  Son 20 sezonda 13. resmi maçta 2/1 - 1/2 sayısı : 1
+╚══════════════════════════════════════════════════════════════════╝
+   ⭐ 2019/2020 | 13. resmi maç | HT/FT: 2/1
+        3.11.2019  →  Sakaryaspor 4-2 Van Spor FK   (İY: 1-2)  [Türkiye 2. Lig]
+
+⏳ İlerleme: 4/514 | Bulunan: 2
+╔══════════════════════════════════════════════════════════════════╗
+  ✅ Sarıyer (ID: 563)
+  Şimdi oynayacağı RESMİ maç sırası : 13. maç
+  Oynanacak maç : 27.10.2026  Sarıyer vs Ayvalıkgücü  [Türkiye Kupa]
+  Son 20 sezonda 13. resmi maçta 2/1 - 1/2 sayısı : 1
+╚══════════════════════════════════════════════════════════════════╝
+   ⭐ 2006/2007 | 13. resmi maç | HT/FT: 1/2
+        1.11.2006  →  Yeşil Bursa 1-2 Sarıyer   (İY: 1-0)  [Türkiye 2. Lig]
+
+⏳ İlerleme: 5/514 | Bulunan: 3
+╔══════════════════════════════════════════════════════════════════╗
+  ✅ Ayvalıkgücü (ID: 9731)
+  Şimdi oynayacağı RESMİ maç sırası : 10. maç
+  Oynanacak maç : 27.10.2026  Sarıyer vs Ayvalıkgücü  [Türkiye Kupa]
+  Son 20 sezonda 10. resmi maçta 2/1 - 1/2 sayısı : 1
+╚══════════════════════════════════════════════════════════════════╝
+   ⭐ 2022/2023 | 10. resmi maç | HT/FT: 1/2
+        30.10.2022  →  Karaman FK 2-3 Ayvalıkgücü   (İY: 2-1)  [Türkiye 3. Lig]
+
+⏳ İlerleme: 6/514 | Bulunan: 4⏳ İlerleme: 7/514 | Bulunan: 4⏳ İlerleme: 8/514 | Bulunan: 4
+╔══════════════════════════════════════════════════════════════════╗
+  ✅ Boluspor (ID: 621)
+  Şimdi oynayacağı RESMİ maç sırası : 13. maç
+  Oynanacak maç : 27.10.2026  Boluspor vs Karşıyaka  [Türkiye Kupa]
+  Son 20 sezonda 13. resmi maçta 2/1 - 1/2 sayısı : 1
+╚══════════════════════════════════════════════════════════════════╝
+   ⭐ 2010/2011 | 13. resmi maç | HT/FT: 2/1
+        21.11.2010  →  Çaykur Rizespor 2-1 Boluspor   (İY: 0-1)  [Türkiye 1. Lig]
+
+⏳ İlerleme: 9/514 | Bulunan: 5
+╔══════════════════════════════════════════════════════════════════╗
+  ✅ Karşıyaka (ID: 541)
+  Şimdi oynayacağı RESMİ maç sırası : 10. maç
+  Oynanacak maç : 27.10.2026  Boluspor vs Karşıyaka  [Türkiye Kupa]
+  Son 20 sezonda 10. resmi maçta 2/1 - 1/2 sayısı : 1
+╚══════════════════════════════════════════════════════════════════╝
+   ⭐ 2008/2009 | 10. resmi maç | HT/FT: 2/1
+        11.10.2008  →  Sakaryaspor 3-1 Karşıyaka   (İY: 0-1)  [Türkiye 1. Lig]
+
+⏳ İlerleme: 10/514 | Bulunan: 6
+╔══════════════════════════════════════════════════════════════════╗
+  ✅ Kocaelispor (ID: 18)
+  Şimdi oynayacağı RESMİ maç sırası : 10. maç
+  Oynanacak maç : 27.10.2026  Kocaelispor vs Mazıdağı Fosfat  [Türkiye Kupa]
+  Son 20 sezonda 10. resmi maçta 2/1 - 1/2 sayısı : 1
+╚══════════════════════════════════════════════════════════════════╝
+   ⭐ 2014/2015 | 10. resmi maç | HT/FT: 1/2
+        30.11.2014  →  Erokspor 1-2 Kocaelispor   (İY: 1-0)  [Türkiye Bölgesel Amatör Lig]
+
+⏳ İlerleme: 11/514 | Bulunan: 7
+╔══════════════════════════════════════════════════════════════════╗
+  ✅ Mazıdağı Fosfat (ID: 52853)
+  Şimdi oynayacağı RESMİ maç sırası : 10. maç
+  Oynanacak maç : 27.10.2026  Kocaelispor vs Mazıdağı Fosfat  [Türkiye Kupa]
+  Son 20 sezonda 10. resmi maçta 2/1 - 1/2 sayısı : 1
+╚══════════════════════════════════════════════════════════════════╝
+   ⭐ 2024/2025 | 10. resmi maç | HT/FT: 1/2
+        3.11.2024  →  Uşak Spor A.Ş. 1-2 Mazıdağı Fosfat   (İY: 1-0)  [Türkiye 3. Lig]
+
+⏳ İlerleme: 12/514 | Bulunan: 8⏳ İlerleme: 13/514 | Bulunan: 8⏳ İlerleme: 14/514 | Bulunan: 8
+╔══════════════════════════════════════════════════════════════════╗
+  ✅ Alanyaspor (ID: 619)
+  Şimdi oynayacağı RESMİ maç sırası : 10. maç
+  Oynanacak maç : 27.10.2026  Alanyaspor vs 12 Bingölspor  [Türkiye Kupa]
+  Son 20 sezonda 10. resmi maçta 2/1 - 1/2 sayısı : 2
+╚══════════════════════════════════════════════════════════════════╝
+   ⭐ 2024/2025 | 10. resmi maç | HT/FT: 1/2
+        27.10.2024  →  Alanyaspor 1-2 Antalyaspor   (İY: 1-0)  [Türkiye Süper Lig]
+   ⭐ 2013/2014 | 10. resmi maç | HT/FT: 1/2
+        27.10.2013  →  Bandırmaspor 1-2 Alanyaspor   (İY: 1-0)  [Türkiye 2. Lig]
+
+⏳ İlerleme: 15/514 | Bulunan: 9⏳ İlerleme: 16/514 | Bulunan: 9
+╔══════════════════════════════════════════════════════════════════╗
+  ✅ Sassuolo (ID: 6348)
+  Şimdi oynayacağı RESMİ maç sırası : 11. maç
+  Oynanacak maç : 27.10.2026  Sassuolo vs Lazio  [İtalya Serie A]
+  Son 20 sezonda 11. resmi maçta 2/1 - 1/2 sayısı : 2
+╚══════════════════════════════════════════════════════════════════╝
+   ⭐ 2021/2022 | 11. resmi maç | HT/FT: 1/2
+        31.10.2021  →  Sassuolo 1-2 Empoli   (İY: 1-0)  [İtalya Serie A]
+   ⭐ 2007/2008 | 11. resmi maç | HT/FT: 2/1
+        1.11.2007  →  Sassuolo 2-1 Padova   (İY: 0-1)  [İtalya Lega Pro 1]
+
+⏳ İlerleme: 17/514 | Bulunan: 10
+╔══════════════════════════════════════════════════════════════════╗
+  ✅ Lazio (ID: 160)
+  Şimdi oynayacağı RESMİ maç sırası : 10. maç
+  Oynanacak maç : 27.10.2026  Sassuolo vs Lazio  [İtalya Serie A]
+  Son 20 sezonda 10. resmi maçta 2/1 - 1/2 sayısı : 3
+╚══════════════════════════════════════════════════════════════════╝
+   ⭐ 2021/2022 | 10. resmi maç | HT/FT: 2/1
+        16.10.2021  →  Lazio 3-1 Inter   (İY: 0-1)  [İtalya Serie A]
+   ⭐ 2015/2016 | 10. resmi maç | HT/FT: 1/2
+        27.09.2015  →  Hellas Verona 1-2 Lazio   (İY: 1-0)  [İtalya Serie A]
+   ⭐ 2011/2012 | 10. resmi maç | HT/FT: 2/1
+        16.10.2011  →  Lazio 2-1 Roma   (İY: 0-1)  [İtalya Serie A]
+
+⏳ İlerleme: 18/514 | Bulunan: 11⏳ İlerleme: 19/514 | Bulunan: 11
+╔══════════════════════════════════════════════════════════════════╗
+  ✅ Cagliari (ID: 176)
+  Şimdi oynayacağı RESMİ maç sırası : 11. maç
+  Oynanacak maç : 27.10.2026  Roma vs Cagliari  [İtalya Serie A]
+  Son 20 sezonda 11. resmi maçta 2/1 - 1/2 sayısı : 2
+╚══════════════════════════════════════════════════════════════════╝
+   ⭐ 2023/2024 | 11. resmi maç | HT/FT: 2/1
+        29.10.2023  →  Cagliari 4-3 Frosinone   (İY: 0-2)  [İtalya Serie A]
+   ⭐ 2019/2020 | 11. resmi maç | HT/FT: 2/1
+        30.10.2019  →  Cagliari 3-2 Bologna   (İY: 0-1)  [İtalya Serie A]
+
+⏳ İlerleme: 20/514 | Bulunan: 12
+╔══════════════════════════════════════════════════════════════════╗
+  ✅ Torino (ID: 172)
+  Şimdi oynayacağı RESMİ maç sırası : 11. maç
+  Oynanacak maç : 27.10.2026  Torino vs Como  [İtalya Serie A]
+  Son 20 sezonda 11. resmi maçta 2/1 - 1/2 sayısı : 1
+╚══════════════════════════════════════════════════════════════════╝
+   ⭐ 2019/2020 | 11. resmi maç | HT/FT: 2/1
+        26.09.2019  →  Torino 2-1 Milan   (İY: 0-1)  [İtalya Serie A]
+
+⏳ İlerleme: 21/514 | Bulunan: 13⏳ İlerleme: 22/514 | Bulunan: 13⏳ İlerleme: 23/514 | Bulunan: 13
+╔══════════════════════════════════════════════════════════════════╗
+  ✅ Peterborough (ID: 968)
+  Şimdi oynayacağı RESMİ maç sırası : 17. maç
+  Oynanacak maç : 20.10.2026  Huddersfield vs Peterborough  [İngiltere 1. Lig]
+  Son 20 sezonda 17. resmi maçta 2/1 - 1/2 sayısı : 1
+╚══════════════════════════════════════════════════════════════════╝
+   ⭐ 2014/2015 | 17. resmi maç | HT/FT: 2/1
+        25.10.2014  →  Coventry 3-2 Peterborough   (İY: 0-2)  [İngiltere 1. Lig]
+
+⏳ İlerleme: 24/514 | Bulunan: 14
+╔══════════════════════════════════════════════════════════════════╗
+  ✅ Fleetwood (ID: 6627)
+  Şimdi oynayacağı RESMİ maç sırası : 18. maç
+  Oynanacak maç : 24.10.2026  Exeter City vs Fleetwood  [İngiltere 2. Lig]
+  Son 20 sezonda 18. resmi maçta 2/1 - 1/2 sayısı : 2
+╚══════════════════════════════════════════════════════════════════╝
+   ⭐ 2021/2022 | 18. resmi maç | HT/FT: 1/2
+        2.11.2021  →  Fleetwood 2-3 Wigan Ath   (İY: 1-0)  [İngiltere 1. Lig]
+   ⭐ 2020/2021 | 18. resmi maç | HT/FT: 2/1
+        10.11.2020  →  Fleetwood 2-1 Sunderland   (İY: 0-1)  [İngiltere EFL Trophy]
+
+⏳ İlerleme: 25/514 | Bulunan: 15⚠️ Keçici xəta: HTTP 429 (Tor çıxışı dəyişdirilir)
+
+╔══════════════════════════════════════════════════════════════════╗
+  ✅ Arsenal (ID: 20)
+  Şimdi oynayacağı RESMİ maç sırası : 14. maç
+  Oynanacak maç : 27.10.2026  Fleetwood vs Arsenal  [İngiltere Lig Kupası]
+  Son 20 sezonda 14. resmi maçta 2/1 - 1/2 sayısı : 1
+╚══════════════════════════════════════════════════════════════════╝
+   ⭐ 2012/2013 | 14. resmi maç | HT/FT: 1/2
+        30.10.2012  →  Reading 5-7 Arsenal   (İY: 4-1)  [İngiltere Lig Kupası]
+
+⏳ İlerleme: 26/514 | Bulunan: 16⏳ İlerleme: 27/514 | Bulunan: 16
+╔══════════════════════════════════════════════════════════════════╗
+  ✅ RB Leipzig (ID: 911)
+  Şimdi oynayacağı RESMİ maç sırası : 12. maç
+  Oynanacak maç : 27.10.2026  Essen vs RB Leipzig  [Almanya Almanya Kupası]
+  Son 20 sezonda 12. resmi maçta 2/1 - 1/2 sayısı : 3
+╚══════════════════════════════════════════════════════════════════╝
+   ⭐ 2024/2025 | 12. resmi maç | HT/FT: 2/1
+        26.10.2024  →  RB Leipzig 3-1 Freiburg   (İY: 0-1)  [Almanya Bundesliga]
+   ⭐ 2019/2020 | 12. resmi maç | HT/FT: 2/1
+        23.10.2019  →  RB Leipzig 2-1 Zenit   (İY: 0-1)  [UEFA Şampiyonlar Ligi UEFA Şampiyonlar Ligi]
+   ⭐ 2016/2017 | 12. resmi maç | HT/FT: 1/2
+        18.11.2016  →  Leverkusen 2-3 RB Leipzig   (İY: 2-1)  [Almanya Bundesliga]
+
+⏳ İlerleme: 28/514 | Bulunan: 17
+╔══════════════════════════════════════════════════════════════════╗
+  ✅ Bochum (ID: 127)
+  Şimdi oynayacağı RESMİ maç sırası : 11. maç
+  Oynanacak maç : 27.10.2026  Bochum vs Mainz 05  [Almanya Almanya Kupası]
+  Son 20 sezonda 11. resmi maçta 2/1 - 1/2 sayısı : 2
+╚══════════════════════════════════════════════════════════════════╝
+   ⭐ 2011/2012 | 11. resmi maç | HT/FT: 1/2
+        1.10.2011  →  Ingolstadt 3-5 Bochum   (İY: 3-1)  [Almanya 2. Bundesliga]
+   ⭐ 2010/2011 | 11. resmi maç | HT/FT: 2/1
+        31.10.2010  →  Cottbus 2-1 Bochum   (İY: 0-1)  [Almanya 2. Bundesliga]
+
+⏳ İlerleme: 29/514 | Bulunan: 18
+╔══════════════════════════════════════════════════════════════════╗
+  ✅ Mainz 05 (ID: 143)
+  Şimdi oynayacağı RESMİ maç sırası : 9. maç
+  Oynanacak maç : 27.10.2026  Bochum vs Mainz 05  [Almanya Almanya Kupası]
+  Son 20 sezonda 9. resmi maçta 2/1 - 1/2 sayısı : 1
+╚══════════════════════════════════════════════════════════════════╝
+   ⭐ 2013/2014 | 9. resmi maç | HT/FT: 2/1
+        28.09.2013  →  Hertha Berlin 3-1 Mainz 05   (İY: 0-1)  [Almanya Bundesliga]
+
+⏳ İlerleme: 30/514 | Bulunan: 19⏳ İlerleme: 31/514 | Bulunan: 19⏳ İlerleme: 32/514 | Bulunan: 19⏳ İlerleme: 33/514 | Bulunan: 19⏳ İlerleme: 34/514 | Bulunan: 19⏳ İlerleme: 35/514 | Bulunan: 19
+╔══════════════════════════════════════════════════════════════════╗
+  ✅ Union Berlin (ID: 146)
+  Şimdi oynayacağı RESMİ maç sırası : 9. maç
+  Oynanacak maç : 27.10.2026  Köln vs Union Berlin  [Almanya Almanya Kupası]
+  Son 20 sezonda 9. resmi maçta 2/1 - 1/2 sayısı : 3
+╚══════════════════════════════════════════════════════════════════╝
+   ⭐ 2023/2024 | 9. resmi maç | HT/FT: 1/2
+        3.10.2023  →  Union Berlin 2-3 Braga   (İY: 2-1)  [UEFA Şampiyonlar Ligi UEFA Şampiyonlar Ligi]
+   ⭐ 2015/2016 | 9. resmi maç | HT/FT: 2/1
+        23.09.2015  →  FSV 3-2 Union Berlin   (İY: 0-1)  [Almanya 2. Bundesliga]
+   ⭐ 2013/2014 | 9. resmi maç | HT/FT: 1/2
+        20.09.2013  →  Union Berlin 2-4 Greuther Fürth   (İY: 1-0)  [Almanya 2. Bundesliga]
+
+⏳ İlerleme: 36/514 | Bulunan: 20
+╔══════════════════════════════════════════════════════════════════╗
+  ✅ M gladbach (ID: 126)
+  Şimdi oynayacağı RESMİ maç sırası : 9. maç
+  Oynanacak maç : 27.10.2026  M gladbach vs Karlsruher  [Almanya Almanya Kupası]
+  Son 20 sezonda 9. resmi maçta 2/1 - 1/2 sayısı : 1
+╚══════════════════════════════════════════════════════════════════╝
+   ⭐ 2010/2011 | 9. resmi maç | HT/FT: 2/1
+        17.10.2010  →  Hoffenheim 3-2 M gladbach   (İY: 0-1)  [Almanya Bundesliga]
+
+⏳ İlerleme: 37/514 | Bulunan: 21
+╔══════════════════════════════════════════════════════════════════╗
+  ✅ Karlsruher (ID: 153)
+  Şimdi oynayacağı RESMİ maç sırası : 11. maç
+  Oynanacak maç : 27.10.2026  M gladbach vs Karlsruher  [Almanya Almanya Kupası]
+  Son 20 sezonda 11. resmi maçta 2/1 - 1/2 sayısı : 1
+╚══════════════════════════════════════════════════════════════════╝
+   ⭐ 2020/2021 | 11. resmi maç | HT/FT: 1/2
+        5.12.2020  →  Osnabruck 1-2 Karlsruher   (İY: 1-0)  [Almanya 2. Bundesliga]
+
+⏳ İlerleme: 38/514 | Bulunan: 22
+╔══════════════════════════════════════════════════════════════════╗
+  ✅ Dortmund (ID: 120)
+  Şimdi oynayacağı RESMİ maç sırası : 13. maç
+  Oynanacak maç : 27.10.2026  Dortmund vs W.Bremen  [Almanya Almanya Kupası]
+  Son 20 sezonda 13. resmi maçta 2/1 - 1/2 sayısı : 3
+╚══════════════════════════════════════════════════════════════════╝
+   ⭐ 2020/2021 | 13. resmi maç | HT/FT: 1/2
+        21.11.2020  →  Hertha Berlin 2-5 Dortmund   (İY: 1-0)  [Almanya Bundesliga]
+   ⭐ 2018/2019 | 13. resmi maç | HT/FT: 2/1
+        6.10.2018  →  Dortmund 4-3 Augsburg   (İY: 0-1)  [Almanya Bundesliga]
+   ⭐ 2007/2008 | 13. resmi maç | HT/FT: 2/1
+        31.10.2007  →  Dortmund 2-1 E.Frankfurt   (İY: 0-1)  [Almanya Almanya Kupası]
+
+⏳ İlerleme: 39/514 | Bulunan: 23⏳ İlerleme: 40/514 | Bulunan: 23
+╔══════════════════════════════════════════════════════════════════╗
+  ✅ Elversberg (ID: 915)
+  Şimdi oynayacağı RESMİ maç sırası : 9. maç
+  Oynanacak maç : 27.10.2026  Elversberg vs Darmstadt  [Almanya Almanya Kupası]
+  Son 20 sezonda 9. resmi maçta 2/1 - 1/2 sayısı : 1
+╚══════════════════════════════════════════════════════════════════╝
+   ⭐ 2015/2016 | 9. resmi maç | HT/FT: 2/1
+        13.09.2015  →  Elversberg 4-3 Offenbach   (İY: 1-2)  [Almanya Bölgesel Lig]
+
+⏳ İlerleme: 41/514 | Bulunan: 24⏳ İlerleme: 42/514 | Bulunan: 24
+╔══════════════════════════════════════════════════════════════════╗
+  ✅ Sporting CP (ID: 275)
+  Şimdi oynayacağı RESMİ maç sırası : 13. maç
+  Oynanacak maç : 27.10.2026  Sporting CP vs Maritimo  [Portekiz Lig Kupası]
+  Son 20 sezonda 13. resmi maçta 2/1 - 1/2 sayısı : 1
+╚══════════════════════════════════════════════════════════════════╝
+   ⭐ 2025/2026 | 13. resmi maç | HT/FT: 2/1
+        22.10.2025  →  Sporting CP 2-1 Marsilya   (İY: 0-1)  [UEFA Şampiyonlar Ligi UEFA Şampiyonlar Ligi]
+
+⏳ İlerleme: 43/514 | Bulunan: 25⏳ İlerleme: 44/514 | Bulunan: 25
+╔══════════════════════════════════════════════════════════════════╗
+  ✅ Abha (ID: 2793)
+  Şimdi oynayacağı RESMİ maç sırası : 11. maç
+  Oynanacak maç : 27.10.2026  Abha vs Al Faisaly  [Suudi Arabistan Pro Lig]
+  Son 20 sezonda 11. resmi maçta 2/1 - 1/2 sayısı : 1
+╚══════════════════════════════════════════════════════════════════╝
+   ⭐ 2020/2021 | 11. resmi maç | HT/FT: 2/1
+        3.12.2020  →  Abha 2-1 Al Nassr   (İY: 0-1)  [Suudi Arabistan Pro Lig]
+
+⏳ İlerleme: 45/514 | Bulunan: 26⏳ İlerleme: 46/514 | Bulunan: 26⏳ İlerleme: 47/514 | Bulunan: 26
+╔══════════════════════════════════════════════════════════════════╗
+  ✅ Girona (ID: 1778)
+  Şimdi oynayacağı RESMİ maç sırası : 12. maç
+  Oynanacak maç : 27.10.2026  Cuarte vs Girona  [İspanya İspanya Kral Kupası]
+  Son 20 sezonda 12. resmi maçta 2/1 - 1/2 sayısı : 4
+╚══════════════════════════════════════════════════════════════════╝
+   ⭐ 2020/2021 | 12. resmi maç | HT/FT: 1/2
+        20.11.2020  →  Espanyol 1-2 Girona   (İY: 1-0)  [İspanya 2. lig]
+   ⭐ 2017/2018 | 12. resmi maç | HT/FT: 2/1
+        29.10.2017  →  Girona 2-1 Real Madrid   (İY: 0-1)  [İspanya LaLiga]
+   ⭐ 2013/2014 | 12. resmi maç | HT/FT: 2/1
+        20.10.2013  →  Girona 2-1 Sport.Gijon   (İY: 0-1)  [İspanya 2. lig]
+   ⭐ 2012/2013 | 12. resmi maç | HT/FT: 2/1
+        28.10.2012  →  Girona 3-1 Numancia   (İY: 0-1)  [İspanya 2. lig]
+
+⏳ İlerleme: 48/514 | Bulunan: 27⏳ İlerleme: 49/514 | Bulunan: 27⏳ İlerleme: 50/514 | Bulunan: 27⏳ İlerleme: 51/514 | Bulunan: 27
+╔══════════════════════════════════════════════════════════════════╗
+  ✅ Europa (ID: 30178)
+  Şimdi oynayacağı RESMİ maç sırası : 10. maç
+  Oynanacak maç : 27.10.2026  Calamocha vs Europa  [İspanya İspanya Kral Kupası]
+  Son 20 sezonda 10. resmi maçta 2/1 - 1/2 sayısı : 1
+╚══════════════════════════════════════════════════════════════════╝
+   ⭐ 2016/2017 | 10. resmi maç | HT/FT: 1/2
+        12.10.2016  →  Castelldefels 1-2 Europa   (İY: 1-0)  [İspanya Tercera Division]
+
+⏳ İlerleme: 52/514 | Bulunan: 28⏳ İlerleme: 53/514 | Bulunan: 28⏳ İlerleme: 54/514 | Bulunan: 28⏳ İlerleme: 55/514 | Bulunan: 28
+╔══════════════════════════════════════════════════════════════════╗
+  ✅ Almeria (ID: 117)
+  Şimdi oynayacağı RESMİ maç sırası : 12. maç
+  Oynanacak maç : 27.10.2026  Castellonense vs Almeria  [İspanya İspanya Kral Kupası]
+  Son 20 sezonda 12. resmi maçta 2/1 - 1/2 sayısı : 1
+╚══════════════════════════════════════════════════════════════════╝
+   ⭐ 2022/2023 | 12. resmi maç | HT/FT: 2/1
+        29.10.2022  →  Almeria 3-1 Celta Vigo   (İY: 0-1)  [İspanya LaLiga]
+
+⏳ İlerleme: 56/514 | Bulunan: 29⏳ İlerleme: 57/514 | Bulunan: 29
+╔══════════════════════════════════════════════════════════════════╗
+  ✅ CyD Leonesa (ID: 1765)
+  Şimdi oynayacağı RESMİ maç sırası : 10. maç
+  Oynanacak maç : 27.10.2026  G.Segovian vs CyD Leonesa  [İspanya İspanya Kral Kupası]
+  Son 20 sezonda 10. resmi maçta 2/1 - 1/2 sayısı : 1
+╚══════════════════════════════════════════════════════════════════╝
+   ⭐ 2018/2019 | 10. resmi maç | HT/FT: 2/1
+        13.10.2018  →  CyD Leonesa 3-1 Navalcarnero   (İY: 0-1)  [İspanya 2. Lig B]
+
+⏳ İlerleme: 58/514 | Bulunan: 30⏳ İlerleme: 59/514 | Bulunan: 30⏳ İlerleme: 60/514 | Bulunan: 30
+╔══════════════════════════════════════════════════════════════════╗
+  ✅ Lucena (ID: 8541)
+  Şimdi oynayacağı RESMİ maç sırası : 9. maç
+  Oynanacak maç : 27.10.2026  Lucena vs Majadahonda  [İspanya İspanya Kral Kupası]
+  Son 20 sezonda 9. resmi maçta 2/1 - 1/2 sayısı : 1
+╚══════════════════════════════════════════════════════════════════╝
+   ⭐ 2015/2016 | 9. resmi maç | HT/FT: 2/1
+        11.10.2015  →  CD Alcala 3-1 Lucena   (İY: 0-1)  [İspanya Tercera Division]
+
+⏳ İlerleme: 61/514 | Bulunan: 31
+╔══════════════════════════════════════════════════════════════════╗
+  ✅ Majadahonda (ID: 30431)
+  Şimdi oynayacağı RESMİ maç sırası : 10. maç
+  Oynanacak maç : 27.10.2026  Lucena vs Majadahonda  [İspanya İspanya Kral Kupası]
+  Son 20 sezonda 10. resmi maçta 2/1 - 1/2 sayısı : 2
+╚══════════════════════════════════════════════════════════════════╝
+   ⭐ 2015/2016 | 10. resmi maç | HT/FT: 1/2
+        18.10.2015  →  Socuellamos 1-2 Majadahonda   (İY: 1-0)  [İspanya 2. Lig B]
+   ⭐ 2014/2015 | 10. resmi maç | HT/FT: 2/1
+        2.11.2014  →  CA De Pinto 3-1 Majadahonda   (İY: 0-1)  [İspanya Tercera Division]
+
+⏳ İlerleme: 62/514 | Bulunan: 32⏳ İlerleme: 63/514 | Bulunan: 32⏳ İlerleme: 64/514 | Bulunan: 32⏳ İlerleme: 65/514 | Bulunan: 32⏳ İlerleme: 66/514 | Bulunan: 32⏳ İlerleme: 67/514 | Bulunan: 32
+╔══════════════════════════════════════════════════════════════════╗
+  ✅ Sant Andre (ID: 6368)
+  Şimdi oynayacağı RESMİ maç sırası : 10. maç
+  Oynanacak maç : 27.10.2026  Manresa vs Sant Andre  [İspanya İspanya Kral Kupası]
+  Son 20 sezonda 10. resmi maçta 2/1 - 1/2 sayısı : 1
+╚══════════════════════════════════════════════════════════════════╝
+   ⭐ 2013/2014 | 10. resmi maç | HT/FT: 2/1
+        13.10.2013  →  Sant Andre 3-2 Elche II   (İY: 1-2)  [İspanya 2. Lig B]
+
+⏳ İlerleme: 68/514 | Bulunan: 33
+╔══════════════════════════════════════════════════════════════════╗
+  ✅ DonBenito (ID: 1771)
+  Şimdi oynayacağı RESMİ maç sırası : 9. maç
+  Oynanacak maç : 27.10.2026  DonBenito vs Extremadura 24  [İspanya İspanya Kral Kupası]
+  Son 20 sezonda 9. resmi maçta 2/1 - 1/2 sayısı : 1
+╚══════════════════════════════════════════════════════════════════╝
+   ⭐ 2024/2025 | 9. resmi maç | HT/FT: 2/1
+        27.10.2024  →  Union Atl 3-1 DonBenito   (İY: 0-1)  [İspanya 2. Lig RFEF]
+
+⏳ İlerleme: 69/514 | Bulunan: 34⏳ İlerleme: 70/514 | Bulunan: 34⏳ İlerleme: 71/514 | Bulunan: 34⏳ İlerleme: 72/514 | Bulunan: 34⏳ İlerleme: 73/514 | Bulunan: 34⏳ İlerleme: 74/514 | Bulunan: 34
+╔══════════════════════════════════════════════════════════════════╗
+  ✅ Manacor (ID: 13835)
+  Şimdi oynayacağı RESMİ maç sırası : 8. maç
+  Oynanacak maç : 27.10.2026  Manacor vs Villarreal  [İspanya İspanya Kral Kupası]
+  Son 20 sezonda 8. resmi maçta 2/1 - 1/2 sayısı : 1
+╚══════════════════════════════════════════════════════════════════╝
+   ⭐ 2023/2024 | 8. resmi maç | HT/FT: 2/1
+        28.10.2023  →  Manacor 3-2 Platges   (İY: 0-1)  [İspanya Tercera Division]
+
+⏳ İlerleme: 75/514 | Bulunan: 35
+╔══════════════════════════════════════════════════════════════════╗
+  ✅ Villarreal (ID: 92)
+  Şimdi oynayacağı RESMİ maç sırası : 14. maç
+  Oynanacak maç : 27.10.2026  Manacor vs Villarreal  [İspanya İspanya Kral Kupası]
+  Son 20 sezonda 14. resmi maçta 2/1 - 1/2 sayısı : 1
+╚══════════════════════════════════════════════════════════════════╝
+   ⭐ 2016/2017 | 14. resmi maç | HT/FT: 2/1
+        23.10.2016  →  Villarreal 2-1 Las Palmas   (İY: 0-1)  [İspanya LaLiga]
+
+⏳ İlerleme: 76/514 | Bulunan: 36⏳ İlerleme: 77/514 | Bulunan: 36⏳ İlerleme: 78/514 | Bulunan: 36⏳ İlerleme: 79/514 | Bulunan: 36
+╔══════════════════════════════════════════════════════════════════╗
+  ✅ Pontevedra (ID: 1571)
+  Şimdi oynayacağı RESMİ maç sırası : 10. maç
+  Oynanacak maç : 27.10.2026  Arosa vs Pontevedra  [İspanya İspanya Kral Kupası]
+  Son 20 sezonda 10. resmi maçta 2/1 - 1/2 sayısı : 3
+╚══════════════════════════════════════════════════════════════════╝
+   ⭐ 2021/2022 | 10. resmi maç | HT/FT: 2/1
+        7.11.2021  →  Union Adarve 2-1 Pontevedra   (İY: 0-1)  [İspanya 2. Lig RFEF]
+   ⭐ 2019/2020 | 10. resmi maç | HT/FT: 1/2
+        26.10.2019  →  Celta Vigo II 1-2 Pontevedra   (İY: 1-0)  [İspanya 2. Lig B]
+   ⭐ 2015/2016 | 10. resmi maç | HT/FT: 2/1
+        18.10.2015  →  Pontevedra 2-1 Atletico Astorg   (İY: 0-1)  [İspanya 2. Lig B]
+
+⏳ İlerleme: 80/514 | Bulunan: 37⏳ İlerleme: 81/514 | Bulunan: 37
+╔══════════════════════════════════════════════════════════════════╗
+  ✅ Malaga (ID: 78)
+  Şimdi oynayacağı RESMİ maç sırası : 11. maç
+  Oynanacak maç : 27.10.2026  Alcazar vs Malaga  [İspanya İspanya Kral Kupası]
+  Son 20 sezonda 11. resmi maçta 2/1 - 1/2 sayısı : 1
+╚══════════════════════════════════════════════════════════════════╝
+   ⭐ 2014/2015 | 11. resmi maç | HT/FT: 2/1
+        8.11.2014  →  Malaga 2-1 Eibar   (İY: 0-1)  [İspanya LaLiga]
+
+⏳ İlerleme: 82/514 | Bulunan: 38⏳ İlerleme: 83/514 | Bulunan: 38
+╔══════════════════════════════════════════════════════════════════╗
+  ✅ Göztepe U19 (ID: 37894)
+  Şimdi oynayacağı RESMİ maç sırası : 9. maç
+  Oynanacak maç : 27.10.2026  AZ U19 vs Göztepe U19  [UEFA Gençlik Ligi UEFA Gençlik Ligi]
+  Son 20 sezonda 9. resmi maçta 2/1 - 1/2 sayısı : 2
+  ⭐⭐⭐⭐⭐ AYNI RAKİP: bunlardan 2 tanesi bugünkü maçın aynı iki takımı
+╚══════════════════════════════════════════════════════════════════╝
+   ⭐ 2022/2023 | 9. resmi maç | HT/FT: 2/1
+        26.11.2022  →  Karagümrük U19 2-1 Göztepe U19   (İY: 0-1)  [Türkiye U19 Elit Ligi]  ⭐⭐⭐⭐⭐
+   ⭐ 2018/2019 | 9. resmi maç | HT/FT: 2/1
+        20.10.2018  →  Beşiktaş U19 2-1 Göztepe U19   (İY: 0-1)  [Türkiye U19 Elit Ligi]  ⭐⭐⭐⭐⭐
+
+⏳ İlerleme: 84/514 | Bulunan: 39
+╔══════════════════════════════════════════════════════════════════╗
+  ✅ Shabab Al Ahli (ID: 2677)
+  Şimdi oynayacağı RESMİ maç sırası : 14. maç
+  Oynanacak maç : 27.10.2026  Shabab Al Ahli vs Esteghlal  [AFC Şampiyonlar Ligi Elite AFC Şampiyonlar Ligi]
+  Son 20 sezonda 14. resmi maçta 2/1 - 1/2 sayısı : 1
+╚══════════════════════════════════════════════════════════════════╝
+   ⭐ 2006/2007 | 14. resmi maç | HT/FT: 1/2
+        24.03.2007  →  Shabab Al Ahli 1-2 Dubai   (İY: 1-0)  [Birleşik Arap Emirlikleri UFL]
+
+⏳ İlerleme: 85/514 | Bulunan: 40⏳ İlerleme: 86/514 | Bulunan: 40⏳ İlerleme: 87/514 | Bulunan: 40[exit 124]
+[elapsed 600s]
