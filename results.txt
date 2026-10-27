@@ -1,0 +1,18 @@
+== direct (134.33.70.20)
+[direct] 403 0B ip=23.209.84.4 tblFixture=0 | https://arsiv.mackolik.com/Team/Default.aspx?id=451&season=2026/2027
+[host m.mackolik.com] 301 0B ip=23.62.226.198 tblFixture=0 | https://m.mackolik.com/Team/Default.aspx?id=451&season=2026/2027
+[host mobile.mackolik.com] 000 0B ip= tblFixture=0 | https://mobile.mackolik.com/Team/Default.aspx?id=451&season=2026/2027
+[host arsiv2.mackolik.com] 200 196939B ip=23.209.84.17 tblFixture=5 | https://arsiv2.mackolik.com/Team/Default.aspx?id=451&season=2026/2027
+[host eski.mackolik.com] 000 0B ip= tblFixture=5 | https://eski.mackolik.com/Team/Default.aspx?id=451&season=2026/2027
+[vd team?] 404 555B ip=23.209.84.51 tblFixture=0 | https://vd.mackolik.com/Team/Default.aspx?id=451&season=2026/2027
+== TOR
+tor exit: 192.42.116.53
+[tor#1 team] 200 196939B ip=127.0.0.1 tblFixture=5 | https://arsiv.mackolik.com/Team/Default.aspx?id=451&season=2026/2027
+[tor#1 fixture] 200 1092B ip=127.0.0.1 tblFixture=0 | https://arsiv.mackolik.com/AjaxHandlers/FixtureHandler.aspx?command=getWeeks&id=70381
+tor exit: 185.220.101.103
+[tor#2 team] 200 196939B ip=127.0.0.1 tblFixture=5 | https://arsiv.mackolik.com/Team/Default.aspx?id=451&season=2026/2027
+[tor#2 fixture] 200 1092B ip=127.0.0.1 tblFixture=0 | https://arsiv.mackolik.com/AjaxHandlers/FixtureHandler.aspx?command=getWeeks&id=70381
+tor exit: 192.42.116.20
+[tor#3 team] 200 196939B ip=127.0.0.1 tblFixture=5 | https://arsiv.mackolik.com/Team/Default.aspx?id=451&season=2026/2027
+[tor#3 fixture] 200 1092B ip=127.0.0.1 tblFixture=0 | https://arsiv.mackolik.com/AjaxHandlers/FixtureHandler.aspx?command=getWeeks&id=70381
+== WARP
