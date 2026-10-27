@@ -1,5 +1,7 @@
 package analyzer.mackolik.triplepattern;
 
+import analyzer.util.MackolikHttpFetcher;
+
 import analyzer.util.MackolikHost;
 
 import org.apache.http.client.methods.CloseableHttpResponse;
@@ -25,22 +27,8 @@ public class HttpTripleScoreFetcher {
     private static final String CURRENT_SEASON = "2025/2026";
 
     private static String fetchHtml(CloseableHttpClient httpClient, String url) throws IOException {
-        HttpGet request = new HttpGet(url);
-        request.addHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36");
-
-        log.debug("Fetching URL: {}", url);
-        try (CloseableHttpResponse response = httpClient.execute(request)) {
-            int statusCode = response.getStatusLine().getStatusCode();
-            if (statusCode == 200) {
-                return EntityUtils.toString(response.getEntity());
-            } else {
-                log.warn("Failed to fetch URL: {}. Status code: {}", url, statusCode);
-                return null;
-            }
-        } catch (IOException e) {
-            log.error("IOException while fetching URL: {}", url, e);
-            throw e;
-        }
+        // Ortaq fetcher: arsiv2 hostu, Tor ilə IP rotasiyası, retry (bax: MackolikHttpFetcher)
+        return MackolikHttpFetcher.shared().fetchText(url, false);
     }
 
     /**

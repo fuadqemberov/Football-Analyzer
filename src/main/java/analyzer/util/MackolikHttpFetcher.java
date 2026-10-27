@@ -5,11 +5,20 @@ import org.apache.http.client.config.CookieSpecs;
 import org.apache.http.client.config.RequestConfig;
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpGet;
+import org.apache.http.config.Registry;
+import org.apache.http.config.RegistryBuilder;
 import org.apache.http.config.SocketConfig;
+import org.apache.http.conn.socket.ConnectionSocketFactory;
+import org.apache.http.conn.socket.PlainConnectionSocketFactory;
+import org.apache.http.conn.ssl.SSLConnectionSocketFactory;
+import org.apache.http.impl.NoConnectionReuseStrategy;
 import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.DefaultConnectionKeepAliveStrategy;
+import org.apache.http.impl.client.HttpClientBuilder;
 import org.apache.http.impl.client.HttpClients;
 import org.apache.http.impl.conn.PoolingHttpClientConnectionManager;
+import org.apache.http.protocol.HttpContext;
+import org.apache.http.ssl.SSLContexts;
 import org.apache.http.util.EntityUtils;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
@@ -18,6 +27,9 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.net.InetSocketAddress;
+import java.net.Proxy;
+import java.net.Socket;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -25,6 +37,7 @@ import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
@@ -37,28 +50,27 @@ import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
 
 /**
- * arsiv.mackolik.com için TIMEOUT-DAYANIKLI ortak HTTP katmanı.
+ * Mackolik arxivi üçün TIMEOUT- və LİMİT-DAYANIKLI ortaq HTTP qatı.
+ * Bütün mackolik analizləri bunu işlədir (birbaşa və ya {@link #shared()} ilə).
  *
- * HaftaDonguAnalyzer'ın v2 ağ katmanından çıkarıldı; tüm mackolik
- * analizörleri (temas, xthmatch, dongu, multiversion) bunu kullanır.
+ * <h3>Timeout düzəlişləri (əvvəldən)</h3>
+ * Uzun timeout-lar, backoff + jitter ilə retry, 200 olmayan cavabda gövdənin
+ * tükədilməsi, ölü bağlantıların təmizlənməsi, qlobal sorğu aralığı (throttle).
  *
- * Neden gerekli ("Read timed out" düzeltmeleri):
- *   1. Uzun socket/connect timeout'lar client seviyesinde tanımlı.
- *   2. Her istek için üstel geri çekilmeli (backoff + jitter) RETRY.
- *   3. 200 olmayan cevaplarda entity KESİNLİKLE tüketiliyor → bağlantı
- *      havuza geri dönüyor (art arda gelen timeout'ların ana sebebi buydu).
- *   4. 408/429/5xx yeniden deneniyor; 404 gibi kalıcı kodlar denenmiyor.
- *   5. Ölü/boşta bağlantılar tahliye ediliyor (evictIdle + validateAfterInactivity).
- *   6. Global istek aralığı (throttle) ile sunucu boğulmuyor — hız değil,
- *      verinin timeout almadan doğru gelmesi önceliklidir.
+ * <h3>2026-10-19-dan sonrakı bloklar</h3>
+ * <ul>
+ *   <li>arsiv.mackolik.com bulud (GitHub Actions / Azure) IP-lərinə 403 verir →
+ *       {@link MackolikHost} ilə arsiv2.mackolik.com-a keçilir.</li>
+ *   <li>arsiv2 bir IP-yə ~40 sorğu verir, sonra uzun müddət 429 qaytarır →
+ *       {@link TorEgress} aktivdirsə hər Tor portu ayrıca "zolaq"dır (ayrıca çıxış IP);
+ *       429/403 alan zolaq həmin epoch üçün bağlanır, sorğu başqa zolaqla təkrarlanır,
+ *       zolaqların yarısı dolanda NEWNYM ilə hamısı yeni IP alır.</li>
+ *   <li>Tor yoxdursa (lokal işləmə): 403/429-da növbəti hosta keçilir.</li>
+ * </ul>
  *
- * DİSK ÖNBELLEĞİ (isteğe bağlı):
- *   {@code MACKOLIK_CACHE_DIR} ortam değişkeni ya da {@code -Dmackolik.cache.dir}
- *   verilirse GEÇMİŞ SEZON sayfaları gzip'li olarak diske yazılır. Geçmiş sezon
- *   verisi değişmez olduğu için bu doğruluktan hiçbir şey kaybettirmez; buna
- *   karşılık temas/dongu/xthmatch aynı takımların aynı sayfalarını tekrar tekrar
- *   indirmez (aynı iş akışında ~3 kat az istek → çok daha az timeout).
- *   Güncel sezon sayfası gün içinde değiştiği için ASLA önbelleklenmez.
+ * <h3>Disk önbelleği</h3>
+ * {@code MACKOLIK_CACHE_DIR} / {@code -Dmackolik.cache.dir} verilibsə DƏYİŞMƏZ
+ * (keçmiş sezon) cavablar gzip ilə diskə yazılır; açar kanonik host üzrədir.
  */
 public final class MackolikHttpFetcher implements AutoCloseable {
 
@@ -70,34 +82,52 @@ public final class MackolikHttpFetcher implements AutoCloseable {
     private static final int SOCKET_TIMEOUT_MS       = 45_000;
     private static final int CONN_REQUEST_TIMEOUT_MS = 60_000;
 
-    /** Bir URL için toplam deneme sayısı (1 ilk deneme + 7 retry). */
+    /** Keçici xətalar (timeout, 5xx) üçün bir URL-ə ən çox cəhd sayı. */
     private static final int MAX_ATTEMPTS = 8;
     private static final long RETRY_BASE_DELAY_MS = 700;
     private static final long RETRY_MAX_DELAY_MS  = 20_000;
 
-    /**
-     * Timeout/geçici hata görüldüğünde TÜM thread'lerin bekleyeceği ortak soğuma
-     * süresi. Timeout'lar tek tek değil, sunucu yorulunca BURST halinde geliyor;
-     * sadece o isteğin backoff'u yetmiyor — herkes kısa süre durup sunucuya
-     * nefes aldırınca sonraki denemeler tutuyor.
-     */
+    /** Tor rejimində bir URL üçün ən çox zolaq dəyişmə (429/403) sayı. */
+    private static final int MAX_LANE_SWITCHES = 60;
+    /** Bu qədər zolaq dəyişmədən sonra növbəti hosta da keçilir. */
+    private static final int SWITCHES_PER_HOST = 12;
+    /** ControlPort yoxdursa limitə düşən zolaq bu qədər müddət istifadə olunmur. */
+    private static final long LANE_BLOCK_MS = TimeUnit.MINUTES.toMillis(15);
+
     private static final long COOLDOWN_ON_FAILURE_MS = 2_500;
 
-    /** Geçici sayılan ve yeniden denenen HTTP durum kodları. */
+    /** Keçici sayılan və təkrar yoxlanan HTTP kodları (429 ayrıca idarə olunur). */
     private static final Set<Integer> RETRYABLE_STATUS =
-            new HashSet<>(Arrays.asList(408, 425, 429, 500, 502, 503, 504));
+            new HashSet<>(Arrays.asList(408, 425, 500, 502, 503, 504));
 
-    /**
-     * Yalnızca gerçekten fikstür tablosu içeren cevaplar önbelleğe yazılır.
-     * Böylece sunucunun 200 döndürdüğü geçici hata/boş sayfalar önbelleğe
-     * yapışıp sonraki analizörleri yanıltmaz.
-     */
+    /** Önbelleyə yalnız həqiqi data yazılır (fikstür cədvəli və ya FixtureHandler JS massivi). */
     private static final String CACHEABLE_MARKER = "tblFixture";
 
-    /** Önbellek girdisinin en fazla ne kadar eski olabileceği. */
     private static final long CACHE_TTL_MS = TimeUnit.DAYS.toMillis(30);
 
-    private final CloseableHttpClient http;
+    // ── Zolaq: bir çıxış yolu (birbaşa və ya bir Tor portu) ────────────────
+    private static final class Lane {
+        final String name;
+        final CloseableHttpClient http;
+        final PoolingHttpClientConnectionManager cm;
+        volatile int limitedEpoch = -1;
+        volatile long limitedAt = 0L;
+        final AtomicInteger ok = new AtomicInteger();
+
+        Lane(String name, CloseableHttpClient http, PoolingHttpClientConnectionManager cm) {
+            this.name = name; this.http = http; this.cm = cm;
+        }
+
+        boolean limited() {
+            return limitedEpoch == TorEgress.epoch()
+                    && System.currentTimeMillis() - limitedAt < LANE_BLOCK_MS;
+        }
+    }
+
+    private final List<Lane> lanes = new ArrayList<>();
+    private final boolean tor;
+    private final AtomicInteger roundRobin = new AtomicInteger();
+
     private final long minRequestGapMs;
     /** null → disk önbelleği kapalı. */
     private final Path cacheDir;
@@ -106,31 +136,79 @@ public final class MackolikHttpFetcher implements AutoCloseable {
     private final AtomicInteger fetchRetry  = new AtomicInteger();
     private final AtomicInteger fetchFailed = new AtomicInteger();
     private final AtomicInteger cacheHit    = new AtomicInteger();
-    /**
-     * Yeniden denenmeyen (kalıcı) HTTP kodları → adet. Eskiden 403/404 hiçbir
-     * sayaca yazılmıyordu; sunucu tüm istekleri 403 ile reddettiğinde özet
-     * "0 ok / 0 retry / 0 başarısız" görünüyor ve sorun gizleniyordu.
-     */
+    private final AtomicInteger laneSwitch  = new AtomicInteger();
+    /** Təkrar yoxlanmayan (qəti) HTTP kodları → say. */
     private final ConcurrentHashMap<Integer, AtomicInteger> permanentStatus = new ConcurrentHashMap<>();
+    /** Keçici xəta növləri → say (hər növün ilk görülüşü loglanır). */
+    private final ConcurrentHashMap<String, AtomicInteger> transientErrors = new ConcurrentHashMap<>();
 
     private final Object rateLock = new Object();
     private long nextAllowedRequestAt = 0L;
 
+    private static volatile MackolikHttpFetcher shared;
+
     /**
-     * @param maxConcurrent   eşzamanlı istek (thread) sayısı — havuz buna göre boyutlanır
-     * @param minRequestGapMs iki istek arasındaki en küçük global boşluk, ms
+     * @param maxConcurrent   eyni anda sorğu (thread) sayı — hovuz buna görə ölçülür
+     * @param minRequestGapMs iki sorğu arasında ən kiçik qlobal boşluq, ms
      */
     public MackolikHttpFetcher(int maxConcurrent, long minRequestGapMs) {
         this.minRequestGapMs = Math.max(0, minRequestGapMs);
         this.cacheDir = resolveCacheDir();
+        this.tor = TorEgress.enabled();
+        int conc = Math.max(1, maxConcurrent);
 
-        PoolingHttpClientConnectionManager cm = new PoolingHttpClientConnectionManager();
-        cm.setMaxTotal(maxConcurrent * 2);
-        // Tüm istekler aynı host'a gidiyor → per-route limit thread sayısından KÜÇÜK
-        // olmamalı, aksi halde thread'ler bağlantı bekler ve connectionRequest timeout alır.
-        cm.setDefaultMaxPerRoute(maxConcurrent * 2);
-        // Havuzdaki bağlantı 2sn'den uzun boştaysa kullanmadan önce doğrula
-        // (yarı-kapalı soket = read timeout).
+        if (tor) {
+            TorEgress.announce();
+            for (int port : TorEgress.ports()) lanes.add(buildLane("tor:" + port, conc, port));
+        } else {
+            lanes.add(buildLane("direct", conc, -1));
+        }
+    }
+
+    /**
+     * JVM boyu ortaq nümunə — öz HTTP client-i olan köhnə analizlər (SezonDenklemi,
+     * LeagueSeasonFetcher, B2B, Zincir ...) eyni host/Tor/önbellek məntiqini işlətsin.
+     */
+    public static MackolikHttpFetcher shared() {
+        MackolikHttpFetcher s = shared;
+        if (s == null) {
+            synchronized (MackolikHttpFetcher.class) {
+                if (shared == null) {
+                    shared = new MackolikHttpFetcher(12, 40);
+                    Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+                        MackolikHttpFetcher f = shared;
+                        if (f != null && f.fetchOk.get() + f.fetchFailed.get() + f.cacheHit.get() > 0) {
+                            System.out.println("🌐 Mackolik istek özeti: " + f.statsLine());
+                        }
+                    }));
+                }
+                s = shared;
+            }
+        }
+        return s;
+    }
+
+    private Lane buildLane(String name, int conc, int socksPort) {
+        SSLConnectionSocketFactory ssl;
+        PlainConnectionSocketFactory plain;
+        if (socksPort > 0) {
+            final Proxy proxy = new Proxy(Proxy.Type.SOCKS, new InetSocketAddress("127.0.0.1", socksPort));
+            plain = new PlainConnectionSocketFactory() {
+                @Override public Socket createSocket(HttpContext ctx) { return new Socket(proxy); }
+            };
+            ssl = new SSLConnectionSocketFactory(SSLContexts.createSystemDefault()) {
+                @Override public Socket createSocket(HttpContext ctx) { return new Socket(proxy); }
+            };
+        } else {
+            plain = PlainConnectionSocketFactory.getSocketFactory();
+            ssl = SSLConnectionSocketFactory.getSocketFactory();
+        }
+        Registry<ConnectionSocketFactory> reg = RegistryBuilder.<ConnectionSocketFactory>create()
+                .register("http", plain).register("https", ssl).build();
+
+        PoolingHttpClientConnectionManager cm = new PoolingHttpClientConnectionManager(reg);
+        cm.setMaxTotal(conc * 2);
+        cm.setDefaultMaxPerRoute(conc * 2);
         cm.setValidateAfterInactivity(2_000);
         cm.setDefaultSocketConfig(SocketConfig.custom()
                 .setSoTimeout(SOCKET_TIMEOUT_MS)
@@ -146,30 +224,34 @@ public final class MackolikHttpFetcher implements AutoCloseable {
                 .setRedirectsEnabled(true)
                 .build();
 
-        this.http = HttpClients.custom()
+        HttpClientBuilder b = HttpClients.custom()
                 .setConnectionManager(cm)
                 .setConnectionManagerShared(false)
                 .setDefaultRequestConfig(requestConfig)
-                .setKeepAliveStrategy(DefaultConnectionKeepAliveStrategy.INSTANCE)
                 .evictExpiredConnections()
                 .evictIdleConnections(30, TimeUnit.SECONDS)
-                .disableAutomaticRetries()   // retry'ı biz yönetiyoruz
-                .build();
+                .disableAutomaticRetries();          // retry-ı özümüz idarə edirik
+        if (socksPort > 0) {
+            // Bağlantı təkrar istifadə olunmasın: NEWNYM-dən sonra hər yeni sorğu
+            // yeni dövrəyə (yeni çıxış IP-sinə) düşsün.
+            b.setConnectionReuseStrategy(NoConnectionReuseStrategy.INSTANCE);
+        } else {
+            b.setKeepAliveStrategy(DefaultConnectionKeepAliveStrategy.INSTANCE);
+        }
+        return new Lane(name, b.build(), cm);
     }
 
-    /**
-     * Sayfayı indirir ve charset'i HTML meta etiketinden tespit ederek parse eder
-     * (Türkçe/özel karakterli takım adları bozulmaz).
-     *
-     * @return parse edilmiş Document; tüm denemeler başarısızsa <b>null</b>
-     */
+    // ═══════════════════════════════════════════════════════════════════════
+    //  Public API
+    // ═══════════════════════════════════════════════════════════════════════
+
+    /** Səhifəni yükləyir və charset-i HTML meta-dan təyin edərək parse edir. Uğursuzsa null. */
     public Document fetchDocument(String url) {
         return fetchDocument(url, false);
     }
 
     /**
-     * @param cacheable sayfa DEĞİŞMEZ mi (geçmiş sezon)? true ise disk önbelleği
-     *                  kullanılır. Güncel sezon için daima false verilmelidir.
+     * @param cacheable səhifə DƏYİŞMƏZdirmi (keçmiş sezon)? true isə disk önbelleği işlənir.
      */
     public Document fetchDocument(String url, boolean cacheable) {
         byte[] body = fetchBytes(url, cacheable);
@@ -181,9 +263,14 @@ public final class MackolikHttpFetcher implements AutoCloseable {
         }
     }
 
-    /** Sayfayı String olarak döndürür; tüm denemeler başarısızsa null. */
+    /** Səhifəni UTF-8 String kimi qaytarır; uğursuzsa null. */
     public String fetchHtml(String url) {
-        byte[] body = fetchBytes(url, false);
+        return fetchText(url, false);
+    }
+
+    /** UTF-8 mətn (HTML və ya FixtureHandler JS massivi); uğursuzsa null. */
+    public String fetchText(String url, boolean cacheable) {
+        byte[] body = fetchBytes(url, cacheable);
         return body == null ? null : new String(body, StandardCharsets.UTF_8);
     }
 
@@ -191,13 +278,9 @@ public final class MackolikHttpFetcher implements AutoCloseable {
         return fetchBytes(url, false);
     }
 
-    /**
-     * Timeout/geçici hatalarda üstel geri çekilmeyle yeniden dener.
-     * Başarısızsa null döner — çağıran taraf bunu "veri yok" olarak ele alır.
-     */
+    /** Uğursuzsa null — çağıran tərəf bunu "data yoxdur" kimi qəbul edir. */
     public byte[] fetchBytes(String url, boolean cacheable) {
         boolean useCache = cacheable && cacheDir != null;
-        // Önbellek açarı KANONİK host üzrədir: arsiv → arsiv2 keçidində köhnə önbellek itmir.
         Path cacheFile = useCache ? cachePath(MackolikHost.canonical(url)) : null;
         if (useCache) {
             byte[] cached = readCache(cacheFile);
@@ -207,111 +290,138 @@ public final class MackolikHttpFetcher implements AutoCloseable {
             }
         }
 
-        // arsiv.mackolik.com GitHub runner IP-lərini 403 ilə bloklayır → hostları
-        // sıra ilə sına (default: arsiv2.mackolik.com, sonra arsiv.mackolik.com).
-        List<String> candidates = MackolikHost.candidates(url);
-        for (int i = 0; i < candidates.size(); i++) {
-            String target = candidates.get(i);
-            boolean last = (i == candidates.size() - 1);
-            int[] status = new int[1];
-            byte[] body = fetchFromHost(target, useCache, cacheFile, status, last);
-            if (body != null) return body;
-            if (status[0] == 403) {
-                MackolikHost.markBlocked(target);
-                continue;                       // növbəti host
-            }
-            return null;                        // 404, timeout və s. — host dəyişmək kömək etməz
-        }
-        return null;
-    }
+        List<String> hosts = MackolikHost.candidates(url);
+        int hostIdx = 0;
+        int transientTries = 0;
+        int switches = 0;
 
-    /**
-     * Tək bir host üzrə retry'lı yükləmə.
-     * @param status   çıxışda son HTTP kodu (403 → çağıran digər hostu sınayır)
-     * @param lastHost sonuncu hostdursa 403 də "başarısız" sayılır və loglanır
-     */
-    private byte[] fetchFromHost(String url, boolean useCache, Path cacheFile, int[] status, boolean lastHost) {
-        for (int attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+        while (true) {
+            String target = hosts.get(hostIdx % hosts.size());
+            Lane lane = pickLane();
+            int epochAtStart = TorEgress.epoch();
             throttle();
-            HttpGet req = new HttpGet(url);
+
+            HttpGet req = new HttpGet(target);
             req.addHeader("User-Agent", USER_AGENT);
             req.addHeader("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8");
             req.addHeader("Accept-Language", "tr-TR,tr;q=0.9,en;q=0.8");
-            req.addHeader("Connection", "keep-alive");
 
-            try (CloseableHttpResponse resp = http.execute(req)) {
-                int code = resp.getStatusLine().getStatusCode();
-                status[0] = code;
+            int code;
+            try (CloseableHttpResponse resp = lane.http.execute(req)) {
+                code = resp.getStatusLine().getStatusCode();
                 HttpEntity entity = resp.getEntity();
-
                 if (code == 200) {
                     byte[] body = entity != null ? EntityUtils.toByteArray(entity) : new byte[0];
                     fetchOk.incrementAndGet();
+                    lane.ok.incrementAndGet();
                     if (useCache) writeCache(cacheFile, body);
                     return body;
                 }
-
-                // KRİTİK: 200 olmayan cevaplarda gövdeyi tüket, yoksa bağlantı havuza
-                // dönmez ve sonraki istekler "Read timed out" / pool timeout alır.
+                // 200 olmayan cavabda gövdəni tükət — bağlantı hovuza qayıtsın.
                 EntityUtils.consumeQuietly(entity);
-
-                if (code == 403 && !lastHost) {
-                    return null;                       // başqa host var — sayma, çağıran keçəcək
-                }
-                if (!RETRYABLE_STATUS.contains(code)) {
-                    // 403/404 vb. → tekrar denemenin anlamı yok, ama görünür olsun:
-                    // her kodun İLK görülüşü loglanır, hepsi özet satırında sayılır.
-                    fetchFailed.incrementAndGet();
-                    if (permanentStatus.computeIfAbsent(code, k -> new AtomicInteger())
-                                       .getAndIncrement() == 0) {
-                        System.err.println("⚠️ HTTP " + code + " (yeniden denenmiyor): " + url);
-                    }
-                    return null;
-                }
-                noteTransient("HTTP " + code, url);
-                cooldown();                            // 429/5xx → sunucu yorgun, herkes beklesin
             } catch (IOException e) {
-                // SocketTimeoutException, ConnectTimeoutException, NoHttpResponseException,
-                // SocketException("Connection reset") ... hepsi buraya düşer.
-                noteTransient(e.getClass().getSimpleName() + ": " + e.getMessage(), url);
                 req.abort();
-                cooldown();                            // timeout burst'ü → herkes beklesin
+                noteTransient(e.getClass().getSimpleName() + ": " + e.getMessage(), target);
+                if (++transientTries >= MAX_ATTEMPTS) return fail(null, target);
+                fetchRetry.incrementAndGet();
+                cooldown();
+                if (tor) continue;                    // Tor-da başqa zolaq dərhal sınansın
+                sleepBackoff(transientTries);
+                continue;
             } catch (RuntimeException e) {
-                noteTransient(e.getClass().getSimpleName() + ": " + e.getMessage(), url);
                 req.abort();
-                fetchFailed.incrementAndGet();
-                return null;
+                noteTransient(e.getClass().getSimpleName() + ": " + e.getMessage(), target);
+                return fail(null, target);
             }
 
-            if (attempt < MAX_ATTEMPTS) {
-                fetchRetry.incrementAndGet();
-                sleepBackoff(attempt);
+            // ── IP limiti / bloku ──
+            if (code == 429 || code == 403) {
+                if (tor) {
+                    markLimited(lane, epochAtStart, code);
+                    switches++;
+                    laneSwitch.incrementAndGet();
+                    if (switches >= MAX_LANE_SWITCHES) return fail(code, target);
+                    if (switches % SWITCHES_PER_HOST == 0) hostIdx++;  // bu host inadkar — o birini sına
+                    continue;
+                }
+                // Birbaşa rejim: IP-ni dəyişə bilmirik → növbəti host
+                MackolikHost.markBlocked(target, code);
+                if (++hostIdx >= hosts.size()) return fail(code, target);
+                continue;
             }
+
+            if (RETRYABLE_STATUS.contains(code)) {
+                noteTransient("HTTP " + code, target);
+                if (++transientTries >= MAX_ATTEMPTS) return fail(code, target);
+                fetchRetry.incrementAndGet();
+                cooldown();
+                sleepBackoff(transientTries);
+                continue;
+            }
+
+            return fail(code, target);                // 404 və s. — qəti
         }
+    }
+
+    private byte[] fail(Integer code, String url) {
         fetchFailed.incrementAndGet();
+        if (code != null && permanentStatus.computeIfAbsent(code, k -> new AtomicInteger())
+                                           .getAndIncrement() == 0) {
+            System.err.println("⚠️ HTTP " + code + " (vaz keçildi): " + url);
+        }
         return null;
     }
 
-    /**
-     * Geçici hata türleri (timeout, 5xx ...) → adet. Her türün İLK görülüşü loglanır;
-     * eskiden bunlar sessizce yutulduğundan "0 ok / N retry" durumunun nedeni görünmüyordu.
-     */
-    private final ConcurrentHashMap<String, AtomicInteger> transientErrors = new ConcurrentHashMap<>();
+    // ── Zolaq seçimi / limit ────────────────────────────────────────────────
+    private Lane pickLane() {
+        if (!tor) return lanes.get(0);
+        while (true) {
+            List<Lane> free = new ArrayList<>(lanes.size());
+            for (Lane l : lanes) if (!l.limited()) free.add(l);
+
+            // Zolaqların yarısı dolubsa yeni IP-lər istə (mümkün deyilsə və hələ boş
+            // zolaq varsa gözləmədən davam et; heç biri yoxdursa gözlə).
+            if (free.size() * 2 <= lanes.size() && TorEgress.canRenew()) {
+                if (TorEgress.renew(TorEgress.epoch(), free.isEmpty())) continue;
+            }
+            if (!free.isEmpty()) {
+                return free.get(Math.floorMod(roundRobin.getAndIncrement(), free.size()));
+            }
+            if (!TorEgress.canRenew()) {
+                // ControlPort yoxdur — ən tez açılacaq zolağı gözlə
+                long wait = LANE_BLOCK_MS;
+                for (Lane l : lanes) wait = Math.min(wait, LANE_BLOCK_MS - (System.currentTimeMillis() - l.limitedAt));
+                sleepQuietly(Math.max(1_000, wait));
+            }
+        }
+    }
+
+    private void markLimited(Lane lane, int epochAtStart, int code) {
+        if (epochAtStart != TorEgress.epoch()) return;   // köhnə dövrənin cavabıdır
+        if (lane.limitedEpoch != epochAtStart) {
+            lane.limitedAt = System.currentTimeMillis();
+            lane.limitedEpoch = epochAtStart;
+        }
+        noteTransient("HTTP " + code + " (Tor çıxışı dəyişdirilir)", null);
+    }
 
     private void noteTransient(String what, String url) {
         String key = what == null ? "?" : what.replaceAll("\\d+ ?ms", "N ms");
         if (key.length() > 120) key = key.substring(0, 120);
         if (transientErrors.computeIfAbsent(key, k -> new AtomicInteger()).getAndIncrement() == 0) {
-            System.err.println("⚠️ Geçici hata (yeniden denenecek): " + what + " ← " + url);
+            System.err.println("⚠️ Keçici xəta: " + what + (url == null ? "" : " ← " + url));
         }
     }
 
-    /** Üstel geri çekilme + jitter (sunucuyu daha da boğmamak için). */
     private static void sleepBackoff(int attempt) {
-        long delay = Math.min(RETRY_MAX_DELAY_MS, RETRY_BASE_DELAY_MS * (1L << (attempt - 1)));
+        long delay = Math.min(RETRY_MAX_DELAY_MS, RETRY_BASE_DELAY_MS * (1L << Math.min(10, attempt - 1)));
         delay += ThreadLocalRandom.current().nextLong(200, 600);
+        sleepQuietly(delay);
+    }
+
+    private static void sleepQuietly(long ms) {
         try {
-            Thread.sleep(delay);
+            Thread.sleep(ms);
         } catch (InterruptedException ie) {
             Thread.currentThread().interrupt();
         }
@@ -325,29 +435,22 @@ public final class MackolikHttpFetcher implements AutoCloseable {
             waitMs = slot - now;
             nextAllowedRequestAt = slot + minRequestGapMs;
         }
-        if (waitMs > 0) {
-            try {
-                Thread.sleep(waitMs);
-            } catch (InterruptedException ie) {
-                Thread.currentThread().interrupt();
-            }
-        }
+        if (waitMs > 0) sleepQuietly(waitMs);
     }
 
-    /**
-     * Geçici hata sonrası ortak fren: bir sonraki isteğin (hangi thread'den
-     * gelirse gelsin) en erken COOLDOWN_ON_FAILURE_MS sonra çıkmasını sağlar.
-     */
+    /** Keçici xətadan sonra ortaq əyləc: növbəti sorğu ən tez COOLDOWN sonra çıxsın. */
     private void cooldown() {
+        if (tor) return;          // Tor-da hər zolağın IP-si ayrıdır — hamını saxlamağa ehtiyac yoxdur
         synchronized (rateLock) {
             long until = System.currentTimeMillis() + COOLDOWN_ON_FAILURE_MS;
             if (nextAllowedRequestAt < until) nextAllowedRequestAt = until;
         }
     }
 
-    // ─── DİSK ÖNBELLEĞİ ─────────────────────────────────────────────────────
+    // ═══════════════════════════════════════════════════════════════════════
+    //  Disk önbelleği
+    // ═══════════════════════════════════════════════════════════════════════
 
-    /** {@code MACKOLIK_CACHE_DIR} / {@code -Dmackolik.cache.dir}; yoksa önbellek kapalı. */
     private static Path resolveCacheDir() {
         String dir = System.getProperty("mackolik.cache.dir");
         if (dir == null || dir.trim().isEmpty()) dir = System.getenv("MACKOLIK_CACHE_DIR");
@@ -359,7 +462,7 @@ public final class MackolikHttpFetcher implements AutoCloseable {
             return p;
         } catch (IOException | RuntimeException e) {
             System.err.println("⚠️ Önbellek dizini açılamadı (" + dir + "): " + e.getMessage());
-            return null;   // önbellek olmadan da çalış
+            return null;
         }
     }
 
@@ -380,7 +483,6 @@ public final class MackolikHttpFetcher implements AutoCloseable {
         }
     }
 
-    /** @return önbellekteki gövde; yoksa, bayatsa ya da okunamazsa null. */
     private static byte[] readCache(Path file) {
         try {
             if (!Files.isRegularFile(file)) return null;
@@ -391,18 +493,21 @@ public final class MackolikHttpFetcher implements AutoCloseable {
                 return in.readAllBytes();
             }
         } catch (IOException | RuntimeException e) {
-            return null;   // bozuk girdi → ağdan çek
+            return null;
         }
     }
 
-    /**
-     * Gövdeyi gzip'leyip diske yazar. Yalnızca gerçek fikstür sayfaları yazılır;
-     * yazım atomiktir (geçici dosya + move), böylece paralel thread'ler yarım
-     * dosya okumaz.
-     */
+    /** Cavab həqiqi datadırmı? (fikstür cədvəli və ya boş olmayan FixtureHandler JS massivi) */
+    static boolean looksCacheable(byte[] body) {
+        if (body == null || body.length == 0) return false;
+        String s = new String(body, StandardCharsets.ISO_8859_1);
+        if (s.contains(CACHEABLE_MARKER)) return true;
+        String t = s.trim();
+        return t.length() > 4 && t.charAt(0) == '[' && t.charAt(t.length() - 1) == ']';
+    }
+
     private static void writeCache(Path file, byte[] body) {
-        if (body == null || body.length == 0) return;
-        if (!new String(body, StandardCharsets.ISO_8859_1).contains(CACHEABLE_MARKER)) return;
+        if (!looksCacheable(body)) return;
         Path tmp = null;
         try {
             Files.createDirectories(file.getParent());
@@ -412,41 +517,49 @@ public final class MackolikHttpFetcher implements AutoCloseable {
             }
             Files.move(tmp, file, StandardCopyOption.REPLACE_EXISTING);
         } catch (IOException | RuntimeException e) {
-            // Önbellek yazılamazsa analiz akışı bozulmasın.
             if (tmp != null) {
                 try { Files.deleteIfExists(tmp); } catch (IOException ignored) { }
             }
         }
     }
 
-    public int okCount()     { return fetchOk.get(); }
-    public int retryCount()  { return fetchRetry.get(); }
-    public int failedCount() { return fetchFailed.get(); }
+    // ═══════════════════════════════════════════════════════════════════════
+    //  Statistika
+    // ═══════════════════════════════════════════════════════════════════════
+
+    public int okCount()       { return fetchOk.get(); }
+    public int retryCount()    { return fetchRetry.get(); }
+    public int failedCount()   { return fetchFailed.get(); }
     public int cacheHitCount() { return cacheHit.get(); }
 
     public String statsLine() {
-        String base = String.format("%d ok / %d retry / %d başarısız",
-                fetchOk.get(), fetchRetry.get(), fetchFailed.get())
-                + " [host: " + MackolikHost.describe() + "]";
-        if (cacheDir != null) base += " / " + cacheHit.get() + " önbellek";
+        StringBuilder sb = new StringBuilder(String.format("%d ok / %d retry / %d başarısız",
+                fetchOk.get(), fetchRetry.get(), fetchFailed.get()));
+        if (cacheDir != null) sb.append(" / ").append(cacheHit.get()).append(" önbellek");
+        sb.append(" [host: ").append(MackolikHost.describe());
+        if (tor) sb.append(" | Tor: ").append(lanes.size()).append(" zolaq, ")
+                   .append(laneSwitch.get()).append(" IP dəyişmə, NEWNYM×").append(TorEgress.epoch());
+        sb.append(']');
         if (!transientErrors.isEmpty()) {
-            StringBuilder sb = new StringBuilder(base).append(" {geçici: ");
+            sb.append(" {keçici: ");
             transientErrors.forEach((k, n) -> sb.append(k).append('×').append(n.get()).append("; "));
-            base = sb.toString().replaceAll("; $", "") + "}";
+            sb.setLength(sb.length() - 2);
+            sb.append('}');
         }
         if (!permanentStatus.isEmpty()) {
-            StringBuilder sb = new StringBuilder(base).append(" (");
+            sb.append(" (");
             permanentStatus.forEach((code, n) -> sb.append("HTTP ").append(code).append('×').append(n.get()).append(' '));
-            base = sb.toString().trim() + ")";
+            sb.setLength(sb.length() - 1);
+            sb.append(')');
         }
-        return base;
+        return sb.toString();
     }
 
     @Override
     public void close() {
-        try {
-            http.close();
-        } catch (IOException ignored) {
+        if (this == shared) return;          // ortaq nümunə JVM sonuna qədər yaşayır
+        for (Lane l : lanes) {
+            try { l.http.close(); } catch (IOException ignored) { }
         }
     }
 }

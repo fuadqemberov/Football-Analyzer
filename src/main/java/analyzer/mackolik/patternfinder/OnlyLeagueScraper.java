@@ -1,5 +1,7 @@
 package analyzer.mackolik.patternfinder;
 
+import analyzer.util.MackolikHttpFetcher;
+
 import analyzer.util.MackolikHost;
 
 import org.apache.http.client.methods.CloseableHttpResponse;
@@ -32,15 +34,8 @@ public class OnlyLeagueScraper {
 
     private static String fetchHtml(CloseableHttpClient httpClient, String url)
             throws IOException {
-        HttpGet request = new HttpGet(url);
-        request.addHeader("User-Agent",
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36");
-        try (CloseableHttpResponse response = httpClient.execute(request)) {
-            int status = response.getStatusLine().getStatusCode();
-            if (status == 200) return EntityUtils.toString(response.getEntity());
-            log.warn("HTTP {} for URL: {}", status, url);
-            return null;
-        }
+        // Ortaq fetcher: arsiv2 hostu, Tor ilə IP rotasiyası, retry (bax: MackolikHttpFetcher)
+        return MackolikHttpFetcher.shared().fetchText(url, false);
     }
 
     // ═══════════════════════════════════════════════════════════════════════

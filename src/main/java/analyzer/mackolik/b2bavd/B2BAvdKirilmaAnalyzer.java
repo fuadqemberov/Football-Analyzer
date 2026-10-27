@@ -1,5 +1,7 @@
 package analyzer.mackolik.b2bavd;
 
+import analyzer.util.MackolikHttpFetcher;
+
 import analyzer.util.MackolikHost;
 
 import analyzer.util.TeamIdsFetcher;
@@ -530,22 +532,8 @@ public class B2BAvdKirilmaAnalyzer {
     }
 
     private static String fetchHtml(CloseableHttpClient http, String url) throws IOException {
-        HttpGet req = new HttpGet(url);
-        req.addHeader("User-Agent",
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/91.0 Safari/537.36");
-        RequestConfig config = RequestConfig.custom()
-                .setConnectTimeout(10000)
-                .setConnectionRequestTimeout(10000)
-                .setSocketTimeout(15000)
-                .build();
-        req.setConfig(config);
-
-        try (CloseableHttpResponse resp = http.execute(req)) {
-            if (resp.getStatusLine().getStatusCode() == 200) {
-                return EntityUtils.toString(resp.getEntity());
-            }
-            return null;
-        }
+        // Ortaq fetcher: arsiv2 hostu, Tor ilə IP rotasiyası, retry (bax: MackolikHttpFetcher)
+        return MackolikHttpFetcher.shared().fetchText(url, false);
     }
 
     private static String extractCell(Element row, String cssSelector) {

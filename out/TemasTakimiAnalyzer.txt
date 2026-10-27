@@ -1,41 +1,0 @@
-
-╔══════════════════════════════════════════════════════╗
-║  TEMAS TAKIMI ANALİZÖRÜ - HT/FT Sürpriz Avcısı        ║
-║  1/X, 2/X → BERABERLİK COMEBACK                       ║
-║  1/2, 2/1 → FULL COMEBACK                             ║
-║  + CORRECT SCORE (ters-düz aynı skor tekrarı)         ║
-╚══════════════════════════════════════════════════════╝
-
-📅 Güncel sezon (otomatik): 2026/2027 | Taranan geçmiş: 2025/2026 → 2010/2011
-
-🔄 [1/3] Günün başlamamış maçlarından takım ID'leri alınıyor...
-Programda 260 başlamamış maç var; 27/10/2026 için 260 maç alındı.
-Başlamamış maçlardan toplam 520 adet benzersiz Takım ID'si alındı.
-✅ [1/3] 520 takım bulundu
-
-SLF4J(W): No SLF4J providers were found.
-SLF4J(W): Defaulting to no-operation (NOP) logger implementation
-SLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.
-SLF4J(W): Class path contains SLF4J bindings targeting slf4j-api versions 1.7.x or earlier.
-SLF4J(W): Ignoring binding found at [jar:file:/home/runner/.m2/repository/org/slf4j/slf4j-log4j12/1.7.30/slf4j-log4j12-1.7.30.jar!/org/slf4j/impl/StaticLoggerBinder.class]
-SLF4J(W): See https://www.slf4j.org/codes.html#ignoredBindings for an explanation.
-🔄 [2/3] 520 takım 8 thread ile taranıyor...
-
-⚠️ Geçici hata (yeniden denenecek): HTTP 429 ← https://arsiv2.mackolik.com/Team/Default.aspx?id=16&season=2026/2027
-   ❌ [ID:60254] güncel sezon indirilemedi (retry'lar tükendi)
-   ❌ [ID:9] güncel sezon indirilemedi (retry'lar tükendi)
-   ❌ [ID:16] güncel sezon indirilemedi (retry'lar tükendi)
-⏳ İlerleme: 1/520  |  Sinyal: 0   ❌ [ID:600] güncel sezon indirilemedi (retry'lar tükendi)
-   ❌ [ID:52849] güncel sezon indirilemedi (retry'lar tükendi)
-   ❌ [ID:563] güncel sezon indirilemedi (retry'lar tükendi)
-   ❌ [ID:9731] güncel sezon indirilemedi (retry'lar tükendi)
-   ❌ [ID:11950] güncel sezon indirilemedi (retry'lar tükendi)
-⏳ İlerleme: 2/520  |  Sinyal: 0⏳ İlerleme: 3/520  |  Sinyal: 0⏳ İlerleme: 4/520  |  Sinyal: 0⏳ İlerleme: 5/520  |  Sinyal: 0⏳ İlerleme: 6/520  |  Sinyal: 0⏳ İlerleme: 7/520  |  Sinyal: 0⏳ İlerleme: 8/520  |  Sinyal: 0   ❌ [ID:621] güncel sezon indirilemedi (retry'lar tükendi)
-⏳ İlerleme: 9/520  |  Sinyal: 0   ❌ [ID:541] güncel sezon indirilemedi (retry'lar tükendi)
-⏳ İlerleme: 10/520  |  Sinyal: 0   ❌ [ID:52853] güncel sezon indirilemedi (retry'lar tükendi)
-   ❌ [ID:42064] güncel sezon indirilemedi (retry'lar tükendi)
-   ❌ [ID:46137] güncel sezon indirilemedi (retry'lar tükendi)
-   ❌ [ID:619] güncel sezon indirilemedi (retry'lar tükendi)
-   ❌ [ID:18] güncel sezon indirilemedi (retry'lar tükendi)
-⏳ İlerleme: 11/520  |  Sinyal: 0⏳ İlerleme: 12/520  |  Sinyal: 0⏳ İlerleme: 13/520  |  Sinyal: 0⏳ İlerleme: 14/520  |  Sinyal: 0⏳ İlerleme: 15/520  |  Sinyal: 0   ❌ [ID:17386] güncel sezon indirilemedi (retry'lar tükendi)
-⏳ İlerleme: 16/520  |  Sinyal: 0[exit 124]

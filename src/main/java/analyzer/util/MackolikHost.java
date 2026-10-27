@@ -82,9 +82,14 @@ public final class MackolikHost {
 
     /** Host 403 verdi → sonrakı sorğular əvvəlcə digər hostlara getsin. */
     public static void markBlocked(String url) {
+        markBlocked(url, 403);
+    }
+
+    /** Host 403/429 verdi (IP bloku / limit) → sonrakı sorğular əvvəlcə digər hostlara getsin. */
+    public static void markBlocked(String url, int code) {
         String h = hostOf(url);
         if (h != null && BLOCKED.add(h) && HOSTS.size() > 1) {
-            System.err.println("⚠️ " + h + " 403 qaytarır — digər mackolik hostuna keçilir "
+            System.err.println("⚠️ " + h + " HTTP " + code + " qaytarır — digər mackolik hostuna keçilir "
                     + "(sıra: " + String.join(", ", candidates("https://" + h + "/")
                     .stream().map(MackolikHost::hostOf).toList()) + ")");
         }
@@ -108,6 +113,21 @@ public final class MackolikHost {
         return "https://" + host + url.substring(end);
     }
 
+    /**
+     * Sezon artıq bitibmi (datası dəyişməz → önbelleyə yazıla bilər)?
+     * "2024/2025" → başlanğıc ili cari futbol sezonundan (iyuldan başlayır) kiçikdirsə;
+     * "2025" (təqvim ili liqası) → cari ildən kiçikdirsə. Tanınmasa false.
+     */
+    public static boolean isPastSeason(String label) {
+        if (label == null) return false;
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("(\\d{4})").matcher(label);
+        if (!m.find()) return false;
+        int y = Integer.parseInt(m.group(1));
+        java.time.LocalDate now = java.time.LocalDate.now();
+        int curSplit = now.getMonthValue() >= 7 ? now.getYear() : now.getYear() - 1;
+        return label.contains("/") || label.contains("-") ? y < curSplit : y < now.getYear();
+    }
+
     /** Diaqnostika üçün: "arsiv2.mackolik.com → arsiv.mackolik.com". */
     public static String describe() {
         return String.join(" → ", HOSTS);
@@ -123,5 +143,7 @@ public final class MackolikHost {
         System.out.println(candidates(u));
         System.out.println(candidates("https://vd.mackolik.com/livedata?group=all"));
         System.out.println(Arrays.asList(BASE));
+        System.out.println(isPastSeason("2025/2026") + " " + isPastSeason("2026/2027") + " "
+                + isPastSeason("2025") + " " + isPastSeason("2026"));
     }
 }

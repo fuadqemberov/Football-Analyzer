@@ -1,5 +1,7 @@
 package analyzer.mackolik.before_after_pattern;
 
+import analyzer.util.MackolikHttpFetcher;
+
 import analyzer.util.MackolikHost;
 
 import analyzer.util.TeamIdsFetcher;
@@ -135,15 +137,10 @@ public class MackolikHalfTimePatternFinder {
                     String url = MackolikHost.BASE + "/Match/Head2Head.aspx?id=" + matchId + "&s=1";
                     String matchUrl = MackolikHost.BASE + "/Mac/" + matchId + "/";
 
-                    HttpRequest request = HttpRequest.newBuilder()
-                            .uri(URI.create(url))
-                            .header("User-Agent", USER_AGENT)
-                            .timeout(Duration.ofSeconds(30))
-                            .GET()
-                            .build();
-
-                    HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-                    Document doc = Jsoup.parse(response.body());
+                    // Ortaq fetcher: arsiv2 hostu, Tor ilə IP rotasiyası, retry
+                    String body = MackolikHttpFetcher.shared().fetchHtml(url);
+                    if (body == null) throw new java.io.IOException("Head2Head alınmadı: " + url);
+                    Document doc = Jsoup.parse(body);
 
                     Elements forms = doc.select("div.md:has(div.detail-title:contains(Form Durumu))");
                     if (forms.size() < 2) return null;
@@ -407,14 +404,9 @@ public class MackolikHalfTimePatternFinder {
     private static List<PastMatch> fetchTeamPastMatches(String matchId, String teamName) {
         try {
             String url = MackolikHost.BASE + "/Match/Head2Head.aspx?id=" + matchId + "&s=1";
-            HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create(url))
-                    .header("User-Agent", USER_AGENT)
-                    .timeout(Duration.ofSeconds(30))
-                    .GET()
-                    .build();
-            HttpResponse<String> resp = client.send(request, HttpResponse.BodyHandlers.ofString());
-            Document doc = Jsoup.parse(resp.body());
+            String body = MackolikHttpFetcher.shared().fetchHtml(url);
+            if (body == null) return new ArrayList<>();
+            Document doc = Jsoup.parse(body);
 
             Elements forms = doc.select("div.md:has(div.detail-title:contains(Form Durumu))");
             for (Element form : forms) {

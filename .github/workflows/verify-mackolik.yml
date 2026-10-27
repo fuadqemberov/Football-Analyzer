@@ -7,58 +7,59 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
     env:
       LANG: C.UTF-8
       LC_ALL: C.UTF-8
       MAVEN_OPTS: "-Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dstderr.encoding=UTF-8"
+      MACKOLIK_CACHE_DIR: ${{ github.workspace }}/.mackolik-cache
+      MACKOLIK_TOR_PORTS: "9060-9075"
+      MACKOLIK_TOR_CONTROL: "9151"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
         with: { java-version: '21', distribution: 'temurin', cache: maven }
-      - name: Compile
-        run: mvn -B -q compile -DskipTests > compile.txt 2>&1 || { tail -50 compile.txt; exit 1; }
-      - name: Tor load probe
-        shell: bash {0}
+      # arsiv.mackolik.com bulud IP-lərini 403 ilə bloklayır, arsiv2 isə bir IP-yə
+      # ~40 sorğu verib 429 qaytarır. Tor-un hər SOCKS portu ayrı çıxış IP-sidir;
+      # MackolikHttpFetcher limit dolanda portu dəyişir və ControlPort-dan NEWNYM
+      # ilə yeni IP-lər alır. Tor başlamasa analizlər birbaşa bağlantı ilə davam edir.
+      - name: Start Tor (mackolik IP limiti)
         run: |
-          set +e
+          sudo apt-get install -y -qq tor > /dev/null 2>&1 || sudo apt-get install -y tor
+          sudo systemctl stop tor tor@default 2>/dev/null || true
+          sudo pkill -x tor || true; sleep 1
+          TD="$RUNNER_TEMP/tor"; mkdir -p "$TD" && chmod 700 "$TD"
+          { for p in $(seq 9060 9075); do echo "SocksPort $p"; done
+            echo "ControlPort 9151"; echo "CookieAuthentication 0"; echo "DataDirectory $TD"; } > "$RUNNER_TEMP/torrc"
+          nohup tor -f "$RUNNER_TEMP/torrc" > "$RUNNER_TEMP/tor.log" 2>&1 &
+          for i in $(seq 1 90); do grep -q "Bootstrapped 100" "$RUNNER_TEMP/tor.log" && break; sleep 2; done
+          if grep -q "Bootstrapped 100" "$RUNNER_TEMP/tor.log"; then
+            echo "Tor hazırdır: $(curl -s -m 20 --socks5 127.0.0.1:9060 https://api.ipify.org)"
+          else
+            echo "Tor başlamadı — mackolik birbaşa bağlantı ilə işləyəcək"; tail -20 "$RUNNER_TEMP/tor.log"
+            echo "MACKOLIK_TOR_PORTS=" >> "$GITHUB_ENV"
+          fi
+
+      - name: Compile
+        run: mvn -B -q compile -DskipTests > compile.txt 2>&1 || { tail -60 compile.txt; exit 1; }
+      - name: Run analyzers (time-boxed)
+        run: |
           mkdir -p out
-          sudo apt-get install -y -qq tor >/dev/null 2>&1
-          sudo systemctl stop tor tor@default 2>/dev/null; sudo pkill -x tor; sleep 2
-          printf 'SocksPort 9060\nSocksPort 9061\nSocksPort 9062\nSocksPort 9063\nSocksPort 9064\nSocksPort 9065\nSocksPort 9066\nSocksPort 9067\nControlPort 9151\nCookieAuthentication 0\nDataDirectory /tmp/tordata\n' > torrc
-          mkdir -p /tmp/tordata && chmod 700 /tmp/tordata
-          (tor -f torrc > tor.log 2>&1 &)
-          for i in $(seq 1 90); do grep -q "Bootstrapped 100" tor.log && break; sleep 2; done
-          UA='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
-          worker() { # port host season
-            local p=$1 h=$2 se=$3 ok=0 r429=0 r403=0 oth=0 t0=$(date +%s)
-            local ip=$(curl -s -m 20 --socks5 127.0.0.1:$p https://api.ipify.org)
-            for i in $(seq 1 45); do
-              id=$(( (p-9060)*100 + i ))
-              c=$(curl -s -m 40 -A "$UA" --socks5 127.0.0.1:$p -o b.$p -w '%{http_code}' "https://$h/Team/Default.aspx?id=$id&season=$se")
-              case $c in 200) ok=$((ok+1));; 429) r429=$((r429+1));; 403) r403=$((r403+1));; *) oth=$((oth+1));; esac
-            done
-            echo "port $p exit=$ip host=$h  200=$ok 429=$r429 403=$r403 other=$oth  $(( $(date +%s)-t0 ))s"
-          }
-          {
-          echo "tor version: $(tor --version | head -1)"; grep -E "Bootstrapped 100|err|warn|Opened Socks" tor.log | head -15
-          echo "== arsiv (orig) via 8 tor ports in parallel, 45 req each"
-          t0=$(date +%s); for p in 9060 9061 9062 9063 9064 9065 9066 9067; do worker $p arsiv.mackolik.com 2024/2025 & done; wait; echo "total $(( $(date +%s)-t0 ))s"
-          echo "== arsiv2 via 8 tor ports in parallel, 45 req each"
-          t0=$(date +%s); for p in 9060 9061 9062 9063 9064 9065 9066 9067; do worker $p arsiv2.mackolik.com 2023/2024 & done; wait; echo "total $(( $(date +%s)-t0 ))s"
-          echo "== direct arsiv2 after 60s idle (was this IP limited earlier? new runner = fresh IP)"
-          for i in 1 2 3; do curl -s -m 30 -A "$UA" -o /dev/null -w '%{http_code} ' "https://arsiv2.mackolik.com/Team/Default.aspx?id=$((900+i))&season=2022/2023"; done; echo
-          } > out/tor.txt 2>&1
+          for c in analyzer.mackolik.xthmatch.SeasonXthOfficialMatchAnalyzer analyzer.mackolik.temas.TemasTakimiAnalyzer analyzer.mackolik.dongu.HaftaDonguAnalyzer analyzer.mackolik.triplepattern.SezonDenklemiAnalyzer; do
+            n=${c##*.}; s=$(date +%s)
+            timeout -k 20 10m mvn -B -q exec:java -Dexec.mainClass="$c" -Dexec.classpathScope=compile > out/$n.txt 2>&1 || echo "[exit $?]" >> out/$n.txt
+            echo "[elapsed $(( $(date +%s)-s ))s]" >> out/$n.txt
+          done
       - name: Summarize & commit
         if: always()
         run: |
           {
-          echo "compile: $(grep -c ERROR compile.txt 2>/dev/null) error lines"; cat out/tor.txt
+          echo "compile: $(grep -c ERROR compile.txt 2>/dev/null) error lines"
+          grep -E "ERROR" compile.txt | head -20
           for f in out/*.txt; do
             echo "################ $f ($(wc -l < $f) lines)"
-            echo "403 lines: $(grep -c '403' $f)  host-switch: $(grep -c 'hostuna keçilir' $f)"
-            grep -m3 -E 'arsiv|HTTP [0-9]{3}' $f | cut -c1-200
-            tail -n 25 $f | tr '\r' '\n' | grep -v '^⏳' | tail -n 15 | cut -c1-250
+            tr '\r' '\n' < $f | grep -E "Tor çıxışı|Keçici xəta|HTTP [0-9]{3} \(vaz|hostuna|istek özeti|İstek özeti|TAMAMLANDI|Bulunan|NƏTİCƏ|tapılan|exit|elapsed" | cut -c1-400 | tail -n 25
+            tr '\r' '\n' < $f | grep -oE "İstek: .*" | tail -1 | cut -c1-400
           done
           } > verify.txt
           git config user.name verify-bot; git config user.email verify@users.noreply.github.com

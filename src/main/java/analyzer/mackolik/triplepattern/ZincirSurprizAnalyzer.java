@@ -1,5 +1,7 @@
 package analyzer.mackolik.triplepattern;
 
+import analyzer.util.MackolikHttpFetcher;
+
 import analyzer.mackolik.triplepattern.LeagueSeasonFetcher.LeagueRef;
 import analyzer.util.TeamIdsFetcher;
 import org.apache.http.client.config.RequestConfig;
@@ -407,17 +409,8 @@ public class ZincirSurprizAnalyzer {
     // ═══════════════════════════════════════════════════════════════════════
 
     private static String fetchText(CloseableHttpClient http, String url) throws IOException {
-        HttpGet request = new HttpGet(url);
-        request.addHeader("User-Agent", USER_AGENT);
-        request.setConfig(RequestConfig.custom()
-                .setConnectTimeout(10000)
-                .setConnectionRequestTimeout(15000)
-                .setSocketTimeout(20000)
-                .build());
-        try (CloseableHttpResponse response = http.execute(request)) {
-            if (response.getStatusLine().getStatusCode() != 200) return null;
-            return EntityUtils.toString(response.getEntity(), StandardCharsets.UTF_8);
-        }
+        // Ortaq fetcher: arsiv2 hostu, Tor ilə IP rotasiyası, retry (bax: MackolikHttpFetcher)
+        return MackolikHttpFetcher.shared().fetchText(url, false);
     }
 
     // ═══════════════════════════════════════════════════════════════════════

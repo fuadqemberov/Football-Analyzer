@@ -1,5 +1,7 @@
 package analyzer.mackolik.triplepattern;
 
+import analyzer.util.MackolikHttpFetcher;
+
 import analyzer.util.MackolikHost;
 
 import analyzer.mackolik.triplepattern.LeagueSeasonFetcher.JsArrayParser;
@@ -460,7 +462,7 @@ public class SezonDenklemiAnalyzer {
         return FULL_SEASON_CACHE.computeIfAbsent(seasonId, id -> {
             List<LeagueMatch> matches = new ArrayList<>();
             try {
-                List<Integer> weeks = fetchWeeks(http, id);
+                List<Integer> weeks = fetchWeeks(http, id, MackolikHost.isPastSeason(seasonLabel));
                 if (weeks.isEmpty()) {
                     log.warn("seasonId {} üçün hafta siyahısı boşdur", id);
                     return matches;
@@ -491,9 +493,9 @@ public class SezonDenklemiAnalyzer {
         return Integer.compare(a.week, b.week);
     }
 
-    private static List<Integer> fetchWeeks(CloseableHttpClient http, int seasonId) throws IOException {
+    private static List<Integer> fetchWeeks(CloseableHttpClient http, int seasonId, boolean past) throws IOException {
         List<Integer> weeks = new ArrayList<>();
-        String body = fetchText(http, String.format(WEEKS_URL, seasonId));
+        String body = fetchText(http, String.format(WEEKS_URL, seasonId), past);
         if (body == null) return weeks;
         for (List<String> row : JsArrayParser.parseRows(body)) {
             if (row.isEmpty()) continue;
@@ -506,7 +508,8 @@ public class SezonDenklemiAnalyzer {
     private static List<LeagueMatch> fetchWeekMatches(CloseableHttpClient http, int seasonId,
                                                       int week, String seasonLabel) throws IOException {
         List<LeagueMatch> matches = new ArrayList<>();
-        String body = fetchText(http, String.format(MATCHES_URL, seasonId, week));
+        String body = fetchText(http, String.format(MATCHES_URL, seasonId, week),
+                MackolikHost.isPastSeason(seasonLabel));
         if (body == null) return matches;
         for (List<String> row : JsArrayParser.parseRows(body)) {
             LeagueMatch match = toMatch(row, week, seasonLabel);
@@ -886,24 +889,14 @@ public class SezonDenklemiAnalyzer {
     //  HTTP
     // ═══════════════════════════════════════════════════════════════════════
 
-    private static String fetchText(CloseableHttpClient http, String url) throws IOException {
-        HttpGet request = new HttpGet(url);
-        request.addHeader("User-Agent", USER_AGENT);
-        request.setConfig(RequestConfig.custom()
-                .setConnectTimeout(10000)
-                .setConnectionRequestTimeout(15000)
-                .setSocketTimeout(20000)
-                .build());
+    private static String fetchText(CloseableHttpClient http, String url, boolean cacheable) throws IOException {
+        // Ortaq fetcher: arsiv2 hostu, Tor ilə IP rotasiyası, retry (bax: MackolikHttpFetcher)
+        return MackolikHttpFetcher.shared().fetchText(url, cacheable);
+    }
 
-        log.debug("GET {}", url);
-        try (CloseableHttpResponse response = http.execute(request)) {
-            int status = response.getStatusLine().getStatusCode();
-            if (status != 200) {
-                log.warn("HTTP {} — {}", status, url);
-                return null;
-            }
-            return EntityUtils.toString(response.getEntity(), StandardCharsets.UTF_8);
-        }
+    private static String fetchText(CloseableHttpClient http, String url) throws IOException {
+        // Ortaq fetcher: arsiv2 hostu, Tor ilə IP rotasiyası, retry (bax: MackolikHttpFetcher)
+        return MackolikHttpFetcher.shared().fetchText(url, false);
     }
 
     // ═══════════════════════════════════════════════════════════════════════

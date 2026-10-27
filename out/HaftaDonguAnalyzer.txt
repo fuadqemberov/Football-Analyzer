@@ -1,23 +1,0 @@
-
-╔══════════════════════════════════════════════════════╗
-║  HAFTA DÖNGÜ ANALİZÖRÜ (döngü uzunluğu dinamik)       ║
-║  1/2, 2/1 → FULL COMEBACK                             ║
-║  1/X, 2/X → BERABERLİK COMEBACK                       ║
-╚══════════════════════════════════════════════════════╝
-
-📅 Güncel sezon: 2026/2027 | Döngü: 2..10 yıl (dinamik) | Taranan: son 20 yıl
-🌐 Ağ: 8 thread | istek aralığı 40ms | ortak retry'lı fetcher (MackolikHttpFetcher)
-
-🔄 Günün başlamamış maçlarından takım ID'leri alınıyor...
-Programda 260 başlamamış maç var; 27/10/2026 için 260 maç alındı.
-Başlamamış maçlardan toplam 520 adet benzersiz Takım ID'si alındı.
-✅ 520 takım bulundu
-
-SLF4J(W): No SLF4J providers were found.
-SLF4J(W): Defaulting to no-operation (NOP) logger implementation
-SLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.
-SLF4J(W): Class path contains SLF4J bindings targeting slf4j-api versions 1.7.x or earlier.
-SLF4J(W): Ignoring binding found at [jar:file:/home/runner/.m2/repository/org/slf4j/slf4j-log4j12/1.7.30/slf4j-log4j12-1.7.30.jar!/org/slf4j/impl/StaticLoggerBinder.class]
-SLF4J(W): See https://www.slf4j.org/codes.html#ignoredBindings for an explanation.
-⚠️ Geçici hata (yeniden denenecek): HTTP 429 ← https://arsiv2.mackolik.com/Team/Default.aspx?id=16&season=2026/2027
-⏳ İlerleme: 1/520  |  Sinyal: 0  |  İstek: 0 ok / 60 retry / 4 başarısız [host: arsiv2.mackolik.com → arsiv.mackolik.com] {geçici: HTTP 429×64}   ⏳ İlerleme: 2/520  |  Sinyal: 0  |  İstek: 0 ok / 60 retry / 5 başarısız [host: arsiv2.mackolik.com → arsiv.mackolik.com] {geçici: HTTP 429×65}   ⏳ İlerleme: 3/520  |  Sinyal: 0  |  İstek: 0 ok / 60 retry / 7 başarısız [host: arsiv2.mackolik.com → arsiv.mackolik.com] {geçici: HTTP 429×67}   ⏳ İlerleme: 4/520  |  Sinyal: 0  |  İstek: 0 ok / 60 retry / 7 başarısız [host: arsiv2.mackolik.com → arsiv.mackolik.com] {geçici: HTTP 429×67}   ⏳ İlerleme: 5/520  |  Sinyal: 0  |  İstek: 0 ok / 60 retry / 7 başarısız [host: arsiv2.mackolik.com → arsiv.mackolik.com] {geçici: HTTP 429×67}   ⏳ İlerleme: 6/520  |  Sinyal: 0  |  İstek: 0 ok / 65 retry / 8 başarısız [host: arsiv2.mackolik.com → arsiv.mackolik.com] {geçici: HTTP 429×73}   ⏳ İlerleme: 7/520  |  Sinyal: 0  |  İstek: 0 ok / 65 retry / 8 başarısız [host: arsiv2.mackolik.com → arsiv.mackolik.com] {geçici: HTTP 429×73}   ⏳ İlerleme: 8/520  |  Sinyal: 0  |  İstek: 0 ok / 65 retry / 8 başarısız [host: arsiv2.mackolik.com → arsiv.mackolik.com] {geçici: HTTP 429×73}   ⏳ İlerleme: 9/520  |  Sinyal: 0  |  İstek: 0 ok / 112 retry / 9 başarısız [host: arsiv2.mackolik.com → arsiv.mackolik.com] {geçici: HTTP 429×121}   ⏳ İlerleme: 10/520  |  Sinyal: 0  |  İstek: 0 ok / 112 retry / 10 başarısız [host: arsiv2.mackolik.com → arsiv.mackolik.com] {geçici: HTTP 429×122}   ⏳ İlerleme: 11/520  |  Sinyal: 0  |  İstek: 0 ok / 120 retry / 15 başarısız [host: arsiv2.mackolik.com → arsiv.mackolik.com] {geçici: HTTP 429×135}   ⏳ İlerleme: 12/520  |  Sinyal: 0  |  İstek: 0 ok / 120 retry / 15 başarısız [host: arsiv2.mackolik.com → arsiv.mackolik.com] {geçici: HTTP 429×135}   ⏳ İlerleme: 13/520  |  Sinyal: 0  |  İstek: 0 ok / 120 retry / 15 başarısız [host: arsiv2.mackolik.com → arsiv.mackolik.com] {geçici: HTTP 429×135}   ⏳ İlerleme: 14/520  |  Sinyal: 0  |  İstek: 0 ok / 120 retry / 15 başarısız [host: arsiv2.mackolik.com → arsiv.mackolik.com] {geçici: HTTP 429×135}   ⏳ İlerleme: 15/520  |  Sinyal: 0  |  İstek: 0 ok / 121 retry / 16 başarısız [host: arsiv2.mackolik.com → arsiv.mackolik.com] {geçici: HTTP 429×137}   ⏳ İlerleme: 16/520  |  Sinyal: 0  |  İstek: 0 ok / 121 retry / 16 başarısız [host: arsiv2.mackolik.com → arsiv.mackolik.com] {geçici: HTTP 429×137}   [exit 124]

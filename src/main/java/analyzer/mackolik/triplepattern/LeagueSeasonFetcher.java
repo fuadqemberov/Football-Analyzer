@@ -1,5 +1,7 @@
 package analyzer.mackolik.triplepattern;
 
+import analyzer.util.MackolikHttpFetcher;
+
 import analyzer.util.MackolikHost;
 
 import analyzer.mackolik.patternfinder.OnlyLeagueScraper;
@@ -168,7 +170,8 @@ class LeagueSeasonFetcher {
         return SEASON_CACHE.computeIfAbsent(seasonId, id -> {
             List<LeagueMatch> matches = new ArrayList<>();
             try {
-                List<Integer> weeks = fetchWeeks(http, id);
+                boolean past = MackolikHost.isPastSeason(seasonLabel);
+                List<Integer> weeks = fetchWeeks(http, id, past);
                 if (weeks.isEmpty()) {
                     log.warn("No weeks returned for seasonId {}", id);
                     return matches;
@@ -177,7 +180,7 @@ class LeagueSeasonFetcher {
                 int startYear = parseStartYear(seasonLabel);
                 for (int week : weeks) {
                     try {
-                        matches.addAll(fetchWeekMatches(http, id, week, startYear));
+                        matches.addAll(fetchWeekMatches(http, id, week, startYear, past));
                     } catch (IOException e) {
                         log.warn("Week {} of season {} failed: {}", week, id, e.getMessage());
                     }
@@ -202,8 +205,8 @@ class LeagueSeasonFetcher {
         return Integer.compare(a.week, b.week);
     }
 
-    private static List<Integer> fetchWeeks(CloseableHttpClient http, int seasonId) throws IOException {
-        String body = fetchText(http, String.format(WEEKS_URL, seasonId));
+    private static List<Integer> fetchWeeks(CloseableHttpClient http, int seasonId, boolean past) throws IOException {
+        String body = fetchText(http, String.format(WEEKS_URL, seasonId), past);
         List<Integer> weeks = new ArrayList<>();
         if (body == null) return weeks;
 
@@ -216,8 +219,8 @@ class LeagueSeasonFetcher {
     }
 
     private static List<LeagueMatch> fetchWeekMatches(CloseableHttpClient http, int seasonId,
-                                                     int week, int startYear) throws IOException {
-        String body = fetchText(http, String.format(MATCHES_URL, seasonId, week));
+                                                     int week, int startYear, boolean past) throws IOException {
+        String body = fetchText(http, String.format(MATCHES_URL, seasonId, week), past);
         List<LeagueMatch> matches = new ArrayList<>();
         if (body == null) return matches;
 
@@ -329,25 +332,14 @@ class LeagueSeasonFetcher {
     //  HTTP
     // ═══════════════════════════════════════════════════════════════════════
 
-    private static String fetchText(CloseableHttpClient http, String url) throws IOException {
-        HttpGet request = new HttpGet(url);
-        request.addHeader("User-Agent", USER_AGENT);
-        request.setConfig(RequestConfig.custom()
-                .setConnectTimeout(10000)
-                .setConnectionRequestTimeout(15000)
-                .setSocketTimeout(20000)
-                .build());
+    private static String fetchText(CloseableHttpClient http, String url, boolean cacheable) throws IOException {
+        // Ortaq fetcher: arsiv2 hostu, Tor ilə IP rotasiyası, retry (bax: MackolikHttpFetcher)
+        return MackolikHttpFetcher.shared().fetchText(url, cacheable);
+    }
 
-        log.debug("GET {}", url);
-        try (CloseableHttpResponse response = http.execute(request)) {
-            int status = response.getStatusLine().getStatusCode();
-            if (status != 200) {
-                log.warn("HTTP {} for {}", status, url);
-                return null;
-            }
-            // Mackolik declares utf-8 but not always in a way HttpClient honours.
-            return EntityUtils.toString(response.getEntity(), StandardCharsets.UTF_8);
-        }
+    private static String fetchText(CloseableHttpClient http, String url) throws IOException {
+        // Ortaq fetcher: arsiv2 hostu, Tor ilə IP rotasiyası, retry (bax: MackolikHttpFetcher)
+        return MackolikHttpFetcher.shared().fetchText(url, false);
     }
 
     // ═══════════════════════════════════════════════════════════════════════
