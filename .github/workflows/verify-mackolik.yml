@@ -18,18 +18,32 @@ jobs:
         with: { java-version: '21', distribution: 'temurin', cache: maven }
       - name: Compile
         run: mvn -B -q compile -DskipTests > compile.txt 2>&1 || { tail -50 compile.txt; exit 1; }
+      - name: Probe arsiv2
+        run: |
+          mkdir -p out
+          UA='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
+          U='https://arsiv2.mackolik.com/Team/Default.aspx?id=451&season=2026/2027'
+          {
+          for v in --http2 --http1.1; do for i in 1 2; do
+            curl -sS -m 60 -A "$UA" $v -o /dev/null -w "curl $v %{http_code} %{http_version} %{size_download}B t=%{time_total}s ip=%{remote_ip}\n" "$U" 2>&1; done; done
+          curl -sS -m 60 -o /dev/null -w "curl no-UA %{http_code} %{size_download}B t=%{time_total}s\n" "$U" 2>&1
+          curl -sS -m 60 -A "Apache-HttpClient/4.5.14 (Java/21)" -o /dev/null -w "curl hc4-UA %{http_code} %{size_download}B t=%{time_total}s\n" "$U" 2>&1
+          curl -sSI -m 30 -A "$UA" "$U" 2>&1 | head -12
+          echo "--- java probe"
+          timeout 6m mvn -B -q exec:java -Dexec.mainClass=analyzer.util.FetchProbe -Dexec.classpathScope=compile 2>&1 | grep -v SLF4J
+          } > out/probe.txt 2>&1
       - name: Run analyzers (time-boxed)
         run: |
           mkdir -p out
           for c in analyzer.mackolik.xthmatch.SeasonXthOfficialMatchAnalyzer analyzer.mackolik.dongu.HaftaDonguAnalyzer analyzer.mackolik.temas.TemasTakimiAnalyzer analyzer.mackolik.triplepattern.SezonDenklemiAnalyzer; do
             n=${c##*.}
-            timeout -k 20 8m mvn -B -q exec:java -Dexec.mainClass="$c" -Dexec.classpathScope=compile > out/$n.txt 2>&1 || echo "[exit $?]" >> out/$n.txt
+            timeout -k 20 3m mvn -B -q exec:java -Dexec.mainClass="$c" -Dexec.classpathScope=compile > out/$n.txt 2>&1 || echo "[exit $?]" >> out/$n.txt
           done
       - name: Summarize & commit
         if: always()
         run: |
           {
-          echo "compile: $(grep -c ERROR compile.txt 2>/dev/null) error lines"
+          echo "compile: $(grep -c ERROR compile.txt 2>/dev/null) error lines"; cat out/probe.txt
           for f in out/*.txt; do
             echo "################ $f ($(wc -l < $f) lines)"
             echo "403 lines: $(grep -c '403' $f)  host-switch: $(grep -c 'hostuna keçilir' $f)"
