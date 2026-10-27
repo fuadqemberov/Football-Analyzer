@@ -1,0 +1,72 @@
+
+╔══════════════════════════════════════════════════════╗
+║  TEMAS TAKIMI ANALİZÖRÜ - HT/FT Sürpriz Avcısı        ║
+║  1/X, 2/X → BERABERLİK COMEBACK                       ║
+║  1/2, 2/1 → FULL COMEBACK                             ║
+║  + CORRECT SCORE (ters-düz aynı skor tekrarı)         ║
+╚══════════════════════════════════════════════════════╝
+
+📅 Güncel sezon (otomatik): 2026/2027 | Taranan geçmiş: 2025/2026 → 2010/2011
+
+🔄 [1/3] Günün başlamamış maçlarından takım ID'leri alınıyor...
+Programda 263 başlamamış maç var; 27/10/2026 için 263 maç alındı.
+Başlamamış maçlardan toplam 526 adet benzersiz Takım ID'si alındı.
+✅ [1/3] 526 takım bulundu
+
+SLF4J(W): No SLF4J providers were found.
+SLF4J(W): Defaulting to no-operation (NOP) logger implementation
+SLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.
+SLF4J(W): Class path contains SLF4J bindings targeting slf4j-api versions 1.7.x or earlier.
+SLF4J(W): Ignoring binding found at [jar:file:/home/runner/.m2/repository/org/slf4j/slf4j-log4j12/1.7.30/slf4j-log4j12-1.7.30.jar!/org/slf4j/impl/StaticLoggerBinder.class]
+SLF4J(W): See https://www.slf4j.org/codes.html#ignoredBindings for an explanation.
+🔄 [2/3] 526 takım 8 thread ile taranıyor...
+
+   ❌ [ID:16] güncel sezon indirilemedi (retry'lar tükendi)
+⏳ İlerleme: 1/526  |  Sinyal: 0   ❌ [ID:9] güncel sezon indirilemedi (retry'lar tükendi)
+   ❌ [ID:60254] güncel sezon indirilemedi (retry'lar tükendi)
+   ❌ [ID:600] güncel sezon indirilemedi (retry'lar tükendi)
+   ❌ [ID:9731] güncel sezon indirilemedi (retry'lar tükendi)
+   ❌ [ID:52849] güncel sezon indirilemedi (retry'lar tükendi)
+   ❌ [ID:11950] güncel sezon indirilemedi (retry'lar tükendi)
+⏳ İlerleme: 2/526  |  Sinyal: 0⏳ İlerleme: 3/526  |  Sinyal: 0⏳ İlerleme: 4/526  |  Sinyal: 0   ❌ [ID:563] güncel sezon indirilemedi (retry'lar tükendi)
+⏳ İlerleme: 5/526  |  Sinyal: 0⏳ İlerleme: 6/526  |  Sinyal: 0⏳ İlerleme: 7/526  |  Sinyal: 0⏳ İlerleme: 8/526  |  Sinyal: 0   ❌ [ID:621] güncel sezon indirilemedi (retry'lar tükendi)
+⏳ İlerleme: 9/526  |  Sinyal: 0   ❌ [ID:18] güncel sezon indirilemedi (retry'lar tükendi)
+   ❌ [ID:541] güncel sezon indirilemedi (retry'lar tükendi)
+⏳ İlerleme: 10/526  |  Sinyal: 0⏳ İlerleme: 11/526  |  Sinyal: 0   ❌ [ID:46137] güncel sezon indirilemedi (retry'lar tükendi)
+   ❌ [ID:52853] güncel sezon indirilemedi (retry'lar tükendi)
+⏳ İlerleme: 12/526  |  Sinyal: 0   ❌ [ID:17386] güncel sezon indirilemedi (retry'lar tükendi)
+   ❌ [ID:42064] güncel sezon indirilemedi (retry'lar tükendi)
+⏳ İlerleme: 13/526  |  Sinyal: 0⏳ İlerleme: 14/526  |  Sinyal: 0   ❌ [ID:619] güncel sezon indirilemedi (retry'lar tükendi)
+⏳ İlerleme: 15/526  |  Sinyal: 0⏳ İlerleme: 16/526  |  Sinyal: 0   ❌ [ID:6348] güncel sezon indirilemedi (retry'lar tükendi)
+⏳ İlerleme: 17/526  |  Sinyal: 0   ❌ [ID:160] güncel sezon indirilemedi (retry'lar tükendi)
+⏳ İlerleme: 18/526  |  Sinyal: 0   ❌ [ID:170] güncel sezon indirilemedi (retry'lar tükendi)
+   ❌ [ID:176] güncel sezon indirilemedi (retry'lar tükendi)
+   ❌ [ID:161] güncel sezon indirilemedi (retry'lar tükendi)
+⏳ İlerleme: 19/526  |  Sinyal: 0⏳ İlerleme: 20/526  |  Sinyal: 0   ❌ [ID:968] güncel sezon indirilemedi (retry'lar tükendi)
+   ❌ [ID:172] güncel sezon indirilemedi (retry'lar tükendi)
+⏳ İlerleme: 21/526  |  Sinyal: 0⏳ İlerleme: 22/526  |  Sinyal: 0   ❌ [ID:40] güncel sezon indirilemedi (retry'lar tükendi)
+⏳ İlerleme: 23/526  |  Sinyal: 0⏳ İlerleme: 24/526  |  Sinyal: 0   ❌ [ID:6627] güncel sezon indirilemedi (retry'lar tükendi)
+⏳ İlerleme: 25/526  |  Sinyal: 0   ❌ [ID:20] güncel sezon indirilemedi (retry'lar tükendi)
+⏳ İlerleme: 26/526  |  Sinyal: 0   ❌ [ID:8186] güncel sezon indirilemedi (retry'lar tükendi)
+   ❌ [ID:143] güncel sezon indirilemedi (retry'lar tükendi)
+   ❌ [ID:902] güncel sezon indirilemedi (retry'lar tükendi)
+⏳ İlerleme: 27/526  |  Sinyal: 0   ❌ [ID:911] güncel sezon indirilemedi (retry'lar tükendi)
+⏳ İlerleme: 28/526  |  Sinyal: 0   ❌ [ID:127] güncel sezon indirilemedi (retry'lar tükendi)
+⏳ İlerleme: 29/526  |  Sinyal: 0⏳ İlerleme: 30/526  |  Sinyal: 0⏳ İlerleme: 31/526  |  Sinyal: 0   ❌ [ID:916] güncel sezon indirilemedi (retry'lar tükendi)
+⏳ İlerleme: 32/526  |  Sinyal: 0   ❌ [ID:132] güncel sezon indirilemedi (retry'lar tükendi)
+⏳ İlerleme: 33/526  |  Sinyal: 0   ❌ [ID:141] güncel sezon indirilemedi (retry'lar tükendi)
+⏳ İlerleme: 34/526  |  Sinyal: 0   ❌ [ID:146] güncel sezon indirilemedi (retry'lar tükendi)
+   ❌ [ID:138] güncel sezon indirilemedi (retry'lar tükendi)
+⏳ İlerleme: 35/526  |  Sinyal: 0⏳ İlerleme: 36/526  |  Sinyal: 0   ❌ [ID:126] güncel sezon indirilemedi (retry'lar tükendi)
+⏳ İlerleme: 37/526  |  Sinyal: 0   ❌ [ID:120] güncel sezon indirilemedi (retry'lar tükendi)
+   ❌ [ID:153] güncel sezon indirilemedi (retry'lar tükendi)
+⏳ İlerleme: 38/526  |  Sinyal: 0⏳ İlerleme: 39/526  |  Sinyal: 0   ❌ [ID:121] güncel sezon indirilemedi (retry'lar tükendi)
+⏳ İlerleme: 40/526  |  Sinyal: 0   ❌ [ID:915] güncel sezon indirilemedi (retry'lar tükendi)
+⏳ İlerleme: 41/526  |  Sinyal: 0   ❌ [ID:1474] güncel sezon indirilemedi (retry'lar tükendi)
+⏳ İlerleme: 42/526  |  Sinyal: 0   ❌ [ID:275] güncel sezon indirilemedi (retry'lar tükendi)
+⏳ İlerleme: 43/526  |  Sinyal: 0   ❌ [ID:281] güncel sezon indirilemedi (retry'lar tükendi)
+⏳ İlerleme: 44/526  |  Sinyal: 0   ❌ [ID:6417] güncel sezon indirilemedi (retry'lar tükendi)
+   ❌ [ID:2793] güncel sezon indirilemedi (retry'lar tükendi)
+⏳ İlerleme: 45/526  |  Sinyal: 0⏳ İlerleme: 46/526  |  Sinyal: 0   ❌ [ID:1778] güncel sezon indirilemedi (retry'lar tükendi)
+   ❌ [ID:30132] güncel sezon indirilemedi (retry'lar tükendi)
+⏳ İlerleme: 47/526  |  Sinyal: 0⏳ İlerleme: 48/526  |  Sinyal: 0[exit 124]

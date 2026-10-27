@@ -1,0 +1,70 @@
+
+╔════════════════════════════════════════════════════╗
+║   X. RESMİ MAÇ  HT/FT (2/1 - 1/2)  ANALİZİ          ║
+╚════════════════════════════════════════════════════╝
+
+🔄 Bugünün başlamamış maçlarından takım ID'leri çekiliyor...
+Programda 263 başlamamış maç var; 27/10/2026 için 263 maç alındı.
+Başlamamış maçlardan toplam 526 adet benzersiz Takım ID'si alındı.
+✅ 526 benzersiz takım bulundu.
+
+SLF4J(W): No SLF4J providers were found.
+SLF4J(W): Defaulting to no-operation (NOP) logger implementation
+SLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.
+SLF4J(W): Class path contains SLF4J bindings targeting slf4j-api versions 1.7.x or earlier.
+SLF4J(W): Ignoring binding found at [jar:file:/home/runner/.m2/repository/org/slf4j/slf4j-log4j12/1.7.30/slf4j-log4j12-1.7.30.jar!/org/slf4j/impl/StaticLoggerBinder.class]
+SLF4J(W): See https://www.slf4j.org/codes.html#ignoredBindings for an explanation.
+   ❌ [ID:60254] 2021/2022 indirilemedi (retry'lar tükendi)
+   ❌ [ID:563] 2021/2022 indirilemedi (retry'lar tükendi)
+   ❌ [ID:9] 2021/2022 indirilemedi (retry'lar tükendi)
+   ❌ [ID:9731] 2021/2022 indirilemedi (retry'lar tükendi)
+   ❌ [ID:52849] 2021/2022 indirilemedi (retry'lar tükendi)
+   ❌ [ID:600] 2021/2022 indirilemedi (retry'lar tükendi)
+   ❌ [ID:11950] 2021/2022 indirilemedi (retry'lar tükendi)
+   ❌ [ID:16] 2021/2022 indirilemedi (retry'lar tükendi)
+   ❌ [ID:60254] 2020/2021 indirilemedi (retry'lar tükendi)
+   ❌ [ID:9] 2020/2021 indirilemedi (retry'lar tükendi)
+   ❌ [ID:563] 2020/2021 indirilemedi (retry'lar tükendi)
+   ❌ [ID:52849] 2020/2021 indirilemedi (retry'lar tükendi)
+   ❌ [ID:9731] 2020/2021 indirilemedi (retry'lar tükendi)
+   ❌ [ID:600] 2020/2021 indirilemedi (retry'lar tükendi)
+   ❌ [ID:11950] 2020/2021 indirilemedi (retry'lar tükendi)
+   ❌ [ID:16] 2020/2021 indirilemedi (retry'lar tükendi)
+   ❌ [ID:60254] 2019/2020 indirilemedi (retry'lar tükendi)
+   ❌ [ID:9] 2019/2020 indirilemedi (retry'lar tükendi)
+   ❌ [ID:563] 2019/2020 indirilemedi (retry'lar tükendi)
+   ❌ [ID:52849] 2019/2020 indirilemedi (retry'lar tükendi)
+   ❌ [ID:600] 2019/2020 indirilemedi (retry'lar tükendi)
+   ❌ [ID:9731] 2019/2020 indirilemedi (retry'lar tükendi)
+   ❌ [ID:11950] 2019/2020 indirilemedi (retry'lar tükendi)
+   ❌ [ID:16] 2019/2020 indirilemedi (retry'lar tükendi)
+   ❌ [ID:16] 2018/2019 indirilemedi (retry'lar tükendi)
+   ❌ [ID:16] 2017/2018 indirilemedi (retry'lar tükendi)
+   ❌ [ID:16] 2016/2017 indirilemedi (retry'lar tükendi)
+   ❌ [ID:60254] 2018/2019 indirilemedi (retry'lar tükendi)
+   ❌ [ID:16] 2015/2016 indirilemedi (retry'lar tükendi)
+   ❌ [ID:16] 2014/2015 indirilemedi (retry'lar tükendi)
+   ❌ [ID:9] 2018/2019 indirilemedi (retry'lar tükendi)
+   ❌ [ID:16] 2013/2014 indirilemedi (retry'lar tükendi)
+   ❌ [ID:16] 2012/2013 indirilemedi (retry'lar tükendi)
+   ❌ [ID:563] 2018/2019 indirilemedi (retry'lar tükendi)
+   ❌ [ID:16] 2011/2012 indirilemedi (retry'lar tükendi)
+   ❌ [ID:52849] 2018/2019 indirilemedi (retry'lar tükendi)
+   ❌ [ID:16] 2010/2011 indirilemedi (retry'lar tükendi)
+   ❌ [ID:600] 2018/2019 indirilemedi (retry'lar tükendi)
+   ❌ [ID:16] 2009/2010 indirilemedi (retry'lar tükendi)
+   ❌ [ID:9731] 2018/2019 indirilemedi (retry'lar tükendi)
+   ❌ [ID:16] 2008/2009 indirilemedi (retry'lar tükendi)
+   ❌ [ID:16] 2007/2008 indirilemedi (retry'lar tükendi)
+   ❌ [ID:11950] 2018/2019 indirilemedi (retry'lar tükendi)
+   ❌ [ID:16] 2006/2007 indirilemedi (retry'lar tükendi)
+   ❌ [ID:60254] 2017/2018 indirilemedi (retry'lar tükendi)
+   ❌ [ID:9] 2017/2018 indirilemedi (retry'lar tükendi)
+   ❌ [ID:563] 2017/2018 indirilemedi (retry'lar tükendi)
+   ❌ [ID:52849] 2017/2018 indirilemedi (retry'lar tükendi)
+   ❌ [ID:600] 2017/2018 indirilemedi (retry'lar tükendi)
+   ❌ [ID:9731] 2017/2018 indirilemedi (retry'lar tükendi)
+   ❌ [ID:11950] 2017/2018 indirilemedi (retry'lar tükendi)
+   ❌ [ID:621] güncel sezon indirilemedi (retry'lar tükendi)
+   ❌ [ID:60254] 2016/2017 indirilemedi (retry'lar tükendi)
+[exit 124]
