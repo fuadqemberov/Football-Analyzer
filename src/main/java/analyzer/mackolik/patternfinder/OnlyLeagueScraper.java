@@ -1,5 +1,7 @@
 package analyzer.mackolik.patternfinder;
 
+import analyzer.util.MackolikHost;
+
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.impl.client.CloseableHttpClient;
@@ -20,7 +22,7 @@ public class OnlyLeagueScraper {
     private static final Logger log = LoggerFactory.getLogger(OnlyLeagueScraper.class);
 
     private static final String BASE_URL =
-            "https://arsiv.mackolik.com/Team/Default.aspx?id=%d&season=%s";
+            MackolikHost.BASE + "/Team/Default.aspx?id=%d&season=%s";
 
     private static final String CURRENT_SEASON = "2026/2027";
 

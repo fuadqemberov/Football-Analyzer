@@ -1,5 +1,7 @@
 package analyzer.mackolik.b2bavd;
 
+import analyzer.util.MackolikHost;
+
 import analyzer.util.TeamIdsFetcher;
 import org.apache.http.client.config.RequestConfig;
 import org.apache.http.client.methods.CloseableHttpResponse;
@@ -69,7 +71,7 @@ import java.util.concurrent.TimeUnit;
 public class B2BAvdKirilmaAnalyzer {
 
     // ─── AYARLAR ────────────────────────────────────────────────────────────
-    private static final String BASE_URL     = "https://arsiv.mackolik.com/Team/Default.aspx?id=%d&season=%s";
+    private static final String BASE_URL     = MackolikHost.BASE + "/Team/Default.aspx?id=%d&season=%s";
 
     /** Yeni futbol sezonunun başladığı ay (Temmuz). */
     private static final int SEASON_START_MONTH = 7;

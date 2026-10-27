@@ -1,5 +1,7 @@
 package analyzer.mackolik.triplepattern;
 
+import analyzer.util.MackolikHost;
+
 import analyzer.mackolik.patternfinder.OnlyLeagueScraper;
 import org.apache.http.client.config.RequestConfig;
 import org.apache.http.client.methods.CloseableHttpResponse;
@@ -43,10 +45,10 @@ class LeagueSeasonFetcher {
 
     private static final Logger log = LoggerFactory.getLogger(LeagueSeasonFetcher.class);
 
-    private static final String TEAM_URL     = "https://arsiv.mackolik.com/Team/Default.aspx?id=%d&season=%s";
-    private static final String STANDING_URL = "https://arsiv.mackolik.com/Puan-Durumu/s=%d/lig";
-    private static final String WEEKS_URL    = "https://arsiv.mackolik.com/AjaxHandlers/FixtureHandler.aspx?command=getWeeks&id=%d";
-    private static final String MATCHES_URL  = "https://arsiv.mackolik.com/AjaxHandlers/FixtureHandler.aspx?command=getMatches&id=%d&week=%d";
+    private static final String TEAM_URL     = MackolikHost.BASE + "/Team/Default.aspx?id=%d&season=%s";
+    private static final String STANDING_URL = MackolikHost.BASE + "/Puan-Durumu/s=%d/lig";
+    private static final String WEEKS_URL    = MackolikHost.BASE + "/AjaxHandlers/FixtureHandler.aspx?command=getWeeks&id=%d";
+    private static final String MATCHES_URL  = MackolikHost.BASE + "/AjaxHandlers/FixtureHandler.aspx?command=getMatches&id=%d&week=%d";
 
     private static final String USER_AGENT =
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";

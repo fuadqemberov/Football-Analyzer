@@ -1,5 +1,7 @@
 package analyzer.mackolik.triplepattern;
 
+import analyzer.util.MackolikHost;
+
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.impl.client.CloseableHttpClient;
@@ -19,7 +21,7 @@ import java.util.List;
 public class HttpTripleScoreFetcher {
 
     private static final Logger log = LoggerFactory.getLogger(HttpTripleScoreFetcher.class);
-    private static final String BASE_URL = "https://arsiv.mackolik.com/Team/Default.aspx?id=%d&season=%s";
+    private static final String BASE_URL = MackolikHost.BASE + "/Team/Default.aspx?id=%d&season=%s";
     private static final String CURRENT_SEASON = "2025/2026";
 
     private static String fetchHtml(CloseableHttpClient httpClient, String url) throws IOException {

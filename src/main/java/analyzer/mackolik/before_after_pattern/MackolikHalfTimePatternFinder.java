@@ -1,5 +1,7 @@
 package analyzer.mackolik.before_after_pattern;
 
+import analyzer.util.MackolikHost;
+
 import analyzer.util.TeamIdsFetcher;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
@@ -130,8 +132,8 @@ public class MackolikHalfTimePatternFinder {
             try {
                 semaphore.acquire();
                 try {
-                    String url = "https://arsiv.mackolik.com/Match/Head2Head.aspx?id=" + matchId + "&s=1";
-                    String matchUrl = "https://arsiv.mackolik.com/Mac/" + matchId + "/";
+                    String url = MackolikHost.BASE + "/Match/Head2Head.aspx?id=" + matchId + "&s=1";
+                    String matchUrl = MackolikHost.BASE + "/Mac/" + matchId + "/";
 
                     HttpRequest request = HttpRequest.newBuilder()
                             .uri(URI.create(url))
@@ -404,7 +406,7 @@ public class MackolikHalfTimePatternFinder {
     // Belirli bir maçın Head2Head sayfasından, verilen takımın formundaki PastMatch listesini döner
     private static List<PastMatch> fetchTeamPastMatches(String matchId, String teamName) {
         try {
-            String url = "https://arsiv.mackolik.com/Match/Head2Head.aspx?id=" + matchId + "&s=1";
+            String url = MackolikHost.BASE + "/Match/Head2Head.aspx?id=" + matchId + "&s=1";
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(url))
                     .header("User-Agent", USER_AGENT)

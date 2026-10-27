@@ -27,6 +27,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Arrays;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
@@ -196,7 +197,8 @@ public final class MackolikHttpFetcher implements AutoCloseable {
      */
     public byte[] fetchBytes(String url, boolean cacheable) {
         boolean useCache = cacheable && cacheDir != null;
-        Path cacheFile = useCache ? cachePath(url) : null;
+        // Önbellek açarı KANONİK host üzrədir: arsiv → arsiv2 keçidində köhnə önbellek itmir.
+        Path cacheFile = useCache ? cachePath(MackolikHost.canonical(url)) : null;
         if (useCache) {
             byte[] cached = readCache(cacheFile);
             if (cached != null) {
@@ -205,6 +207,30 @@ public final class MackolikHttpFetcher implements AutoCloseable {
             }
         }
 
+        // arsiv.mackolik.com GitHub runner IP-lərini 403 ilə bloklayır → hostları
+        // sıra ilə sına (default: arsiv2.mackolik.com, sonra arsiv.mackolik.com).
+        List<String> candidates = MackolikHost.candidates(url);
+        for (int i = 0; i < candidates.size(); i++) {
+            String target = candidates.get(i);
+            boolean last = (i == candidates.size() - 1);
+            int[] status = new int[1];
+            byte[] body = fetchFromHost(target, useCache, cacheFile, status, last);
+            if (body != null) return body;
+            if (status[0] == 403) {
+                MackolikHost.markBlocked(target);
+                continue;                       // növbəti host
+            }
+            return null;                        // 404, timeout və s. — host dəyişmək kömək etməz
+        }
+        return null;
+    }
+
+    /**
+     * Tək bir host üzrə retry'lı yükləmə.
+     * @param status   çıxışda son HTTP kodu (403 → çağıran digər hostu sınayır)
+     * @param lastHost sonuncu hostdursa 403 də "başarısız" sayılır və loglanır
+     */
+    private byte[] fetchFromHost(String url, boolean useCache, Path cacheFile, int[] status, boolean lastHost) {
         for (int attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
             throttle();
             HttpGet req = new HttpGet(url);
@@ -215,6 +241,7 @@ public final class MackolikHttpFetcher implements AutoCloseable {
 
             try (CloseableHttpResponse resp = http.execute(req)) {
                 int code = resp.getStatusLine().getStatusCode();
+                status[0] = code;
                 HttpEntity entity = resp.getEntity();
 
                 if (code == 200) {
@@ -228,6 +255,9 @@ public final class MackolikHttpFetcher implements AutoCloseable {
                 // dönmez ve sonraki istekler "Read timed out" / pool timeout alır.
                 EntityUtils.consumeQuietly(entity);
 
+                if (code == 403 && !lastHost) {
+                    return null;                       // başqa host var — sayma, çağıran keçəcək
+                }
                 if (!RETRYABLE_STATUS.contains(code)) {
                     // 403/404 vb. → tekrar denemenin anlamı yok, ama görünür olsun:
                     // her kodun İLK görülüşü loglanır, hepsi özet satırında sayılır.
@@ -379,7 +409,8 @@ public final class MackolikHttpFetcher implements AutoCloseable {
 
     public String statsLine() {
         String base = String.format("%d ok / %d retry / %d başarısız",
-                fetchOk.get(), fetchRetry.get(), fetchFailed.get());
+                fetchOk.get(), fetchRetry.get(), fetchFailed.get())
+                + " [host: " + MackolikHost.describe() + "]";
         if (cacheDir != null) base += " / " + cacheHit.get() + " önbellek";
         if (!permanentStatus.isEmpty()) {
             StringBuilder sb = new StringBuilder(base).append(" (");

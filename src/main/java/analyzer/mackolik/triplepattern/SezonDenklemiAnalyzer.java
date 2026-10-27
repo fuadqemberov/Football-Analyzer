@@ -1,5 +1,7 @@
 package analyzer.mackolik.triplepattern;
 
+import analyzer.util.MackolikHost;
+
 import analyzer.mackolik.triplepattern.LeagueSeasonFetcher.JsArrayParser;
 import analyzer.mackolik.triplepattern.LeagueSeasonFetcher.LeagueRef;
 import org.apache.http.client.config.RequestConfig;
@@ -104,9 +106,9 @@ public class SezonDenklemiAnalyzer {
      * oyunlarını, üstəlik hər sətirdə liqa adı, seasonId və sezon etiketi ilə verir.
      */
     private static final String LIVEDATA_URL = "https://vd.mackolik.com/livedata?group=all";
-    private static final String STANDING_URL = "https://arsiv.mackolik.com/Puan-Durumu/s=%d/lig";
-    private static final String WEEKS_URL    = "https://arsiv.mackolik.com/AjaxHandlers/FixtureHandler.aspx?command=getWeeks&id=%d";
-    private static final String MATCHES_URL  = "https://arsiv.mackolik.com/AjaxHandlers/FixtureHandler.aspx?command=getMatches&id=%d&week=%d";
+    private static final String STANDING_URL = MackolikHost.BASE + "/Puan-Durumu/s=%d/lig";
+    private static final String WEEKS_URL    = MackolikHost.BASE + "/AjaxHandlers/FixtureHandler.aspx?command=getWeeks&id=%d";
+    private static final String MATCHES_URL  = MackolikHost.BASE + "/AjaxHandlers/FixtureHandler.aspx?command=getMatches&id=%d&week=%d";
 
     /** Fixture.js: oyun tam bitibsə status bu kodlardan biridir. */
     private static final int[] FINISHED_CODES = {4, 6, 8, 10};
