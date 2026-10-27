@@ -1,8 +1,36 @@
 compile: 0 error lines
+tor version: Tor version 0.4.9.11.
+Oct 27 11:40:57.145 [warn] ControlPort is open, but no authentication method has been configured.  This means that any program on your computer can reconfigure your Tor.  That's bad!  You should upgrade your Tor controller as soon as possible.
+Oct 27 11:40:57.145 [warn] Could not bind to 127.0.0.1:9050: Address already in use. Is Tor already running?
+Oct 27 11:40:57.145 [notice] Opened Socks listener connection (ready) on 127.0.0.1:9051
+Oct 27 11:40:57.145 [notice] Opened Socks listener connection (ready) on 127.0.0.1:9052
+Oct 27 11:40:57.145 [notice] Opened Socks listener connection (ready) on 127.0.0.1:9053
+Oct 27 11:40:57.145 [notice] Opened Socks listener connection (ready) on 127.0.0.1:9054
+Oct 27 11:40:57.145 [notice] Opened Socks listener connection (ready) on 127.0.0.1:9055
+Oct 27 11:40:57.145 [notice] Opened Socks listener connection (ready) on 127.0.0.1:9056
+Oct 27 11:40:57.145 [notice] Opened Socks listener connection (ready) on 127.0.0.1:9057
+Oct 27 11:40:57.145 [warn] Failed to parse/validate config: Failed to bind one of the listener ports.
+Oct 27 11:40:57.145 [err] Reading config failed--see warnings above.
 == arsiv (orig) via 8 tor ports in parallel, 45 req each
+port 9051 exit= host=arsiv.mackolik.com  200=0 429=0 403=0 other=45  0s
+port 9054 exit= host=arsiv.mackolik.com  200=0 429=0 403=0 other=45  0s
+port 9056 exit= host=arsiv.mackolik.com  200=0 429=0 403=0 other=45  0s
+port 9052 exit= host=arsiv.mackolik.com  200=0 429=0 403=0 other=45  0s
+port 9050 exit= host=arsiv.mackolik.com  200=0 429=0 403=0 other=45  0s
+port 9057 exit= host=arsiv.mackolik.com  200=0 429=0 403=0 other=45  0s
+port 9055 exit= host=arsiv.mackolik.com  200=0 429=0 403=0 other=45  0s
+port 9053 exit= host=arsiv.mackolik.com  200=0 429=0 403=0 other=45  0s
 total 0s
 == arsiv2 via 8 tor ports in parallel, 45 req each
-total 0s
+port 9052 exit= host=arsiv2.mackolik.com  200=0 429=0 403=0 other=45  1s
+port 9056 exit= host=arsiv2.mackolik.com  200=0 429=0 403=0 other=45  1s
+port 9055 exit= host=arsiv2.mackolik.com  200=0 429=0 403=0 other=45  1s
+port 9057 exit= host=arsiv2.mackolik.com  200=0 429=0 403=0 other=45  1s
+port 9050 exit= host=arsiv2.mackolik.com  200=0 429=0 403=0 other=45  1s
+port 9054 exit= host=arsiv2.mackolik.com  200=0 429=0 403=0 other=45  1s
+port 9053 exit= host=arsiv2.mackolik.com  200=0 429=0 403=0 other=45  1s
+port 9051 exit= host=arsiv2.mackolik.com  200=0 429=0 403=0 other=45  1s
+total 1s
 == direct arsiv2 after 60s idle (was this IP limited earlier? new runner = fresh IP)
 200 200 200 
 ################ out/HaftaDonguAnalyzer.txt (23 lines)
@@ -113,14 +141,23 @@ cache-control: max-age=600
 
 no recovery in 300s
 recovered after 304s
-################ out/tor.txt (6 lines)
-403 lines: 0  host-switch: 0
+################ out/tor.txt (34 lines)
+403 lines: 16  host-switch: 0
 == arsiv (orig) via 8 tor ports in parallel, 45 req each
-== arsiv2 via 8 tor ports in parallel, 45 req each
-== direct arsiv2 after 60s idle (was this IP limited earlier? new runner = fresh IP)
-== arsiv (orig) via 8 tor ports in parallel, 45 req each
+port 9051 exit= host=arsiv.mackolik.com  200=0 429=0 403=0 other=45  0s
+port 9054 exit= host=arsiv.mackolik.com  200=0 429=0 403=0 other=45  0s
+port 9055 exit= host=arsiv.mackolik.com  200=0 429=0 403=0 other=45  0s
+port 9053 exit= host=arsiv.mackolik.com  200=0 429=0 403=0 other=45  0s
 total 0s
 == arsiv2 via 8 tor ports in parallel, 45 req each
-total 0s
+port 9052 exit= host=arsiv2.mackolik.com  200=0 429=0 403=0 other=45  1s
+port 9056 exit= host=arsiv2.mackolik.com  200=0 429=0 403=0 other=45  1s
+port 9055 exit= host=arsiv2.mackolik.com  200=0 429=0 403=0 other=45  1s
+port 9057 exit= host=arsiv2.mackolik.com  200=0 429=0 403=0 other=45  1s
+port 9050 exit= host=arsiv2.mackolik.com  200=0 429=0 403=0 other=45  1s
+port 9054 exit= host=arsiv2.mackolik.com  200=0 429=0 403=0 other=45  1s
+port 9053 exit= host=arsiv2.mackolik.com  200=0 429=0 403=0 other=45  1s
+port 9051 exit= host=arsiv2.mackolik.com  200=0 429=0 403=0 other=45  1s
+total 1s
 == direct arsiv2 after 60s idle (was this IP limited earlier? new runner = fresh IP)
 200 200 200 
