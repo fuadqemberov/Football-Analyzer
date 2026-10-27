@@ -268,13 +268,16 @@ public final class MackolikHttpFetcher implements AutoCloseable {
                     }
                     return null;
                 }
+                noteTransient("HTTP " + code, url);
                 cooldown();                            // 429/5xx → sunucu yorgun, herkes beklesin
             } catch (IOException e) {
                 // SocketTimeoutException, ConnectTimeoutException, NoHttpResponseException,
                 // SocketException("Connection reset") ... hepsi buraya düşer.
+                noteTransient(e.getClass().getSimpleName() + ": " + e.getMessage(), url);
                 req.abort();
                 cooldown();                            // timeout burst'ü → herkes beklesin
             } catch (RuntimeException e) {
+                noteTransient(e.getClass().getSimpleName() + ": " + e.getMessage(), url);
                 req.abort();
                 fetchFailed.incrementAndGet();
                 return null;
@@ -287,6 +290,20 @@ public final class MackolikHttpFetcher implements AutoCloseable {
         }
         fetchFailed.incrementAndGet();
         return null;
+    }
+
+    /**
+     * Geçici hata türleri (timeout, 5xx ...) → adet. Her türün İLK görülüşü loglanır;
+     * eskiden bunlar sessizce yutulduğundan "0 ok / N retry" durumunun nedeni görünmüyordu.
+     */
+    private final ConcurrentHashMap<String, AtomicInteger> transientErrors = new ConcurrentHashMap<>();
+
+    private void noteTransient(String what, String url) {
+        String key = what == null ? "?" : what.replaceAll("\\d+ ?ms", "N ms");
+        if (key.length() > 120) key = key.substring(0, 120);
+        if (transientErrors.computeIfAbsent(key, k -> new AtomicInteger()).getAndIncrement() == 0) {
+            System.err.println("⚠️ Geçici hata (yeniden denenecek): " + what + " ← " + url);
+        }
     }
 
     /** Üstel geri çekilme + jitter (sunucuyu daha da boğmamak için). */
@@ -412,6 +429,11 @@ public final class MackolikHttpFetcher implements AutoCloseable {
                 fetchOk.get(), fetchRetry.get(), fetchFailed.get())
                 + " [host: " + MackolikHost.describe() + "]";
         if (cacheDir != null) base += " / " + cacheHit.get() + " önbellek";
+        if (!transientErrors.isEmpty()) {
+            StringBuilder sb = new StringBuilder(base).append(" {geçici: ");
+            transientErrors.forEach((k, n) -> sb.append(k).append('×').append(n.get()).append("; "));
+            base = sb.toString().replaceAll("; $", "") + "}";
+        }
         if (!permanentStatus.isEmpty()) {
             StringBuilder sb = new StringBuilder(base).append(" (");
             permanentStatus.forEach((code, n) -> sb.append("HTTP ").append(code).append('×').append(n.get()).append(' '));
