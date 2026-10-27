@@ -1,5 +1,7 @@
 package analyzer.mackolik.triplepattern;
 
+import analyzer.util.MackolikHost;
+
 import analyzer.util.MackolikHttpFetcher;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
@@ -40,7 +42,7 @@ import java.util.Map;
 public class HttpTeamNamePatternFetcher {
 
     private static final Logger log = LoggerFactory.getLogger(HttpTeamNamePatternFetcher.class);
-    private static final String BASE_URL       = "https://arsiv.mackolik.com/Team/Default.aspx?id=%d&season=%s";
+    private static final String BASE_URL       = MackolikHost.BASE + "/Team/Default.aspx?id=%d&season=%s";
 
     /** Yeni futbol sezonunun başladığı ay (Temmuz). Bu aydan itibaren yıl/(yıl+1) sezonundayız. */
     private static final int SEASON_START_MONTH = 7;

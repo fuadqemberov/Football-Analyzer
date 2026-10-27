@@ -18,6 +18,10 @@ jobs:
       # (~3 kat az istek → çok daha az timeout).
       MACKOLIK_CACHE_DIR: ${{ github.workspace }}/.mackolik-cache
 
+      # Mackolik sorğuları Tor üzərindən (bax: "Start Tor" addımı, analyzer.util.TorEgress)
+      MACKOLIK_TOR_PORTS: "9060-9075"
+      MACKOLIK_TOR_CONTROL: "9151"
+
       # Çıktı .txt dosyaya yönlendirildiği için Java System.out'u konsol değil,
       # "native.encoding" (yani runner'ın locale'i) ile yazar. Locale UTF-8
       # değilse ⭐ ve 🎯 gibi karakterler eke "?" olarak düşer. Aşağıdakiler
@@ -65,6 +69,27 @@ jobs:
           sudo apt-get install -y google-chrome-stable || true
           sudo apt-get install -y chromium-browser || sudo apt-get install -y chromium || true
           google-chrome --version || chromium --version || chromium-browser --version || true
+
+      # arsiv.mackolik.com bulud IP-lərini 403 ilə bloklayır, arsiv2 isə bir IP-yə
+      # ~40 sorğu verib 429 qaytarır. Tor-un hər SOCKS portu ayrı çıxış IP-sidir;
+      # MackolikHttpFetcher limit dolanda portu dəyişir və ControlPort-dan NEWNYM
+      # ilə yeni IP-lər alır. Tor başlamasa analizlər birbaşa bağlantı ilə davam edir.
+      - name: Start Tor (mackolik IP limiti)
+        run: |
+          sudo apt-get install -y -qq tor > /dev/null 2>&1 || sudo apt-get install -y tor
+          sudo systemctl stop tor tor@default 2>/dev/null || true
+          sudo pkill -x tor || true; sleep 1
+          TD="$RUNNER_TEMP/tor"; mkdir -p "$TD" && chmod 700 "$TD"
+          { for p in $(seq 9060 9075); do echo "SocksPort $p"; done
+            echo "ControlPort 9151"; echo "CookieAuthentication 0"; echo "DataDirectory $TD"; } > "$RUNNER_TEMP/torrc"
+          nohup tor -f "$RUNNER_TEMP/torrc" > "$RUNNER_TEMP/tor.log" 2>&1 &
+          for i in $(seq 1 90); do grep -q "Bootstrapped 100" "$RUNNER_TEMP/tor.log" && break; sleep 2; done
+          if grep -q "Bootstrapped 100" "$RUNNER_TEMP/tor.log"; then
+            echo "Tor hazırdır: $(curl -s -m 20 --socks5 127.0.0.1:9060 https://api.ipify.org)"
+          else
+            echo "Tor başlamadı — mackolik birbaşa bağlantı ilə işləyəcək"; tail -20 "$RUNNER_TEMP/tor.log"
+            echo "MACKOLIK_TOR_PORTS=" >> "$GITHUB_ENV"
+          fi
 
       - name: Compile
         run: mvn -B compile -DskipTests

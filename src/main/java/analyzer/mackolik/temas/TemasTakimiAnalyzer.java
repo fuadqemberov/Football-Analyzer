@@ -1,5 +1,7 @@
 package analyzer.mackolik.temas;
 
+import analyzer.util.MackolikHost;
+
 import analyzer.util.AyniEslesme;
 import analyzer.util.MackolikHttpFetcher;
 import analyzer.util.TeamIdsFetcher;
@@ -53,7 +55,7 @@ import java.util.concurrent.TimeUnit;
 public class TemasTakimiAnalyzer {
 
     // ─── AYARLAR ────────────────────────────────────────────────────────────
-    private static final String BASE_URL       = "https://arsiv.mackolik.com/Team/Default.aspx?id=%d&season=%s";
+    private static final String BASE_URL       = MackolikHost.BASE + "/Team/Default.aspx?id=%d&season=%s";
 
     /** Yeni futbol sezonunun başladığı ay (Temmuz). Bu aydan itibaren yıl/(yıl+1) sezonundayız. */
     private static final int SEASON_START_MONTH = 7;

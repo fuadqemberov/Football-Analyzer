@@ -1,5 +1,7 @@
 package analyzer.oranavcisi;
 
+import analyzer.util.MackolikHost;
+
 import analyzer.mackolik.patternfinder.OnlyLeagueScraper;
 import analyzer.util.MackolikHttpFetcher;
 import org.json.JSONArray;
@@ -79,7 +81,7 @@ import java.util.regex.Pattern;
 public class OranAvcisiAnalyzer {
 
     private static final String LIVEDATA_URL = "https://vd.mackolik.com/livedata?group=all";
-    private static final String TEAM_URL     = "https://arsiv.mackolik.com/Team/Default.aspx?id=%d&season=%s";
+    private static final String TEAM_URL     = MackolikHost.BASE + "/Team/Default.aspx?id=%d&season=%s";
 
     private static final int NUM_THREADS       = 8;
     private static final long MIN_REQUEST_GAP  = 80L;

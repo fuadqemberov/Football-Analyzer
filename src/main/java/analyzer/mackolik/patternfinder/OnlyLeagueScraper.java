@@ -1,5 +1,9 @@
 package analyzer.mackolik.patternfinder;
 
+import analyzer.util.MackolikHttpFetcher;
+
+import analyzer.util.MackolikHost;
+
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.impl.client.CloseableHttpClient;
@@ -20,7 +24,7 @@ public class OnlyLeagueScraper {
     private static final Logger log = LoggerFactory.getLogger(OnlyLeagueScraper.class);
 
     private static final String BASE_URL =
-            "https://arsiv.mackolik.com/Team/Default.aspx?id=%d&season=%s";
+            MackolikHost.BASE + "/Team/Default.aspx?id=%d&season=%s";
 
     private static final String CURRENT_SEASON = "2026/2027";
 
@@ -30,15 +34,8 @@ public class OnlyLeagueScraper {
 
     private static String fetchHtml(CloseableHttpClient httpClient, String url)
             throws IOException {
-        HttpGet request = new HttpGet(url);
-        request.addHeader("User-Agent",
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36");
-        try (CloseableHttpResponse response = httpClient.execute(request)) {
-            int status = response.getStatusLine().getStatusCode();
-            if (status == 200) return EntityUtils.toString(response.getEntity());
-            log.warn("HTTP {} for URL: {}", status, url);
-            return null;
-        }
+        // Ortaq fetcher: arsiv2 hostu, Tor ilə IP rotasiyası, retry (bax: MackolikHttpFetcher)
+        return MackolikHttpFetcher.shared().fetchText(url, false);
     }
 
     // ═══════════════════════════════════════════════════════════════════════
