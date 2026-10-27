@@ -1,14 +1,10 @@
 compile: 0 error lines
-[burst] gap=0s  200=40 429=40  first429_at_req=41  elapsed=117s
-server: nginx/1.24.0 (Ubuntu)
-cache-control: max-age=600
-no recovery in 300s
-recovered after 304s
-[gap0.5] gap=0.5s  200=0 429=80  first429_at_req=1  elapsed=124s
-server: nginx/1.24.0 (Ubuntu)
-cache-control: max-age=600
-no recovery in 300s
-recovered after 304s
+== arsiv (orig) via 8 tor ports in parallel, 45 req each
+total 0s
+== arsiv2 via 8 tor ports in parallel, 45 req each
+total 0s
+== direct arsiv2 after 60s idle (was this IP limited earlier? new runner = fresh IP)
+200 200 200 
 ################ out/HaftaDonguAnalyzer.txt (23 lines)
 403 lines: 0  host-switch: 0
 ⚠️ Geçici hata (yeniden denenecek): HTTP 429 ← https://arsiv2.mackolik.com/Team/Default.aspx?id=16&season=2026/2027
@@ -117,3 +113,14 @@ cache-control: max-age=600
 
 no recovery in 300s
 recovered after 304s
+################ out/tor.txt (6 lines)
+403 lines: 0  host-switch: 0
+== arsiv (orig) via 8 tor ports in parallel, 45 req each
+== arsiv2 via 8 tor ports in parallel, 45 req each
+== direct arsiv2 after 60s idle (was this IP limited earlier? new runner = fresh IP)
+== arsiv (orig) via 8 tor ports in parallel, 45 req each
+total 0s
+== arsiv2 via 8 tor ports in parallel, 45 req each
+total 0s
+== direct arsiv2 after 60s idle (was this IP limited earlier? new runner = fresh IP)
+200 200 200 

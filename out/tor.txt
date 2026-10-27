@@ -1,0 +1,6 @@
+== arsiv (orig) via 8 tor ports in parallel, 45 req each
+total 0s
+== arsiv2 via 8 tor ports in parallel, 45 req each
+total 0s
+== direct arsiv2 after 60s idle (was this IP limited earlier? new runner = fresh IP)
+200 200 200 
