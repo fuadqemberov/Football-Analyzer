@@ -7,53 +7,62 @@ permissions:
 jobs:
   diag:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
-      - name: Probe
+      - name: Probes
         run: |
-          UA='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36'
-          probe() { # label url extra-curl-args...
-            local label="$1" url="$2"; shift 2
-            echo "################ $label :: $url"
-            curl -sS -m 25 -o body.bin -D hdr.txt "$@" "$url" 2>&1 | head -3
-            head -25 hdr.txt
-            echo "--- body ($(wc -c < body.bin) bytes):"
-            (gunzip -c body.bin 2>/dev/null || cat body.bin) | tr -s ' \r\n\t' ' ' | head -c 1200; echo
-            grep -c tblFixture body.bin || true
-          }
-          {
-          echo "runner ip: $(curl -s -m 10 https://api.ipify.org)"; curl -s -m 10 "https://ipinfo.io/json" | tr -d '\n'; echo
           T='https://arsiv.mackolik.com/Team/Default.aspx?id=451&season=2026/2027'
-          probe "plain curl" "$T"
-          probe "browser UA" "$T" -A "$UA"
-          probe "full browser headers" "$T" -A "$UA" --compressed \
-            -H 'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8' \
-            -H 'Accept-Language: tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7' \
-            -H 'Referer: https://arsiv.mackolik.com/' -H 'Upgrade-Insecure-Requests: 1' \
-            -H 'Sec-Fetch-Dest: document' -H 'Sec-Fetch-Mode: navigate' -H 'Sec-Fetch-Site: same-origin' -H 'Sec-Fetch-User: ?1' \
-            -H 'sec-ch-ua: "Chromium";v="130", "Google Chrome";v="130", "Not?A_Brand";v="99"' -H 'sec-ch-ua-mobile: ?0' -H 'sec-ch-ua-platform: "Windows"'
-          probe "arsiv root" "https://arsiv.mackolik.com/" -A "$UA"
-          probe "arsiv http" "http://arsiv.mackolik.com/Team/Default.aspx?id=451&season=2026/2027" -A "$UA"
-          probe "FixtureHandler weeks" "https://arsiv.mackolik.com/AjaxHandlers/FixtureHandler.aspx?command=getWeeks&id=70381" -A "$UA"
-          probe "Puan durumu" "https://arsiv.mackolik.com/Puan-Durumu/s=70381/lig" -A "$UA"
-          probe "Head2Head" "https://arsiv.mackolik.com/Match/Head2Head.aspx?id=4300000" -A "$UA"
-          probe "vd livedata" "https://vd.mackolik.com/livedata?group=all" -A "$UA"
-          probe "www root" "https://www.mackolik.com/" -A "$UA"
-          probe "www takim" "https://www.mackolik.com/takim/galatasaray/fikstur/1y4e7ozr3fzxqk3yepdbvldsk" -A "$UA"
-          echo "################ DNS"; getent hosts arsiv.mackolik.com vd.mackolik.com www.mackolik.com
-          } > results.txt 2>&1
-      - name: Headless Chrome probe
-        run: |
-          {
-          echo "################ CHROME"
-          google-chrome --version || true
-          timeout 60 google-chrome --headless=new --no-sandbox --disable-gpu --virtual-time-budget=15000 \
-            --dump-dom 'https://arsiv.mackolik.com/Team/Default.aspx?id=451&season=2026/2027' 2>/dev/null > dom.html || true
-          echo "dom bytes: $(wc -c < dom.html)  tblFixture: $(grep -c tblFixture dom.html)"
-          tr -s ' \r\n\t' ' ' < dom.html | head -c 1500; echo
-          } >> results.txt 2>&1
+          F='https://arsiv.mackolik.com/AjaxHandlers/FixtureHandler.aspx?command=getWeeks&id=70381'
+          UA='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36'
+          p() { # label url curl-args...
+            local l="$1" u="$2"; shift 2
+            local r; r=$(curl -sS -m 40 -A "$UA" -o body.bin -w '%{http_code} %{size_download}B ip=%{remote_ip}' "$@" "$u" 2>&1 | tail -1)
+            echo "[$l] $r tblFixture=$(grep -c tblFixture body.bin 2>/dev/null) | $u"
+          }
+          exec > results.txt 2>&1
+          echo "== direct ($(curl -s -m 10 https://api.ipify.org))"
+          p direct "$T"
+          for h in m.mackolik.com mobile.mackolik.com arsiv2.mackolik.com eski.mackolik.com; do
+            p "host $h" "https://$h/Team/Default.aspx?id=451&season=2026/2027"; done
+          p "vd team?" "https://vd.mackolik.com/Team/Default.aspx?id=451&season=2026/2027"
+
+          echo "== TOR"
+          sudo apt-get install -y -qq tor >/dev/null 2>&1; sudo systemctl start tor || true
+          for i in $(seq 1 30); do curl -s -m 10 --socks5-hostname 127.0.0.1:9050 https://api.ipify.org >/dev/null && break; sleep 3; done
+          for i in 1 2 3; do
+            echo "tor exit: $(curl -s -m 20 --socks5-hostname 127.0.0.1:9050 https://api.ipify.org)"
+            p "tor#$i team" "$T" --socks5-hostname 127.0.0.1:9050
+            p "tor#$i fixture" "$F" --socks5-hostname 127.0.0.1:9050
+            sudo systemctl reload tor || sudo killall -HUP tor || true; sleep 8
+          done
+
+          echo "== WARP"
+          curl -fsSL https://pkg.cloudflareclient.com/pubkey.gpg | sudo gpg --yes --dearmor -o /usr/share/keyrings/cloudflare-warp-archive-keyring.gpg
+          echo "deb [signed-by=/usr/share/keyrings/cloudflare-warp-archive-keyring.gpg] https://pkg.cloudflareclient.com/ $(lsb_release -cs) main" | sudo tee /etc/apt/sources.list.d/cloudflare-client.list >/dev/null
+          sudo apt-get update -qq >/dev/null 2>&1; sudo apt-get install -y -qq cloudflare-warp >/dev/null 2>&1
+          sleep 3
+          warp-cli --accept-tos registration new 2>&1 | tail -1
+          warp-cli --accept-tos mode proxy 2>&1 | tail -1
+          warp-cli --accept-tos connect 2>&1 | tail -1
+          for i in $(seq 1 20); do warp-cli --accept-tos status | grep -q Connected && break; sleep 2; done
+          warp-cli --accept-tos status | head -3
+          echo "warp proxy ip: $(curl -s -m 15 --socks5-hostname 127.0.0.1:40000 https://api.ipify.org)"
+          p "warp-proxy team" "$T" --socks5-hostname 127.0.0.1:40000
+          p "warp-proxy fixture" "$F" --socks5-hostname 127.0.0.1:40000
+          p "warp-proxy vd" "https://vd.mackolik.com/livedata?group=all" --socks5-hostname 127.0.0.1:40000
+          echo "-- tunnel mode"
+          warp-cli --accept-tos mode warp 2>&1 | tail -1
+          for i in $(seq 1 20); do warp-cli --accept-tos status | grep -q Connected && break; sleep 2; done
+          warp-cli --accept-tos status | head -3
+          echo "warp tunnel ip: $(curl -s -m 15 https://api.ipify.org)"
+          p "warp-tunnel team" "$T"
+          p "warp-tunnel fixture" "$F"
+          p "warp-tunnel github" "https://api.github.com/zen"
+          warp-cli --accept-tos disconnect 2>&1 | tail -1
+          echo "after disconnect ip: $(curl -s -m 15 https://api.ipify.org)"
       - name: Commit results
+        if: always()
         run: |
           git config user.name diag-bot; git config user.email diag@users.noreply.github.com
-          git add -f results.txt && git commit -m "diag results" && git push
+          git add -f results.txt && git commit -m "diag2 results" && git push
