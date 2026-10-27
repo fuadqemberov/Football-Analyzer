@@ -1,14 +1,40 @@
 compile: 0 error lines
-################ out/HaftaDonguAnalyzer.txt (22 lines)
+curl --http2 200 2 196939B t=2.245002s ip=23.192.228.4
+curl --http2 200 2 196939B t=0.029986s ip=23.192.228.23
+curl --http1.1 200 1.1 196939B t=0.029353s ip=23.192.228.4
+curl --http1.1 200 1.1 196939B t=0.039921s ip=23.192.228.23
+curl no-UA 200 196939B t=0.029225s
+curl hc4-UA 200 196939B t=0.028923s
+HTTP/2 200 
+server: nginx/1.24.0 (Ubuntu)
+content-type: text/html; charset=utf-8
+x-aspnet-version: 4.0.30319
+x-powered-by: ASP.NET
+cache-control: public, private, max-age=59, s-maxage=60
+date: Tue, 27 Oct 2026 11:03:28 GMT
+x-content-type-options: nosniff
+content-security-policy: default-src https:; script-src https: 'unsafe-inline' 'unsafe-eval'; style-src https: 'unsafe-inline'; img-src * 'self' https: data:; connect-src https: wss:; font-src https: data:; media-src https: blob:;
+strict-transport-security: max-age=63072000
+x-xss-protection: 1
+x-frame-options: SAMEORIGIN
+--- java probe
+[jdk] 200 HTTP_2 196939B 124ms https://arsiv2.mackolik.com/Team/Default.aspx?id=451&season=2026/2027
+[jdk] 200 HTTP_2 215027B 1747ms https://arsiv2.mackolik.com/Team/Default.aspx?id=451&season=2025/2026
+[jdk] 200 HTTP_2 245305B 2041ms https://arsiv2.mackolik.com/Team/Default.aspx?id=3&season=2026/2027
+[hc4] 196939B 51ms https://arsiv.mackolik.com/Team/Default.aspx?id=451&season=2026/2027
+[hc4] 215027B 7ms https://arsiv.mackolik.com/Team/Default.aspx?id=451&season=2025/2026
+[hc4] 245305B 54ms https://arsiv.mackolik.com/Team/Default.aspx?id=3&season=2026/2027
+[hc4] 3 ok / 0 retry / 0 başarısız [host: arsiv2.mackolik.com → arsiv.mackolik.com]
+################ out/HaftaDonguAnalyzer.txt (23 lines)
 403 lines: 0  host-switch: 0
-⏳ İlerleme: 1/526  |  Sinyal: 0  |  İstek: 0 ok / 57 retry / 3 başarısız [host: arsiv2.mackolik.com → arsiv.mackolik.com]   ⏳ İlerleme: 2/526  |  Sinyal: 0  |  İstek: 0 ok / 58 retry / 
-📅 Güncel sezon: 2026/2027 | Döngü: 2..10 yıl (dinamik) | Taranan: son 20 yıl
+⚠️ Geçici hata (yeniden denenecek): HTTP 429 ← https://arsiv2.mackolik.com/Team/Default.aspx?id=16&season=2026/2027
+⏳ İlerleme: 1/520  |  Sinyal: 0  |  İstek: 0 ok / 60 retry / 4 başarısız [host: arsiv2.mackolik.com → arsiv.mackolik.com] {geçici: HTTP 429×64}   ⏳ İlerleme: 2/520  |  Sinyal: 0  |  İ
 🌐 Ağ: 8 thread | istek aralığı 40ms | ortak retry'lı fetcher (MackolikHttpFetcher)
 
 🔄 Günün başlamamış maçlarından takım ID'leri alınıyor...
-Programda 263 başlamamış maç var; 27/10/2026 için 263 maç alındı.
-Başlamamış maçlardan toplam 526 adet benzersiz Takım ID'si alındı.
-✅ 526 takım bulundu
+Programda 260 başlamamış maç var; 27/10/2026 için 260 maç alındı.
+Başlamamış maçlardan toplam 520 adet benzersiz Takım ID'si alındı.
+✅ 520 takım bulundu
 
 SLF4J(W): No SLF4J providers were found.
 SLF4J(W): Defaulting to no-operation (NOP) logger implementation
@@ -16,23 +42,25 @@ SLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.
 SLF4J(W): Class path contains SLF4J bindings targeting slf4j-api versions 1.7.x or earlier.
 SLF4J(W): Ignoring binding found at [jar:file:/home/runner/.m2/repository/org/slf4j/slf4j-log4j12/1.7.30/slf4j-log4j12-1.7.30.jar!/org/slf4j/impl/StaticLoggerBinder.class]
 SLF4J(W): See https://www.slf4j.org/codes.html#ignoredBindings for an explanation.
+⚠️ Geçici hata (yeniden denenecek): HTTP 429 ← https://arsiv2.mackolik.com/Team/Default.aspx?id=16&season=2026/2027
 
-################ out/SeasonXthOfficialMatchAnalyzer.txt (70 lines)
+################ out/SeasonXthOfficialMatchAnalyzer.txt (32 lines)
 403 lines: 0  host-switch: 0
-   ❌ [ID:9731] 2018/2019 indirilemedi (retry'lar tükendi)
-   ❌ [ID:16] 2008/2009 indirilemedi (retry'lar tükendi)
-   ❌ [ID:16] 2007/2008 indirilemedi (retry'lar tükendi)
-   ❌ [ID:11950] 2018/2019 indirilemedi (retry'lar tükendi)
-   ❌ [ID:16] 2006/2007 indirilemedi (retry'lar tükendi)
-   ❌ [ID:60254] 2017/2018 indirilemedi (retry'lar tükendi)
-   ❌ [ID:9] 2017/2018 indirilemedi (retry'lar tükendi)
-   ❌ [ID:563] 2017/2018 indirilemedi (retry'lar tükendi)
-   ❌ [ID:52849] 2017/2018 indirilemedi (retry'lar tükendi)
-   ❌ [ID:600] 2017/2018 indirilemedi (retry'lar tükendi)
-   ❌ [ID:9731] 2017/2018 indirilemedi (retry'lar tükendi)
-   ❌ [ID:11950] 2017/2018 indirilemedi (retry'lar tükendi)
-   ❌ [ID:621] güncel sezon indirilemedi (retry'lar tükendi)
-   ❌ [ID:60254] 2016/2017 indirilemedi (retry'lar tükendi)
+⚠️ Geçici hata (yeniden denenecek): HTTP 429 ← https://arsiv2.mackolik.com/Team/Default.aspx?id=16&season=2022/2023
+   ❌ [ID:563] 2022/2023 indirilemedi (retry'lar tükendi)
+   ❌ [ID:9] 2021/2022 indirilemedi (retry'lar tükendi)
+   ❌ [ID:16] 2022/2023 indirilemedi (retry'lar tükendi)
+   ❌ [ID:9731] 2022/2023 indirilemedi (retry'lar tükendi)
+   ❌ [ID:11950] 2022/2023 indirilemedi (retry'lar tükendi)
+   ❌ [ID:52849] 2021/2022 indirilemedi (retry'lar tükendi)
+   ❌ [ID:60254] 2020/2021 indirilemedi (retry'lar tükendi)
+   ❌ [ID:600] 2021/2022 indirilemedi (retry'lar tükendi)
+   ❌ [ID:563] 2021/2022 indirilemedi (retry'lar tükendi)
+   ❌ [ID:16] 2021/2022 indirilemedi (retry'lar tükendi)
+   ❌ [ID:11950] 2021/2022 indirilemedi (retry'lar tükendi)
+   ❌ [ID:9] 2020/2021 indirilemedi (retry'lar tükendi)
+   ❌ [ID:52849] 2020/2021 indirilemedi (retry'lar tükendi)
+   ❌ [ID:600] 2020/2021 indirilemedi (retry'lar tükendi)
 [exit 124]
 ################ out/SezonDenklemiAnalyzer.txt (30 lines)
 403 lines: 0  host-switch: 0
@@ -42,29 +70,50 @@ SLF4J(W): See https://www.slf4j.org/codes.html#ignoredBindings for an explanatio
    Türkiye · Kupa 3.Tur                          8 oyun
    Almanya · DFB Kupası 2.Tur                    8 oyun
    İngiltere · Non League Premier Güney          8 oyun
-   Portekiz · U23 Ulusal Şampiyona               8 oyun
+   İtalya · Serie B                              7 oyun
    … və daha 75 liqa
-262 oyun analiz edilir...
+260 oyun analiz edilir...
 
 
 ════════ NƏTİCƏ ════════
-Analiz edilən oyun            : 262
+Analiz edilən oyun            : 260
 Denklem siqnalı tapılan oyun  : 0
 → Bugün bu qəlibə uyğun oyun YOXDUR. (Qəlib çox nadirdir — boş nəticə normaldır.)
-################ out/TemasTakimiAnalyzer.txt (72 lines)
+################ out/TemasTakimiAnalyzer.txt (41 lines)
 403 lines: 0  host-switch: 0
+⚠️ Geçici hata (yeniden denenecek): HTTP 429 ← https://arsiv2.mackolik.com/Team/Default.aspx?id=16&season=2026/2027
+   ❌ [ID:16] güncel sezon indirilemedi (retry'lar tükendi)
 
-   ❌ [ID:138] güncel sezon indirilemedi (retry'lar tükendi)
-
-
-   ❌ [ID:153] güncel sezon indirilemedi (retry'lar tükendi)
-
-
-
-
+   ❌ [ID:52849] güncel sezon indirilemedi (retry'lar tükendi)
+   ❌ [ID:563] güncel sezon indirilemedi (retry'lar tükendi)
+   ❌ [ID:9731] güncel sezon indirilemedi (retry'lar tükendi)
+   ❌ [ID:11950] güncel sezon indirilemedi (retry'lar tükendi)
 
 
-   ❌ [ID:2793] güncel sezon indirilemedi (retry'lar tükendi)
 
-   ❌ [ID:30132] güncel sezon indirilemedi (retry'lar tükendi)
+   ❌ [ID:42064] güncel sezon indirilemedi (retry'lar tükendi)
+   ❌ [ID:46137] güncel sezon indirilemedi (retry'lar tükendi)
+   ❌ [ID:619] güncel sezon indirilemedi (retry'lar tükendi)
+   ❌ [ID:18] güncel sezon indirilemedi (retry'lar tükendi)
 
+
+################ out/probe.txt (26 lines)
+403 lines: 0  host-switch: 0
+[jdk] 200 HTTP_2 196939B 124ms https://arsiv2.mackolik.com/Team/Default.aspx?id=451&season=2026/2027
+[jdk] 200 HTTP_2 215027B 1747ms https://arsiv2.mackolik.com/Team/Default.aspx?id=451&season=2025/2026
+[jdk] 200 HTTP_2 245305B 2041ms https://arsiv2.mackolik.com/Team/Default.aspx?id=3&season=2026/2027
+
+strict-transport-security: max-age=63072000
+
+x-xss-protection: 1
+
+x-frame-options: SAMEORIGIN
+
+--- java probe
+[jdk] 200 HTTP_2 196939B 124ms https://arsiv2.mackolik.com/Team/Default.aspx?id=451&season=2026/2027
+[jdk] 200 HTTP_2 215027B 1747ms https://arsiv2.mackolik.com/Team/Default.aspx?id=451&season=2025/2026
+[jdk] 200 HTTP_2 245305B 2041ms https://arsiv2.mackolik.com/Team/Default.aspx?id=3&season=2026/2027
+[hc4] 196939B 51ms https://arsiv.mackolik.com/Team/Default.aspx?id=451&season=2026/2027
+[hc4] 215027B 7ms https://arsiv.mackolik.com/Team/Default.aspx?id=451&season=2025/2026
+[hc4] 245305B 54ms https://arsiv.mackolik.com/Team/Default.aspx?id=3&season=2026/2027
+[hc4] 3 ok / 0 retry / 0 başarısız [host: arsiv2.mackolik.com → arsiv.mackolik.com]

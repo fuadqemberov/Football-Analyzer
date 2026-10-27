@@ -1,0 +1,26 @@
+curl --http2 200 2 196939B t=2.245002s ip=23.192.228.4
+curl --http2 200 2 196939B t=0.029986s ip=23.192.228.23
+curl --http1.1 200 1.1 196939B t=0.029353s ip=23.192.228.4
+curl --http1.1 200 1.1 196939B t=0.039921s ip=23.192.228.23
+curl no-UA 200 196939B t=0.029225s
+curl hc4-UA 200 196939B t=0.028923s
+HTTP/2 200 
+server: nginx/1.24.0 (Ubuntu)
+content-type: text/html; charset=utf-8
+x-aspnet-version: 4.0.30319
+x-powered-by: ASP.NET
+cache-control: public, private, max-age=59, s-maxage=60
+date: Tue, 27 Oct 2026 11:03:28 GMT
+x-content-type-options: nosniff
+content-security-policy: default-src https:; script-src https: 'unsafe-inline' 'unsafe-eval'; style-src https: 'unsafe-inline'; img-src * 'self' https: data:; connect-src https: wss:; font-src https: data:; media-src https: blob:;
+strict-transport-security: max-age=63072000
+x-xss-protection: 1
+x-frame-options: SAMEORIGIN
+--- java probe
+[jdk] 200 HTTP_2 196939B 124ms https://arsiv2.mackolik.com/Team/Default.aspx?id=451&season=2026/2027
+[jdk] 200 HTTP_2 215027B 1747ms https://arsiv2.mackolik.com/Team/Default.aspx?id=451&season=2025/2026
+[jdk] 200 HTTP_2 245305B 2041ms https://arsiv2.mackolik.com/Team/Default.aspx?id=3&season=2026/2027
+[hc4] 196939B 51ms https://arsiv.mackolik.com/Team/Default.aspx?id=451&season=2026/2027
+[hc4] 215027B 7ms https://arsiv.mackolik.com/Team/Default.aspx?id=451&season=2025/2026
+[hc4] 245305B 54ms https://arsiv.mackolik.com/Team/Default.aspx?id=3&season=2026/2027
+[hc4] 3 ok / 0 retry / 0 başarısız [host: arsiv2.mackolik.com → arsiv.mackolik.com]

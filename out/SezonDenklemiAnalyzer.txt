@@ -8,7 +8,7 @@ SLF4J(W): See https://www.slf4j.org/codes.html#ignoredBindings for an explanatio
 Denklem: [Ə əvvəlki rəqib] → ★hədəf → [S sonrakı rəqib] + orta halqanın körpüsü (V)
 Keçmiş sezon sayı : 10
 Filtr             : yalnız sürprizlə bitmiş denklemlər
-Mənbə: livedata proqramı (27/10/2026) — 262 başlamamış oyun.
+Mənbə: livedata proqramı (27/10/2026) — 260 başlamamış oyun.
 Fərqli liqa       : 85
    İspanya · Kral Kupası 1.Tur                   18 oyun
    İngiltere · Ulusal Lig N / S Kuzey            11 oyun
@@ -19,12 +19,12 @@ Fərqli liqa       : 85
    Türkiye · Kupa 3.Tur                          8 oyun
    Almanya · DFB Kupası 2.Tur                    8 oyun
    İngiltere · Non League Premier Güney          8 oyun
-   Portekiz · U23 Ulusal Şampiyona               8 oyun
+   İtalya · Serie B                              7 oyun
    … və daha 75 liqa
-262 oyun analiz edilir...
+260 oyun analiz edilir...
 
 
 ════════ NƏTİCƏ ════════
-Analiz edilən oyun            : 262
+Analiz edilən oyun            : 260
 Denklem siqnalı tapılan oyun  : 0
 → Bugün bu qəlibə uyğun oyun YOXDUR. (Qəlib çox nadirdir — boş nəticə normaldır.)
