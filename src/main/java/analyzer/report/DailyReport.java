@@ -77,6 +77,8 @@ public final class DailyReport {
         final List<Finding> findings = new ArrayList<>();
         // hesablanan
         int fire, maxStars, star5, star4, star3;
+        /** Oyun bu günə aiddir (tarixi bilinmirsə də true). */
+        boolean today = true;
         final Set<String> analyzers = new LinkedHashSet<>();
 
         String title() { return nz(home) + " – " + nz(away); }
@@ -309,6 +311,7 @@ public final class DailyReport {
     }
 
     static void score(Group g, LocalDate today) {
+        g.today = g.date == null || g.date.equals(today.toString());
         for (Finding f : g.findings) {
             for (Finding.Evidence e : f.evidence) {
                 int s = stars(today, e.date);
@@ -341,16 +344,18 @@ public final class DailyReport {
     }
 
     static final Comparator<Group> GROUP_ORDER = Comparator
-            .comparingInt((Group g) -> g.fire > 0 ? 0 : 1)
+            .comparingInt((Group g) -> g.today ? 0 : 1)          // başqa günün oyunu ən sonda
+            .thenComparingInt(g -> g.fire > 0 ? 0 : 1)
             .thenComparingInt(g -> -g.maxStars)
             .thenComparingInt(g -> -g.analyzers.size())
+            .thenComparingInt(g -> -g.fire)
             .thenComparingInt(g -> -(g.star5 * 100 + g.star4 * 10 + g.star3))
             .thenComparingInt(g -> -g.findings.size())
             .thenComparing(g -> nz(g.kickoff));
 
     /** Diqqətçəkən oyun: 🔥 var, ən azı 4 ulduz var, və ya 2+ fərqli analiz. */
     static boolean highlighted(Group g) {
-        return g.fire > 0 || g.maxStars >= 4 || g.analyzers.size() >= 2;
+        return g.today && (g.fire > 0 || g.maxStars >= 4 || g.analyzers.size() >= 2);
     }
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -407,7 +412,13 @@ public final class DailyReport {
     private static final DateTimeFormatter DM = DateTimeFormatter.ofPattern("dd.MM", Locale.ROOT);
 
     /** E-poçtun içində ən çox bu qədər oyun kartı (Gmail ~102 KB-dan sonra məktubu kəsir). */
-    static final int EMAIL_MAX_CARDS = 25;
+    static final int EMAIL_MAX_CARDS = 8;
+    /** E-poçt kartında bir analiz üçün ən çox bu qədər işarəli sübut oyunu. */
+    static final int EMAIL_MAX_EVIDENCE = 3;
+    /** E-poçtdakı "diqqətçəkən oyunlar" siyahısında ən çox bu qədər sətir. */
+    static final int EMAIL_MAX_TOP = 20;
+    /** E-poçt kartında ən çox bu qədər analiz nəticəsi. */
+    static final int EMAIL_MAX_FINDINGS = 6;
 
     /**
      * @param emailMode true → yalnız diqqətçəkən oyunların kartları (e-poçt gövdəsi üçün);
@@ -447,7 +458,8 @@ public final class DailyReport {
         if (!top.isEmpty()) {
             h.append(sectionTitle("🎯 Diqqətçəkən oyunlar (" + top.size() + ")"));
             h.append("<div style=\"background:#fff;border-radius:12px;padding:6px 0;\">");
-            for (Group g : top) {
+            List<Group> topShown = emailMode && top.size() > EMAIL_MAX_TOP ? top.subList(0, EMAIL_MAX_TOP) : top;
+            for (Group g : topShown) {
                 String tag = emailMode ? "div" : "a";
                 h.append('<').append(tag).append(emailMode ? "" : " href=\"#" + anchor(g) + "\"")
                  .append(" style=\"display:block;padding:9px 16px;")
@@ -456,6 +468,10 @@ public final class DailyReport {
                  .append(" <span style=\"color:#6b7280;\">").append(esc(timeLeague(g))).append("</span><br>")
                  .append("<span style=\"font-size:13px;\">").append(badgeText(g)).append("</span></").append(tag).append('>');
             }
+            if (topShown.size() < top.size()) {
+                h.append("<div style=\"padding:9px 16px;font-size:13px;color:#6b7280;\">+ ")
+                 .append(top.size() - topShown.size()).append(" diqqətçəkən oyun daha — əlavədəki tam hesabatda</div>");
+            }
             h.append("</div>");
         }
 
@@ -463,7 +479,7 @@ public final class DailyReport {
             // E-poçt: yalnız diqqətçəkən oyunların kartları, qalanı əlavədəki tam hesabatda
             List<Group> shown = top.size() > EMAIL_MAX_CARDS ? top.subList(0, EMAIL_MAX_CARDS) : top;
             if (!shown.isEmpty()) h.append(sectionTitle("⚽ Diqqətçəkən oyunların analizləri"));
-            for (Group g : shown) h.append(card(g, today));
+            for (Group g : shown) h.append(card(g, today, true));
             int rest = groups.size() - shown.size();
             h.append("<div style=\"background:#eef2ff;border-radius:12px;padding:12px 16px;margin-top:12px;font-size:14px;\">")
              .append(groups.isEmpty() ? "Bu gün heç bir analiz nəticə vermədi."
@@ -476,7 +492,7 @@ public final class DailyReport {
                 h.append("<div style=\"background:#fff;border-radius:12px;padding:16px;font-size:14px;\">")
                  .append("Bu gün heç bir analiz nəticə vermədi.</div>");
             }
-            for (Group g : groups) h.append(card(g, today));
+            for (Group g : groups) h.append(card(g, today, false));
         }
 
         // Vəziyyət
@@ -504,7 +520,8 @@ public final class DailyReport {
         return "<div style=\"font-size:16px;font-weight:700;margin:22px 4px 8px;\">" + esc(t) + "</div>";
     }
 
-    private static String card(Group g, LocalDate today) {
+    /** @param compact true → yalnız işarəli (⭐/🔥) sübut oyunları, qalanların sayı (e-poçt üçün) */
+    private static String card(Group g, LocalDate today, boolean compact) {
         StringBuilder h = new StringBuilder();
         String border = g.fire > 0 ? "#f97316" : g.maxStars >= 4 ? "#eab308" : "#e5e7eb";
         h.append("<div id=\"").append(anchor(g)).append("\" style=\"background:#fff;border-radius:12px;")
@@ -517,7 +534,14 @@ public final class DailyReport {
          .append("<div style=\"font-size:13px;margin-top:4px;\">").append(badgeText(g)).append("</div></div>");
 
         // Analizlər
+        int fIdx = 0;
         for (Finding f : g.findings) {
+            if (compact && fIdx++ >= EMAIL_MAX_FINDINGS) {
+                h.append("<div style=\"padding:10px 16px;font-size:12px;color:#6b7280;\">+ ")
+                 .append(g.findings.size() - EMAIL_MAX_FINDINGS)
+                 .append(" analiz nəticəsi daha (əlavədəki tam hesabatda)</div>");
+                break;
+            }
             h.append("<div style=\"padding:12px 16px;border-bottom:1px solid #f3f4f6;\">")
              .append("<div style=\"font-size:14px;font-weight:700;color:#1f2937;\">")
              .append(esc(analyzerName(f)));
@@ -533,7 +557,19 @@ public final class DailyReport {
             }
             if (!f.evidence.isEmpty()) {
                 h.append("<div style=\"margin-top:6px;\">");
-                for (Finding.Evidence e : f.evidence) h.append(evidenceHtml(f, e, today));
+                int hidden = 0, shown = 0;
+                for (Finding.Evidence e : f.evidence) {
+                    if (compact && ((stars(today, e.date) == 0 && !sameTeams(f, e)) || shown >= EMAIL_MAX_EVIDENCE)) {
+                        hidden++;
+                        continue;
+                    }
+                    shown++;
+                    h.append(evidenceHtml(f, e, today));
+                }
+                if (hidden > 0) {
+                    h.append("<div style=\"font-size:12px;color:#6b7280;margin-top:4px;\">+ ").append(hidden)
+                     .append(" keçmiş oyun daha (əlavədəki tam hesabatda)</div>");
+                }
                 h.append("</div>");
             }
             h.append("</div>");

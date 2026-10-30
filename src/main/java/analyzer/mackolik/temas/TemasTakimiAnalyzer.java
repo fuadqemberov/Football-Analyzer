@@ -411,7 +411,7 @@ public class TemasTakimiAnalyzer {
         String cs = k.correctScore();
         if (cs != null) {
             int[] p = parseScore(cs);
-            gozlenti += " · dəqiq hesab " + cs + " və ya " + p[1] + "-" + p[0];
+            gozlenti += " · dəqiq hesab " + cs + (p[0] == p[1] ? "" : " və ya " + p[1] + "-" + p[0]);
         }
         Finding f = Finding.of("TEMAS", "Temas komandası", "mackolik")
                 .team(teamId, teamName)
