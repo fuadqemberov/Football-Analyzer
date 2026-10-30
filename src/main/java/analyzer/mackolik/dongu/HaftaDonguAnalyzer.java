@@ -1,5 +1,8 @@
 package analyzer.mackolik.dongu;
 
+import analyzer.report.Finding;
+import analyzer.report.ReportSink;
+
 import analyzer.util.MackolikHost;
 
 import analyzer.util.AyniEslesme;
@@ -301,6 +304,7 @@ public class HaftaDonguAnalyzer {
         StringBuilder out = new StringBuilder();
         for (Cycle c : secilen) {
             out.append(buildReport(teamName, teamId, weekNo, target, c));
+            if (c.signal) emitFinding(teamName, teamId, weekNo, target, c);
         }
         return out.length() == 0 ? null : out.toString();
     }
@@ -325,6 +329,27 @@ public class HaftaDonguAnalyzer {
 
         String htFt = htFtCode(m.htScore, m.ftScore);
         return new CycleHit(season, m, htFt, comebackGrubu(htFt), toplamGol(m.ftScore));
+    }
+
+    // ─── GÜNLÜK HESABAT ─────────────────────────────────────────────────────
+    /** Günlük tək hesabat üçün strukturlaşdırılmış nəticə (bax: analyzer.report.DailyReport). */
+    private static void emitFinding(String teamName, int teamId, int weekNo, MacData target, Cycle c) {
+        if (!ReportSink.enabled()) return;
+        Finding f = Finding.of("HAFTA_DONGU", "Həftə dövrü", "mackolik")
+                .team(teamId, teamName)
+                .match(0, target.homeTeam, 0, target.awayTeam, null, target.time, null)
+                .explain(String.format(
+                        "%s komandasının %d. həftə oyunu hər %d ildən bir təkrarlanan dövrə düşür: son %d ildə həmin "
+                        + "dövrün %d oyunundan %d-i İY-də öndə olan komandanın qalib gələ bilmədiyi dönüşlə bitib.",
+                        teamName, weekNo, c.period, LOOKBACK_YEARS, c.hits.size(), c.comebacks))
+                .predict(ortakTahmin(c.hits));
+        for (CycleHit a : c.hits) {
+            f.evidence(Finding.ev(a.season, a.match.time, a.match.homeTeam, a.match.awayTeam,
+                            a.match.ftScore, a.match.htScore)
+                    .htft(a.htFt)
+                    .note(a.grup != null ? a.grup : "sürpriz yox"));
+        }
+        f.emit();
     }
 
     // ─── RAPOR ──────────────────────────────────────────────────────────────

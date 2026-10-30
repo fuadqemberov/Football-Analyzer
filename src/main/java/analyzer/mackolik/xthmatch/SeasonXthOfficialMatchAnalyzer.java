@@ -5,6 +5,8 @@ import analyzer.util.MackolikHost;
 import analyzer.util.AyniEslesme;
 import analyzer.util.MackolikHttpFetcher;
 import analyzer.util.TeamIdsFetcher;
+import analyzer.report.Finding;
+import analyzer.report.ReportSink;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
@@ -165,6 +167,7 @@ public class SeasonXthOfficialMatchAnalyzer {
                 }
 
                 if (hits.isEmpty()) return null;
+                emitFinding(teamId, teamName, x, upcoming, hits);
                 return buildReport(teamId, teamName, x, upcoming, hits);
 
             } catch (Exception e) {
@@ -177,6 +180,27 @@ public class SeasonXthOfficialMatchAnalyzer {
     // =====================================================================
     // Rapor
     // =====================================================================
+
+    /** Günlük tək hesabat üçün strukturlaşdırılmış nəticə (bax: analyzer.report.DailyReport). */
+    private static void emitFinding(int teamId, String teamName, int x, Match upcoming, List<Hit> hits) {
+        if (!ReportSink.enabled()) return;
+        Finding f = Finding.of("SEASON_XTH", "X. rəsmi oyun İY/MS", "mackolik")
+                .team(teamId, teamName)
+                .explain(String.format(
+                        "%s bu mövsüm %d. rəsmi oyununu oynayacaq. Keçmiş %d mövsümün %d-də onun %d. rəsmi oyunu "
+                        + "İY/MS dönüşü (2/1 və ya 1/2) ilə bitib.",
+                        teamName, x, PAST_SEASONS, hits.size(), x))
+                .predict("İY/MS dönüşü: 2/1 və ya 1/2");
+        if (upcoming != null) {
+            f.match(0, upcoming.home, 0, upcoming.away, upcoming.league, upcoming.dateStr, null);
+        }
+        for (Hit h : hits) {
+            Match m = h.match;
+            f.evidence(Finding.ev(h.season, m.dateStr, m.home, m.away, m.ftScore, m.htScore)
+                    .htft(h.htFt).note(m.league));
+        }
+        f.emit();
+    }
 
     private static String buildReport(int teamId, String teamName, int x, Match upcoming, List<Hit> hits) {
         StringBuilder sb = new StringBuilder();

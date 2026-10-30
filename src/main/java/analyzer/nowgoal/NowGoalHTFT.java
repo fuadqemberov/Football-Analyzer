@@ -1,5 +1,8 @@
 package analyzer.nowgoal;
 
+import analyzer.report.Finding;
+import analyzer.report.ReportSink;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -179,7 +182,8 @@ public class NowGoalHTFT {
                                 b1, b2,
                                 cur.teamName(up.homeId), cur.teamName(up.awayId),
                                 up.kickoff,
-                                cur.leagueName, cur
+                                cur.leagueName, cur,
+                                up.homeId, up.awayId
                         );
                     } catch (Exception ignored) {}
                 }
@@ -283,7 +287,8 @@ public class NowGoalHTFT {
                                int b1, int b2,
                                String curHome, String curAway,
                                LocalDateTime curKickoff,
-                               String leagueName, LeagueData curData) throws Exception {
+                               String leagueName, LeagueData curData,
+                               int curHomeId, int curAwayId) throws Exception {
         LeagueData past = loadLeague(ligId, season);
         if (past == null) return;
 
@@ -303,6 +308,28 @@ public class NowGoalHTFT {
 
         String comeback = comeback(found.ft, found.ht);
         if (comeback.equals("NONE")) return;
+
+        // Günlük tək hesabat üçün strukturlaşdırılmış nəticə (bax: analyzer.report.DailyReport)
+        if (ReportSink.enabled()) {
+            String b1n = curData.teamName(b1), b2n = curData.teamName(b2);
+            Finding.of("NG_BRIDGE", "NowGoal · Körpü (comeback)", "nowgoal")
+                    .match(curHomeId, curHome, curAwayId, curAway, leagueName,
+                            curKickoff == null ? null : curKickoff.toLocalDate().toString(),
+                            curKickoff == null ? null : curKickoff.toLocalTime().toString())
+                    .explain(String.format(
+                            "%d tur əvvəl %s %s ilə, %s isə %s ilə oynayıb. %s mövsümündə bu körpü komandalarının "
+                            + "eyni turdakı rəqibləri (%s və %s) %d. turda qarşılaşıb və oyun İY/MS %s dönüşü ilə bitib.",
+                            bridgeOffset, curHome, b1n, curAway, b2n, season,
+                            past.teamName(oldA), past.teamName(oldB), targetRound, comeback))
+                    .predict("İY/MS dönüşü: " + comeback)
+                    .evidence(Finding.ev(season,
+                                    found.kickoff == null ? null : found.kickoff.toLocalDate().toString(),
+                                    past.teamName(found.homeId), past.teamName(found.awayId), found.ft, found.ht)
+                            .ids(found.homeId, found.awayId)
+                            .htft(comeback)
+                            .note("Körpü: " + b1n + " & " + b2n + " · " + bridgeOffset + " tur əvvəl"))
+                    .emit();
+        }
 
         synchronized (System.out) {
             System.out.println("\n**********************");

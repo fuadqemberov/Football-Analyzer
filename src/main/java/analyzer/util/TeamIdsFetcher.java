@@ -1,5 +1,6 @@
 package analyzer.util;
 
+import analyzer.report.ReportSink;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
@@ -149,7 +150,12 @@ public class TeamIdsFetcher {
             Fixture fixture = toFixture(rows.optJSONArray(i));
             if (fixture == null) continue;
             unstarted++;
-            if (day == null || day.equals(fixture.dateText)) fixtures.add(fixture);
+            if (day == null || day.equals(fixture.dateText)) {
+                fixtures.add(fixture);
+                // Günlük hesabat nəticələri bu siyahı ilə oyunlara bağlayır
+                ReportSink.fixture(fixture.matchId, fixture.homeId, fixture.homeName,
+                        fixture.awayId, fixture.awayName, fixture.leagueName, fixture.dateText, fixture.kickoff);
+            }
         }
 
         System.out.println("Programda " + unstarted + " başlamamış maç var; "

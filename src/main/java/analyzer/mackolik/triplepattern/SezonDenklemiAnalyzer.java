@@ -1,5 +1,8 @@
 package analyzer.mackolik.triplepattern;
 
+import analyzer.report.Finding;
+import analyzer.report.ReportSink;
+
 import analyzer.util.MackolikHttpFetcher;
 
 import analyzer.util.MackolikHost;
@@ -282,6 +285,17 @@ public class SezonDenklemiAnalyzer {
             return sb.toString();
         }
 
+        /** Bütün keçmiş halların rol oxusu (protaqonist gözü ilə) — təkrarsız. */
+        String roleReadings() {
+            java.util.LinkedHashSet<String> set = new java.util.LinkedHashSet<>();
+            for (DenklemHit hit : hits) {
+                String code = hit.protagonistCode();
+                if (code == null) continue;
+                set.add(target.isHome(protagonistId) ? code : flip(code));
+            }
+            return set.isEmpty() ? null : String.join(" / ", set);
+        }
+
         /**
          * Keçmiş nəticəni protaqonist rolu üzərindən bugünkü oyuna köçürür.
          * Keçmiş protaqonist evdə, bugünkü deplasmandadırsa (şəkildəki hal) kod çevrilir —
@@ -295,6 +309,37 @@ public class SezonDenklemiAnalyzer {
             return transferred + "  (" + protagonistName + " "
                     + (protagonistHomeNow ? "evdə" : "deplasmanda") + ")";
         }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  Günlük hesabat
+    // ═══════════════════════════════════════════════════════════════════════
+
+    /** Günlük tək hesabat üçün strukturlaşdırılmış nəticə (bax: analyzer.report.DailyReport). */
+    static void emitFinding(Fixture fx, String leagueName, Signal s) {
+        if (!ReportSink.enabled()) return;
+        String roles = s.roleReadings();
+        Finding f = Finding.of("SEZON_DENKLEMI", "Sezon denklemi", "mackolik")
+                .team(s.protagonistId, s.protagonistName)
+                .match(fx.homeId, fx.homeName, fx.awayId, fx.awayName, leagueName, fx.dateText, fx.kickoff)
+                .explain(String.format(
+                        "Bu mövsüm %s əvvəl %s ilə oynayıb, sonra %s ilə oynayacaq; bugünkü rəqib %s isə "
+                        + "bundan sonra %s ilə oynayacaq. Eyni düzülüş keçmiş %d mövsümdə də olub və həmin oyun%s "
+                        + "sürprizlə bitib.",
+                        s.protagonistName, s.prevOppName, s.nextOppName, s.midName, s.bridgeName,
+                        s.hits.size(), s.hits.size() > 1 ? "lar" : ""))
+                .predict(roles == null ? null : "İY/MS (keçmişdən köçürülmüş, " + s.protagonistName + " gözü ilə): " + roles);
+        for (DenklemHit hit : s.hits) {
+            LeagueMatch m = hit.star;
+            f.evidence(Finding.ev(hit.seasonLabel, Finding.isoDate(m.date), m.homeName, m.awayName,
+                            m.ftHome + "-" + m.ftAway, m.hasHalfTime() ? m.htScoreText() : null)
+                    .ids(m.homeId, m.awayId)
+                    .htft(hit.htFt)
+                    .note("Əvvəl: " + hit.previous.opponentName(hit.protagonistId)
+                            + " · Sonra: " + hit.next.opponentName(hit.protagonistId)
+                            + " · Körpü: " + hit.bridge.homeName + " vs " + hit.bridge.awayName));
+        }
+        f.emit();
     }
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -690,7 +735,11 @@ public class SezonDenklemiAnalyzer {
                 Fixture fixture = toFixture(row);
                 if (fixture == null) continue;
                 unstarted++;
-                if (day == null || day.equals(fixture.dateText)) fixtures.add(fixture);
+                if (day == null || day.equals(fixture.dateText)) {
+                    fixtures.add(fixture);
+                    ReportSink.fixture(row.optInt(0, 0), fixture.homeId, fixture.homeName,
+                            fixture.awayId, fixture.awayName, fixture.leagueName, fixture.dateText, fixture.kickoff);
+                }
             }
             log.info("livedata: {} başlamamış oyun, {} tarixi üçün {} oyun seçildi.",
                     unstarted, day == null ? "bütün günlər" : day, fixtures.size());
@@ -832,6 +881,8 @@ public class SezonDenklemiAnalyzer {
             StringBuilder sb = new StringBuilder();
             if (fromHome != null) sb.append(fromHome.render(leagueName));
             if (fromAway != null) sb.append(fromAway.render(leagueName));
+            if (fromHome != null) emitFinding(fixture, leagueName, fromHome);
+            if (fromAway != null) emitFinding(fixture, leagueName, fromAway);
             return sb.length() == 0 ? null : sb.toString();
         }
 
