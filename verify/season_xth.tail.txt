@@ -1,0 +1,45 @@
+1.Lig]
+
+⏳ İlerleme: 424/576 | Bulunan: 158⏳ İlerleme: 425/576 | Bulunan: 158⏳ İlerleme: 426/576 | Bulunan: 158⏳ İlerleme: 427/576 | Bulunan: 158⏳ İlerleme: 428/576 | Bulunan: 158
+╔══════════════════════════════════════════════════════════════════╗
+  ✅ Tarxien (ID: 7821)
+  Şimdi oynayacağı RESMİ maç sırası : 6. maç
+  Oynanacak maç : 30.10.2026  Tarxien vs Victoria H  [Malta 1. Lig]
+  Son 20 sezonda 6. resmi maçta 2/1 - 1/2 sayısı : 1
+╚══════════════════════════════════════════════════════════════════╝
+   ⭐ 2016/2017 | 6. resmi maç | HT/FT: 2/1
+        25.09.2016  →  Sliema 2-1 Tarxien   (İY: 0-1)  [Malta Premier Lig]
+
+⏳ İlerleme: 429/576 | Bulunan: 159⏳ İlerleme: 430/576 | Bulunan: 159
+╔══════════════════════════════════════════════════════════════════╗
+  ✅ Vittoriosa (ID: 8316)
+  Şimdi oynayacağı RESMİ maç sırası : 5. maç
+  Oynanacak maç : 25.10.2026  Pieta vs Vittoriosa  [Malta 1. Lig]
+  Son 20 sezonda 5. resmi maçta 2/1 - 1/2 sayısı : 1
+  ⭐⭐⭐⭐⭐ AYNI RAKİP: bunlardan 1 tanesi bugünkü maçın aynı iki takımı
+╚══════════════════════════════════════════════════════════════════╝
+   ⭐ 2016/2017 | 5. resmi maç | HT/FT: 1/2
+        15.10.2016  →  Pieta 2-3 Vittoriosa   (İY: 1-0)  [Malta 1. Lig]  ⭐⭐⭐⭐⭐
+
+⏳ İlerleme: 431/576 | Bulunan: 160⏳ İlerleme: 432/576 | Bulunan: 160
+╔══════════════════════════════════════════════════════════════════╗
+  ✅ Doxa (ID: 6877)
+  Şimdi oynayacağı RESMİ maç sırası : 6. maç
+  Oynanacak maç : 30.10.2026  Doxa vs Iraklis Y.  [Kıbrıs Rum Kesimi 2. Lig]
+  Son 20 sezonda 6. resmi maçta 2/1 - 1/2 sayısı : 1
+╚══════════════════════════════════════════════════════════════════╝
+   ⭐ 2023/2024 | 6. resmi maç | HT/FT: 1/2
+        1.10.2023  →  Doxa 1-3 Omonia   (İY: 1-0)  [Kıbrıs Rum Kesimi 1. Lig]
+
+⏳ İlerleme: 433/576 | Bulunan: 161⏳ İlerleme: 434/576 | Bulunan: 161⏳ İlerleme: 435/576 | Bulunan: 161
+╔══════════════════════════════════════════════════════════════════╗
+  ✅ Anagennisi (ID: 6878)
+  Şimdi oynayacağı RESMİ maç sırası : 6. maç
+  Oynanacak maç : 30.10.2026  Ermis vs Anagennisi  [Kıbrıs Rum Kesimi 2. Lig]
+  Son 20 sezonda 6. resmi maçta 2/1 - 1/2 sayısı : 1
+╚══════════════════════════════════════════════════════════════════╝
+   ⭐ 2014/2015 | 6. resmi maç | HT/FT: 1/2
+        29.10.2014  →  N&S Erimis 3-4 Anagennisi   (İY: 2-0)  [Kıbrıs Rum Kesimi Kupa]
+
+⏳ İlerleme: 436/576 | Bulunan: 162⏳ İlerleme: 437/576 | Bulunan: 162⏳ İlerleme: 438/576 | Bulunan: 162⏳ İlerleme: 439/576 | Bulunan: 162⏳ İlerleme: 440/576 | Bulunan: 162⏳ İlerleme: 441/576 | Bulunan: 162⏳ İlerleme: 442/576 | Bulunan: 162⏳ İlerleme: 443/576 | Bulunan: 162⏳ İlerleme: 444/576 | Bulunan: 162[workflow] step timed out or failed (exit 124)
+===== SeasonXthOfficialMatchAnalyzer END =====

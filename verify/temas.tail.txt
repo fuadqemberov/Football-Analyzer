@@ -1,0 +1,43 @@
+��════════════════════════════════════════════════════════════════════╗
+║ 🎯 SİNYAL: Guastatoya
+║    Bugünkü Maç : Guastatoya vs Mixco
+║    Tahmin      : HT/FT 1/2 veya 2/1 → FULL COMEBACK
+║    Temas Takımı: Antigua
+║    Kural       : Sürpriz, Antigua temasından 2 maç SONRA geliyor
+║    Bugünkü temas maçı: Guastatoya vs Antigua (oynandı: 1-1)
+║    Güç         : ORTA → 2 farklı sezonda tekrarladı
+╠════════════════════════════════════════════════════════════════════╣
+║    GEÇMİŞ SEZON KANITLARI:
+║    2019/2020 | SÜRPRİZ: Guastatoya 3-1 (İY: 0-1) Comunicacion → HT/FT 2/1 | TEMAS: Guastatoya vs Antigua [İç Saha]
+║    2017/2018 | SÜRPRİZ: Guastatoya 1-2 (İY: 1-0) Suchitepeq → HT/FT 1/2 | TEMAS: Guastatoya vs Antigua [İç Saha]
+╚════════════════════════════════════════════════════════════════════╝
+
+╔════════════════════════════════════════════════════════════════════╗
+║ 🎯 SİNYAL: Guastatoya
+║    Bugünkü Maç : Guastatoya vs Mixco
+║    Tahmin      : HT/FT 1/X veya 2/X → BERABERLİK COMEBACK
+║    Temas Takımı: Suchitepeq
+║    Kural       : Sürpriz, Suchitepeq temasından 3 maç ÖNCE geliyor
+║    Bugünkü temas maçı: Guastatoya vs Suchitepeq (henüz oynanmadı)
+║    Güç         : ORTA → 2 farklı sezonda tekrarladı
+╠════════════════════════════════════════════════════════════════════╣
+║    GEÇMİŞ SEZON KANITLARI:
+║    2017/2018 | SÜRPRİZ: Siquinala 1-1 (İY: 0-1) Guastatoya → HT/FT 2/X | TEMAS: Guastatoya vs Suchitepeq [İç Saha]
+║    2015/2016 | SÜRPRİZ: Coban Impe 2-2 (İY: 0-2) Guastatoya → HT/FT 2/X | TEMAS: Guastatoya vs Suchitepeq [İç Saha]
+╚════════════════════════════════════════════════════════════════════╝
+
+╔════════════════════════════════════════════════════════════════════╗
+║ 🎯 SİNYAL: Guastatoya
+║    Bugünkü Maç : Guastatoya vs Mixco
+║    Tahmin      : HT/FT 1/2 veya 2/1 → FULL COMEBACK
+║    Temas Takımı: Municipal
+║    Kural       : Sürpriz, Municipal temasından 1 maç SONRA geliyor
+║    Bugünkü temas maçı: Municipal vs Guastatoya (oynandı: 1-1)
+║    Güç         : ORTA → 2 farklı sezonda tekrarladı
+╠════════════════════════════════════════════════════════════════════╣
+║    GEÇMİŞ SEZON KANITLARI:
+║    2017/2018 | SÜRPRİZ: Guastatoya 1-2 (İY: 1-0) Suchitepeq → HT/FT 1/2 | TEMAS: Municipal vs Guastatoya [Deplasman]
+║    2015/2016 | SÜRPRİZ: San Carlos 2-3 (İY: 2-1) Guastatoya → HT/FT 1/2 | TEMAS: Guastatoya vs Municipal [İç Saha]
+╚════════════════════════════════════════════════════════════════════╝
+⏳ İlerleme: 254/576  |  Sinyal: 169[workflow] step timed out or failed (exit 124)
+===== TemasTakimiAnalyzer END =====

@@ -1,0 +1,59 @@
+=====================================
+[LİQA]: French Championnat National 2   |   HƏFTƏ: 8
+[BUGÜNKÜ MATÇ]: Andrezieux  vs  Touraine   |   [TARİX]: 2026-10-30 18:30  (bugün: 2026-10-30)
+[A takımı (ev) = Andrezieux] 8-ci həftədə (ev + səfər) keçmiş HT/FT (2/1, 1/2, 1/X, 2/X):
+     [2021-2022]  R8   HT/FT: 2/X  |  Andrezieux vs Canet Roussillon   HT(0-1) FT(1-1)
+     [2016-2017]  R8   HT/FT: 2/1  |  Jura Sud Foot vs Andrezieux   HT(0-1) FT(4-1)
+     >>> Uyğun nəticə: 2
+
+[B takımı (qonaq) = Touraine] 8-ci həftədə (ev + səfər) keçmiş HT/FT (2/1, 1/2, 1/X, 2/X):
+     (bu nümunələr üzrə nəticə yoxdur)
+     >>> Uyğun nəticə: 0
+==================================================================
+==================================================================
+[LİQA]: French Championnat National 2   |   HƏFTƏ: 8
+[BUGÜNKÜ MATÇ]: Le Poire Sur Vie  vs  Les Herbiers   |   [TARİX]: 2026-10-30 18:00  (bugün: 2026-10-30)
+[A takımı (ev) = Le Poire Sur Vie] 8-ci həftədə (ev + səfər) keçmiş HT/FT (2/1, 1/2, 1/X, 2/X):
+     (bu nümunələr üzrə nəticə yoxdur)
+     >>> Uyğun nəticə: 0
+
+[B takımı (qonaq) = Les Herbiers] 8-ci həftədə (ev + səfər) keçmiş HT/FT (2/1, 1/2, 1/X, 2/X):
+     [2018-2019]  R8   HT/FT: 1/X  |  Saint-Etienne B vs Les Herbiers   HT(2-1) FT(3-3)
+     >>> Uyğun nəticə: 1
+==================================================================
+==================================================================
+[LİQA]: French Championnat National 2   |   HƏFTƏ: 8
+[BUGÜNKÜ MATÇ]: Stade Briochin  vs  Angouleme   |   [TARİX]: 2026-10-30 18:00  (bugün: 2026-10-30)
+[A takımı (ev) = Stade Briochin] 8-ci həftədə (ev + səfər) keçmiş HT/FT (2/1, 1/2, 1/X, 2/X):
+     [2018-2019]  R8   HT/FT: 1/X  |  FC Nantes B vs Stade Briochin   HT(1-0) FT(1-1)
+     >>> Uyğun nəticə: 1
+
+[B takımı (qonaq) = Angouleme] 8-ci həftədə (ev + səfər) keçmiş HT/FT (2/1, 1/2, 1/X, 2/X):
+     [2024-2025]  R8   HT/FT: 2/1  |  Toulon vs Angouleme   HT(0-1) FT(4-1)
+     [2019-2020]  R8   HT/FT: 2/X  |  Angouleme vs CHAMALIERES   HT(0-2) FT(2-2)
+     >>> Uyğun nəticə: 2
+==================================================================
+==================================================================
+[LİQA]: Turkey Ligi 3   |   HƏFTƏ: 9
+[BUGÜNKÜ MATÇ]: Adanaspor  vs  Turk Metal Kirikkale   |   [TARİX]: 2026-10-30 10:00  (bugün: 2026-10-30)
+[A takımı (ev) = Adanaspor] 9-ci həftədə (ev + səfər) keçmiş HT/FT (2/1, 1/2, 1/X, 2/X):
+     (bu nümunələr üzrə nəticə yoxdur)
+     >>> Uyğun nəticə: 0
+
+[B takımı (qonaq) = Turk Metal Kirikkale] 9-ci həftədə (ev + səfər) keçmiş HT/FT (2/1, 1/2, 1/X, 2/X):
+     [2023-2024]  R9   HT/FT: 2/X  |  Turk Metal Kirikkale vs Artvin Hopaspor   HT(0-1) FT(1-1)
+     >>> Uyğun nəticə: 1
+==================================================================
+
+>>> Bütün bugünkü matçların analizi tamamlandı.
+[WARNING] thread Thread[#71,UrlChecker-2,5,analyzer.nowgoal.NowGoalTeamRoundHTFT] was interrupted but is still alive after waiting at least 14995msecs
+[WARNING] thread Thread[#71,UrlChecker-2,5,analyzer.nowgoal.NowGoalTeamRoundHTFT] will linger despite being asked to die via interruption
+[WARNING] thread Thread[#75,CompletableFutureDelayScheduler,5,analyzer.nowgoal.NowGoalTeamRoundHTFT] will linger despite being asked to die via interruption
+[WARNING] NOTE: 2 thread(s) did not finish despite being asked to via interruption. This is not a problem with exec:java, it is a problem with the running code. Although not serious, it should be remedied.
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD SUCCESS
+[INFO] ------------------------------------------------------------------------
+[INFO] Total time:  01:14 min
+[INFO] Finished at: 2026-10-30T06:24:13Z
+[INFO] ------------------------------------------------------------------------
+===== NowGoalTeamRoundHTFT END =====

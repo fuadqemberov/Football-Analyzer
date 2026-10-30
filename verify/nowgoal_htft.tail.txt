@@ -1,0 +1,70 @@
+əftə: 5]
+🔥🔥🔥 [CRAZY COMEBACK HT/FT: 1/2] 🔥🔥🔥
+[KEÇMİŞ NƏTİCƏ]: Shire Endaselassie FC 1-2 Sidama Bunna | HT: (1-0) | [TARİX]: 2025-11-08 12:00
+**********************
+
+**********************
+[LİQA]: Ireland Premier Division | [GÜNCƏL HƏFTƏ]: 36 | [KÖRPÜ OFFSETİ]: 4 tur öncə
+[GÜNCƏL OYUN]: Shelbourne vs Waterford United | [TARİX]: 2026-10-30 19:45  (bugün: 2026-10-30)
+[KÖPRÜLƏR]: Dundalk & Shamrock Rovers
+[TAPILAN SEZON]: 2023 | [Eyni Həftə: 36]
+🔥🔥🔥 [CRAZY COMEBACK HT/FT: 1/2] 🔥🔥🔥
+[KEÇMİŞ NƏTİCƏ]: Drogheda United 2-4 Shelbourne | HT: (2-0) | [TARİX]: 2023-11-03 19:45
+**********************
+
+**********************
+[LİQA]: Uzbek League | [GÜNCƏL HƏFTƏ]: 26 | [KÖRPÜ OFFSETİ]: 2 tur öncə
+[GÜNCƏL OYUN]: Neftchi Fargona vs Kuruvchi Bunyodkor | [TARİX]: 2026-10-30 16:00  (bugün: 2026-10-30)
+[KÖPRÜLƏR]: Kuruvchi Kokand Qoqon & Sogdiana Jizak
+[TAPILAN SEZON]: 2021 | [Eyni Həftə: 26]
+🔥🔥🔥 [CRAZY COMEBACK HT/FT: 1/2] 🔥🔥🔥
+[KEÇMİŞ NƏTİCƏ]: Nasaf Qarshi 1-3 Lokomotiv Tashkent | HT: (1-0) | [TARİX]: 2021-11-27 10:00
+**********************
+
+**********************
+[LİQA]: Denmark - 2.Liga | [GÜNCƏL HƏFTƏ]: 14 | [KÖRPÜ OFFSETİ]: 4 tur öncə
+[GÜNCƏL OYUN]: Skive IK vs VSK Arhus | [TARİX]: 2026-10-30 18:00  (bugün: 2026-10-30)
+[KÖPRÜLƏR]: HIK Hellerup & Brabrand
+[TAPILAN SEZON]: 2022-2023 | [Eyni Həftə: 14]
+🔥🔥🔥 [CRAZY COMEBACK HT/FT: 1/2] 🔥🔥🔥
+[KEÇMİŞ NƏTİCƏ]: BK Frem 1-2 Roskilde | HT: (1-0) | [TARİX]: 2022-11-05 13:00
+**********************
+
+**********************
+[LİQA]: Israel Leumit League | [GÜNCƏL HƏFTƏ]: 12 | [KÖRPÜ OFFSETİ]: 4 tur öncə
+[GÜNCƏL OYUN]: Hapoel Acre FC vs Hapoel Rishon Lezion | [TARİX]: 2026-10-30 13:00  (bugün: 2026-10-30)
+[KÖPRÜLƏR]: Maccabi Kabilio Jaffa & Hapoel Afula
+[TAPILAN SEZON]: 2024-2025 | [Eyni Həftə: 12]
+🔥🔥🔥 [CRAZY COMEBACK HT/FT: 2/1] 🔥🔥🔥
+[KEÇMİŞ NƏTİCƏ]: Hapoel Petah Tikva 3-2 Ironi Nir Ramat HaSharon | HT: (0-1) | [TARİX]: 2024-11-01 13:00
+**********************
+
+**********************
+[LİQA]: Israel Leumit League | [GÜNCƏL HƏFTƏ]: 12 | [KÖRPÜ OFFSETİ]: 4 tur öncə
+[GÜNCƏL OYUN]: Hapoel Afula vs Maccabi Kiryat Gat | [TARİX]: 2026-10-30 13:00  (bugün: 2026-10-30)
+[KÖPRÜLƏR]: Hapoel Rishon Lezion & Bnei Yehuda Tel Aviv
+[TAPILAN SEZON]: 2021-2022 | [Eyni Həftə: 12]
+🔥🔥🔥 [CRAZY COMEBACK HT/FT: 2/1] 🔥🔥🔥
+[KEÇMİŞ NƏTİCƏ]: Hapoel Raanana 2-1 AS Ashdod | HT: (0-1) | [TARİX]: 2021-11-26 13:00
+**********************
+
+**********************
+[LİQA]: Welsh Premier League | [GÜNCƏL HƏFTƏ]: 15 | [KÖRPÜ OFFSETİ]: 5 tur öncə
+[GÜNCƏL OYUN]: Flint Town vs Holywell | [TARİX]: 2026-10-30 19:45  (bugün: 2026-10-30)
+[KÖPRÜLƏR]: Airbus UK Broughton & Haverfordwest County
+[TAPILAN SEZON]: 2022-2023 | [Eyni Həftə: 15]
+🔥🔥🔥 [CRAZY COMEBACK HT/FT: 1/2] 🔥🔥🔥
+[KEÇMİŞ NƏTİCƏ]: Airbus UK Broughton 1-2 Haverfordwest County | HT: (1-0) | [TARİX]: 2022-11-19 14:30
+**********************
+
+>>> Analiz tamamlandı.
+[WARNING] thread Thread[#72,CompletableFutureDelayScheduler,5,analyzer.nowgoal.NowGoalHTFT] was interrupted but is still alive after waiting at least 14995msecs
+[WARNING] thread Thread[#72,CompletableFutureDelayScheduler,5,analyzer.nowgoal.NowGoalHTFT] will linger despite being asked to die via interruption
+[WARNING] NOTE: 1 thread(s) did not finish despite being asked to via interruption. This is not a problem with exec:java, it is a problem with the running code. Although not serious, it should be remedied.
+[INFO] ------------------------------------------------------------------------
+[INFO] BUILD SUCCESS
+[INFO] ------------------------------------------------------------------------
+[INFO] Total time:  03:45 min
+[INFO] Finished at: 2026-10-30T06:28:00Z
+[INFO] ------------------------------------------------------------------------
+===== NowGoalHTFT END =====

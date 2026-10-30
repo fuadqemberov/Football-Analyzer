@@ -1,0 +1,53 @@
+gin.version' for org.apache.maven.plugins:maven-surefire-plugin is missing. @ line 216, column 21
+[WARNING] 
+[WARNING] It is highly recommended to fix these problems because they threaten the stability of your build.
+[WARNING] 
+[WARNING] For this reason, future Maven versions might no longer support building such malformed projects.
+[WARNING] 
+[INFO] Loaded 24297 auto-discovered prefixes for remote repository central (prefixes-central.txt)
+[INFO] 
+[INFO] ------------------------< com.company:football >------------------------
+[INFO] Building football 1.0-SNAPSHOT
+[INFO]   from pom.xml
+[INFO] --------------------------------[ jar ]---------------------------------
+[INFO] Loaded 74 auto-discovered prefixes for remote repository apache.snapshots (prefixes-apache.snapshots.txt)
+[INFO] Loaded 24294 auto-discovered prefixes for remote repository gcs-maven-central-mirror (prefixes-gcs-maven-central-mirror.txt)
+[WARNING] 6 problems were encountered while building the effective model for org.openjfx:javafx-controls:jar:21.0.1 during dependency collection step for project (use -X to see details)
+[INFO] Loaded 24297 auto-discovered prefixes for remote repository central_maven (prefixes-central_maven.txt)
+[INFO] Loaded 74 auto-discovered prefixes for remote repository apache.snapshots.https (prefixes-apache.snapshots.https.txt)
+[WARNING] 2 problems were encountered while building the effective model for org.apache.yetus:audience-annotations:jar:0.5.0 during dependency collection step for project (use -X to see details)
+[INFO] Loaded 24297 auto-discovered prefixes for remote repository sonatype-releases (prefixes-sonatype-releases.txt)
+[INFO] 
+[INFO] --- exec:3.5.0:java (default-cli) @ football ---
+[INFO] Loaded 50 auto-discovered prefixes for remote repository ow2-snapshot (prefixes-ow2-snapshot.txt)
+SLF4J(W): No SLF4J providers were found.
+SLF4J(W): Defaulting to no-operation (NOP) logger implementation
+SLF4J(W): See https://www.slf4j.org/codes.html#noProviders for further details.
+SLF4J(W): Class path contains SLF4J bindings targeting slf4j-api versions 1.7.x or earlier.
+SLF4J(W): Ignoring binding found at [jar:file:/home/runner/.m2/repository/org/slf4j/slf4j-log4j12/1.7.30/slf4j-log4j12-1.7.30.jar!/org/slf4j/impl/StaticLoggerBinder.class]
+SLF4J(W): See https://www.slf4j.org/codes.html#ignoredBindings for an explanation.
+💾 Geçmiş sezon önbelleği: /home/runner/work/Football-Analyzer/Football-Analyzer/.mackolik-cache
+🧅 Tor çıxışı aktiv: 16 SOCKS portu [9060, 9061, 9062, 9063, 9064, 9065, 9066, 9067, 9068, 9069, 9070, 9071, 9072, 9073, 9074, 9075] | NEWNYM: ControlPort 9151
+════════ SEZON DENKLEMİ — QƏLİB DEDEKTORU ════════
+Denklem: [Ə əvvəlki rəqib] → ★hədəf → [S sonrakı rəqib] + orta halqanın körpüsü (V)
+Keçmiş sezon sayı : 10
+Filtr             : yalnız sürprizlə bitmiş denklemlər
+Mənbə: livedata proqramı (30/10/2026) — 289 başlamamış oyun.
+Fərqli liqa       : 150
+   Irak · Premier Lig                            10 oyun
+   Galler · Premier Lig 1.Aşama                  6 oyun
+   Fransa · Ligue 2                              5 oyun
+   İrlanda · Premier Lig                         5 oyun
+   İran · Persian Gulf Pro Lig                   5 oyun
+   Avusturya · Regionalliga Kuzey                5 oyun
+   Romanya · 3.Lig Grup 5                        5 oyun
+   Romanya · 3.Lig Grup 7                        5 oyun
+   Polonya · Merkezi Gençlik Ligi                5 oyun
+   Belçika · Reserve Pro Lig                     5 oyun
+   … və daha 140 liqa
+289 oyun analiz edilir...
+
+⚠️ Keçici xəta: HTTP 429 (Tor çıxışı dəyişdirilir)
+🌐 Mackolik istek özeti: 1201 ok / 0 retry / 0 başarısız / 229 önbellek [host: arsiv2.mackolik.com → arsiv.mackolik.com | Tor: 16 zolaq, 2 IP dəyişmə, NEWNYM×0] {keçici: HTTP 429 (Tor çıxışı dəyişdirilir)×2}
+[workflow] step timed out or failed (exit 124)
+===== SezonDenklemiAnalyzer END =====
