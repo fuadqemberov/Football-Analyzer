@@ -1,5 +1,8 @@
 package analyzer.nowgoal;
 
+import analyzer.report.Finding;
+import analyzer.report.ReportSink;
+
 import analyzer.util.AyniEslesme;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -180,6 +183,7 @@ public class NowGoalTeamRoundHTFT {
         // Keçmiş sezonları gəz (cari daxil), 2010/2011-ə qədər — HƏR İKİ takım üçün.
         // Sezon JSON-u bir dəfə yüklənir, hər iki takım eyni datadan yoxlanılır.
         StringBuilder sbA = new StringBuilder(), sbB = new StringBuilder();
+        List<Finding.Evidence> evA = new ArrayList<>(), evB = new ArrayList<>();
         int hitsA = 0, hitsB = 0;
         for (String season : fx.seasons) {
             if (seasonStartYear(season) < MIN_SEASON_YEAR) break;
@@ -187,9 +191,13 @@ public class NowGoalTeamRoundHTFT {
             LeagueData ld = season.equals(fx.seasons.get(0)) ? cur : loadLeague(fx.leagueId, season);
             if (ld == null) continue;
 
-            if (appendRoundHit(sbA, ld, season, round, idA, today, idA, idB)) hitsA++;
-            if (appendRoundHit(sbB, ld, season, round, idB, today, idA, idB)) hitsB++;
+            if (appendRoundHit(sbA, ld, season, round, idA, today, idA, idB, evA)) hitsA++;
+            if (appendRoundHit(sbB, ld, season, round, idB, today, idA, idB, evB)) hitsB++;
         }
+
+        // Günlük tək hesabat üçün strukturlaşdırılmış nəticə (bax: analyzer.report.DailyReport)
+        if (hitsA > 0) emitFinding(fx, cur, round, idA, evA);
+        if (hitsB > 0) emitFinding(fx, cur, round, idB, evB);
 
         // Heç bir takımda bu nümunələrdən yoxdursa çap etmə
         if (hitsA == 0 && hitsB == 0) return;
@@ -214,6 +222,23 @@ public class NowGoalTeamRoundHTFT {
         }
     }
 
+    // ── GÜNLÜK HESABAT ────────────────────────────────────────
+    static void emitFinding(Fixture fx, LeagueData cur, int round, int teamId, List<Finding.Evidence> ev) {
+        if (!ReportSink.enabled()) return;
+        Finding f = Finding.of("NG_TEAM_ROUND", "NowGoal · Eyni tur İY/MS", "nowgoal")
+                .team(teamId, cur.teamName(teamId))
+                .match(fx.homeId, cur.teamName(fx.homeId), fx.awayId, cur.teamName(fx.awayId), cur.leagueName,
+                        fx.kickoff == null ? null : fx.kickoff.toLocalDate().toString(),
+                        fx.kickoff == null ? null : fx.kickoff.toLocalTime().toString())
+                .explain(String.format(
+                        "%s keçmiş mövsümlərdə %d. turda (ev və ya səfər) %d dəfə İY/MS sürprizi yaşayıb: "
+                        + "İY-də geridə olub qalib gəlib, öndə olub uduzub və ya heç-heçəyə razılaşıb.",
+                        cur.teamName(teamId), round, ev.size()))
+                .predict("İY/MS sürprizi: 2/1, 1/2, 1/X və ya 2/X");
+        for (Finding.Evidence e : ev) f.evidence(e);
+        f.emit();
+    }
+
     // ── BİR TAKIMIN BLOKUNU ÇAP ET ────────────────────────────
     static void printTeamBlock(String label, String teamName, int round, StringBuilder sb, int hits) {
         System.out.println("[" + label + " = " + teamName + "] " + round
@@ -232,7 +257,7 @@ public class NowGoalTeamRoundHTFT {
      */
     static boolean appendRoundHit(StringBuilder sb, LeagueData ld, String season,
                                   int round, int teamId, LocalDate today,
-                                  int bugunEvId, int bugunQonaqId) {
+                                  int bugunEvId, int bugunQonaqId, List<Finding.Evidence> ev) {
         Match m = ld.findTeamMatchInRound(round, teamId);
         if (m == null || m.ft == null || m.ht == null) return false;
         // TARİX YOXLAMASI: nəticə yalnız artıq oynanmış matçdan götürülə bilər
@@ -249,6 +274,11 @@ public class NowGoalTeamRoundHTFT {
         String ulduz = AyniEslesme.yildiz(m.homeId, m.awayId, bugunEvId, bugunQonaqId);
         sb.append(String.format("     [%-9s]  R%-2d  HT/FT: %-3s  |  %s vs %s   HT(%s) FT(%s)%s%n",
                 season, round, htftOrig, ld.teamName(m.homeId), ld.teamName(m.awayId), m.ht, m.ft, ulduz));
+        ev.add(Finding.ev(season, m.kickoff == null ? null : m.kickoff.toLocalDate().toString(),
+                        ld.teamName(m.homeId), ld.teamName(m.awayId), m.ft, m.ht)
+                .ids(m.homeId, m.awayId)
+                .htft(htftOrig)
+                .note(ld.teamName(teamId) + " gözü ilə: " + htft));
         return true;
     }
 

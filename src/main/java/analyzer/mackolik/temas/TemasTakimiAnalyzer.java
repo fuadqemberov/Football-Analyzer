@@ -1,5 +1,8 @@
 package analyzer.mackolik.temas;
 
+import analyzer.report.Finding;
+import analyzer.report.ReportSink;
+
 import analyzer.util.MackolikHost;
 
 import analyzer.util.AyniEslesme;
@@ -389,10 +392,38 @@ public class TemasTakimiAnalyzer {
             if (rakip == null || !teamsMatch(rakip, k.temasAdi)) continue;
 
             out.append(buildSignal(teamName, todayMatch, k, temasMacBugun, teamName));
+            emitFinding(teamId, teamName, todayMatch, k, temasMacBugun);
             signals.add(new SignalInfo(teamName, macAdi, k.grup, k.seasons.size(), k.temasAdi));
         }
 
         return signals.isEmpty() ? null : new TeamResult(out.toString(), signals);
+    }
+
+    // ─── GÜNLÜK HESABAT ─────────────────────────────────────────────────────
+    /** Günlük tək hesabat üçün strukturlaşdırılmış nəticə (bax: analyzer.report.DailyReport). */
+    private static void emitFinding(int teamId, String teamName, MacData todayMatch,
+                                    TemasKaniti k, MacData temasMacBugun) {
+        if (!ReportSink.enabled()) return;
+        String konum = k.offset < 0 ? Math.abs(k.offset) + " oyun əvvəl" : k.offset + " oyun sonra";
+        String gozlenti = k.grup.equals(FULL_COMEBACK)
+                ? "İY/MS 1/2 və ya 2/1 (tam dönüş)"
+                : "İY/MS 1/X və ya 2/X (heç-heçə dönüşü)";
+        String cs = k.correctScore();
+        if (cs != null) {
+            int[] p = parseScore(cs);
+            gozlenti += " · dəqiq hesab " + cs + " və ya " + p[1] + "-" + p[0];
+        }
+        Finding f = Finding.of("TEMAS", "Temas komandası", "mackolik")
+                .team(teamId, teamName)
+                .match(0, todayMatch.homeTeam, 0, todayMatch.awayTeam, null, todayMatch.dateStr, null)
+                .explain(String.format(
+                        "%s keçmiş %d mövsümdə %s ilə oyunundan %s sürprizli nəticə alıb; bu mövsüm də "
+                        + "%s oyunu (%s vs %s) bugünkü oyuna eyni məsafədədir.",
+                        teamName, k.seasons.size(), k.temasAdi, konum,
+                        k.temasAdi, temasMacBugun.homeTeam, temasMacBugun.awayTeam))
+                .predict(gozlenti);
+        for (Finding.Evidence e : k.kanitlar) f.evidence(e);
+        f.emit();
     }
 
     // ─── SİNYAL ÇIKTISI ─────────────────────────────────────────────────────
@@ -496,6 +527,8 @@ public class TemasTakimiAnalyzer {
         final List<String> ftSkorlari = new ArrayList<>();   // sürpriz maçların FT skorları (sezon başına 1)
         /** hitSatirlari ile aynı sırada: sürpriz maçın {ev, deplasman} isimleri (yıldız kontrolü için). */
         final List<String[]> surprizCiftleri = new ArrayList<>();
+        /** hitSatirlari ile aynı sırada: günlük hesabat üçün sübut oyunları. */
+        final List<Finding.Evidence> kanitlar = new ArrayList<>();
 
         TemasKaniti(String temasAdi, int offset, String grup) {
             this.temasAdi = temasAdi;
@@ -509,6 +542,10 @@ public class TemasTakimiAnalyzer {
             if (!seasons.add(season)) return;
             ftSkorlari.add(surprizMac.ftScore);
             surprizCiftleri.add(new String[]{surprizMac.homeTeam, surprizMac.awayTeam});
+            kanitlar.add(Finding.ev(season, surprizMac.dateStr, surprizMac.homeTeam, surprizMac.awayTeam,
+                            surprizMac.ftScore, surprizMac.htScore)
+                    .htft(htFt)
+                    .note("Temas oyunu: " + temasMac.homeTeam + " vs " + temasMac.awayTeam));
             hitSatirlari.add(String.format(
                     "%-9s | SÜRPRİZ: %s %s (İY: %s) %s → HT/FT %s | TEMAS: %s vs %s [%s]",
                     season,
@@ -585,6 +622,7 @@ public class TemasTakimiAnalyzer {
         String awayTeam;
         String ftScore;   // oynanmadıysa null
         String htScore;   // yoksa null
+        String dateStr;   // "11.08.2024" (fikstürün 1-ci sütunu); yoxdursa null
         boolean played;
     }
 
@@ -630,6 +668,7 @@ public class TemasTakimiAnalyzer {
             MacData md = new MacData();
             md.homeTeam = home;
             md.awayTeam = away;
+            md.dateStr  = extractCell(row, "td:nth-child(1)");
 
             Element scoreEl = row.selectFirst("td:nth-child(5) b a");
             String score = scoreEl != null ? scoreEl.text().trim() : "";

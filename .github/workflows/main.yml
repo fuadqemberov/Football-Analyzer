@@ -22,6 +22,11 @@ jobs:
       MACKOLIK_TOR_PORTS: "9060-9075"
       MACKOLIK_TOR_CONTROL: "9151"
 
+      # Bütün analizlər nəticələrini bu fayla yazır; sonda "Build daily report"
+      # addımı hamısını oyun üzrə birləşdirib TƏK hesabat qurur (analyzer.report.DailyReport).
+      ANALYZER_REPORT_FILE: ${{ github.workspace }}/findings.jsonl
+      REPORT_TZ: Asia/Baku
+
       # Çıktı .txt dosyaya yönlendirildiği için Java System.out'u konsol değil,
       # "native.encoding" (yani runner'ın locale'i) ile yazar. Locale UTF-8
       # değilse ⭐ ve 🎯 gibi karakterler eke "?" olarak düşer. Aşağıdakiler
@@ -92,7 +97,9 @@ jobs:
           fi
 
       - name: Compile
-        run: mvn -B compile -DskipTests
+        run: |
+          mvn -B compile -DskipTests
+          rm -f findings.jsonl
 
       - name: 1) NowGoalTeamRoundHTFT
         run: |
@@ -157,6 +164,36 @@ jobs:
           echo "===== SezonDenklemiAnalyzer END =====" >> sezon_denklemi.txt
           tail -n 20 sezon_denklemi.txt
 
+      - name: Build daily report
+        if: always()
+        run: |
+          touch findings.jsonl
+          mvn -B -q exec:java \
+            -Dexec.mainClass="analyzer.report.DailyReport" \
+            -Dexec.classpathScope=compile \
+            -Dexec.args="--in findings.jsonl --html report.html --email-html email.html --txt report.txt --log NG_TEAM_ROUND=team_round.txt --log NG_BRIDGE=nowgoal_htft.txt --log TEMAS=temas.txt --log HAFTA_DONGU=hafta_dongu.txt --log SEASON_XTH=season_xth.txt --log SEZON_DENKLEMI=sezon_denklemi.txt" \
+            || { echo "<html><body><p>Hesabat qurulmadı — xam loglar GitHub Actions-da (raw-logs artefaktı).</p></body></html>" > report.html; cp report.html email.html; }
+          echo "REPORT_DATE=$(TZ=Asia/Baku date +%d.%m.%Y)" >> "$GITHUB_ENV"
+          [ -f report.txt ] && head -n 40 report.txt || true
+
+      # Xam loglar e-poçta getmir — lazım olanda Actions səhifəsindən endirilir.
+      - name: Upload raw logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: raw-logs-${{ github.run_number }}
+          path: |
+            team_round.txt
+            nowgoal_htft.txt
+            temas.txt
+            hafta_dongu.txt
+            season_xth.txt
+            sezon_denklemi.txt
+            findings.jsonl
+            report.txt
+          retention-days: 14
+          if-no-files-found: ignore
+
       - name: Send email
         if: always()
         uses: dawidd6/action-send-mail@v3
@@ -165,22 +202,12 @@ jobs:
           server_port: 465
           username: ${{ secrets.MAIL_USERNAME }}
           password: ${{ secrets.MAIL_PASSWORD }}
-          subject: "Daily All 6 Analyzers - #${{ github.run_number }}"
+          subject: "📊 Günlük analiz hesabatı — ${{ env.REPORT_DATE }} (#${{ github.run_number }})"
           to: ${{ secrets.MAIL_TO }}
           from: GitHub Actions <${{ secrets.MAIL_USERNAME }}>
+          # E-poçtun içində diqqətçəkən oyunlar; bütün oyunlar əlavədəki report.html-də.
+          html_body: file://email.html
           body: |
-            Günlük 6 analiz tamamlandı (01:30 Bakı).
-
-            1) NowGoalTeamRoundHTFT           → team_round.txt
-            2) NowGoalHTFT                    → nowgoal_htft.txt
-            3) TemasTakimiAnalyzer            → temas.txt
-            4) HaftaDonguAnalyzer             → hafta_dongu.txt
-            5) SeasonXthOfficialMatchAnalyzer → season_xth.txt
-            6) SezonDenklemiAnalyzer          → sezon_denklemi.txt
-
-            Not: Hər analiz üçün vaxt limiti var (mackolik analizləri 45-60 dəq, digərləri 25 dəq);
-            bir analiz donsa belə iş dayanmır və email gəlir.
-            Kəsilmə olubsa faylın sonunda "[workflow] step timed out or failed" sətri görünür.
-
-            Log: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          attachments: team_round.txt,nowgoal_htft.txt,temas.txt,hafta_dongu.txt,season_xth.txt,sezon_denklemi.txt
+            Günlük analiz hesabatı əlavədədir (report.html).
+            Xam loglar: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          attachments: report.html
