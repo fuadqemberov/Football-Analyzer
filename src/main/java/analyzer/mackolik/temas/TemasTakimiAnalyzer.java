@@ -39,12 +39,12 @@ import java.util.concurrent.TimeUnit;
  *   Videodaki kural: aynı (temas takımı + offset) kombinasyonu 3+ sezonda tekrar
  *   ediyorsa artık tesadüf değildir.
  *
- * SÜRPRİZ TANIMI (4 ayrı tahmin DEĞİL, 2 grup):
- *   İlk yarıyı önde kapatan takımın maçı KAZANAMAMASI aranır ve iki gruba ayrılır:
- *     - BERABERLİK COMEBACK : HT/FT = 1/X veya 2/X (önde olan yakalanır, maç berabere)
- *     - FULL COMEBACK       : HT/FT = 1/2 veya 2/1 (önde olan maçı kaybeder)
- *   Desen tekrarı da grup bazında sayılır: aynı temas takımı + aynı offset + AYNI
- *   comeback grubu farklı sezonlarda tekrarlanmalıdır.
+ * SÜRPRİZ TANIMI — YALNIZ TAM DÖNÜŞ:
+ *     - FULL COMEBACK : HT/FT = 1/2 veya 2/1 (ilk yarıyı önde kapatan maçı kaybeder)
+ *   1/X, 2/X (beraberlik comeback) ve "correct score" tahminleri 30.10.2026 isabet
+ *   ölçümünde tesadüften zayıf çıktığı için kaldırıldı (1/X-2/X: %9 vs doğal %12;
+ *   correct score: %7 vs ~%10). Full comeback: %9 vs doğal %3.
+ *   Desen tekrarı: aynı temas takımı + aynı offset farklı sezonlarda tekrarlanmalıdır.
  *
  * Akış:
  *   1. Günün başlamamış maçlarındaki takım ID'leri alınır (vd.mackolik.com/livedata).
@@ -96,9 +96,7 @@ public class TemasTakimiAnalyzer {
     public static void main(String[] args) {
         System.out.println("\n╔══════════════════════════════════════════════════════╗");
         System.out.println("║  TEMAS TAKIMI ANALİZÖRÜ - HT/FT Sürpriz Avcısı        ║");
-        System.out.println("║  1/X, 2/X → BERABERLİK COMEBACK                       ║");
-        System.out.println("║  1/2, 2/1 → FULL COMEBACK                             ║");
-        System.out.println("║  + CORRECT SCORE (ters-düz aynı skor tekrarı)         ║");
+        System.out.println("║  1/2, 2/1 → FULL COMEBACK (yalnız tam dönüş)          ║");
         System.out.println("╚══════════════════════════════════════════════════════╝\n");
 
         long globalStart = System.currentTimeMillis();
@@ -201,24 +199,15 @@ public class TemasTakimiAnalyzer {
         }
 
         // ── 2) Tek sinyalde YUKSEK_TEKRAR_ESIGI+ sezon tekrarı olan maçlar ──
-        List<SignalInfo> fullCB     = new ArrayList<>();
-        List<SignalInfo> beraberCB  = new ArrayList<>();
+        List<SignalInfo> fullCB = new ArrayList<>();
         for (SignalInfo s : sinyaller) {
-            if (s.seasonCount < YUKSEK_TEKRAR_ESIGI) continue;
-            if (FULL_COMEBACK.equals(s.group)) fullCB.add(s);
-            else beraberCB.add(s);
+            if (s.seasonCount >= YUKSEK_TEKRAR_ESIGI) fullCB.add(s);
         }
-        Comparator<SignalInfo> tekrardanAzalan = (a, b) -> Integer.compare(b.seasonCount, a.seasonCount);
-        fullCB.sort(tekrardanAzalan);
-        beraberCB.sort(tekrardanAzalan);
+        fullCB.sort((a, b) -> Integer.compare(b.seasonCount, a.seasonCount));
 
-        System.out.printf("%n🔥 1 SİNYALDE %d+ SEZON TEKRARI OLAN MAÇLAR:%n", YUKSEK_TEKRAR_ESIGI);
-
-        System.out.println("\n   ── FULL COMEBACK (1/2, 2/1) ──");
+        System.out.printf("%n🔥 1 SİNYALDE %d+ SEZON TEKRARI OLAN MAÇLAR (FULL COMEBACK 1/2, 2/1):%n",
+                YUKSEK_TEKRAR_ESIGI);
         printYuksekTekrarListesi(fullCB);
-
-        System.out.println("\n   ── BERABERLİK COMEBACK (1/X, 2/X) ──");
-        printYuksekTekrarListesi(beraberCB);
 
         System.out.println();
     }
@@ -405,19 +394,12 @@ public class TemasTakimiAnalyzer {
                                     TemasKaniti k, MacData temasMacBugun) {
         if (!ReportSink.enabled()) return;
         String konum = k.offset < 0 ? Math.abs(k.offset) + " oyun əvvəl" : k.offset + " oyun sonra";
-        String gozlenti = k.grup.equals(FULL_COMEBACK)
-                ? "İY/MS 1/2 və ya 2/1 (tam dönüş)"
-                : "İY/MS 1/X və ya 2/X (heç-heçə dönüşü)";
-        String cs = k.correctScore();
-        if (cs != null) {
-            int[] p = parseScore(cs);
-            gozlenti += " · dəqiq hesab " + cs + (p[0] == p[1] ? "" : " və ya " + p[1] + "-" + p[0]);
-        }
+        String gozlenti = "İY/MS 1/2 və ya 2/1 (tam dönüş)";
         Finding f = Finding.of("TEMAS", "Temas komandası", "mackolik")
                 .team(teamId, teamName)
                 .match(0, todayMatch.homeTeam, 0, todayMatch.awayTeam, null, todayMatch.dateStr, null)
                 .explain(String.format(
-                        "%s keçmiş %d mövsümdə %s ilə oyunundan %s sürprizli nəticə alıb; bu mövsüm də "
+                        "%s keçmiş %d mövsümdə %s ilə oyunundan %s tam dönüşlü (İY/MS 2/1 və ya 1/2) nəticə alıb; bu mövsüm də "
                         + "%s oyunu (%s vs %s) bugünkü oyuna eyni məsafədədir.",
                         teamName, k.seasons.size(), k.temasAdi, konum,
                         k.temasAdi, temasMacBugun.homeTeam, temasMacBugun.awayTeam))
@@ -437,22 +419,13 @@ public class TemasTakimiAnalyzer {
                 ? Math.abs(k.offset) + " maç ÖNCE"
                 : k.offset + " maç SONRA";
 
-        String tahmin = k.grup.equals(FULL_COMEBACK)
-                ? "HT/FT 1/2 veya 2/1 → FULL COMEBACK"
-                : "HT/FT 1/X veya 2/X → BERABERLİK COMEBACK";
+        String tahmin = "HT/FT 1/2 veya 2/1 → FULL COMEBACK";
 
         StringBuilder sb = new StringBuilder();
         sb.append("\n\n╔════════════════════════════════════════════════════════════════════╗\n");
         sb.append(String.format("║ 🎯 SİNYAL: %s%n", teamName));
         sb.append(String.format("║    Bugünkü Maç : %s vs %s%n", todayMatch.homeTeam, todayMatch.awayTeam));
         sb.append(String.format("║    Tahmin      : %s%n", tahmin));
-        String cs = k.correctScore();
-        if (cs != null) {
-            int[] p = parseScore(cs);
-            String ters = p[1] + "-" + p[0];
-            sb.append(String.format("║    CORRECT SCORE: %s veya %s (ters-düz AYNI skor, tüm sezonlar)%n",
-                    cs, ters));
-        }
         sb.append(String.format("║    Temas Takımı: %s%n", k.temasAdi));
         sb.append(String.format("║    Kural       : Sürpriz, %s temasından %s geliyor%n", k.temasAdi, konum));
         sb.append(String.format("║    Bugünkü temas maçı: %s vs %s (%s)%n",
@@ -524,7 +497,6 @@ public class TemasTakimiAnalyzer {
         final String grup;                             // BERABERLIK_COMEBACK / FULL_COMEBACK
         final Set<String> seasons = new LinkedHashSet<>();
         final List<String> hitSatirlari = new ArrayList<>();
-        final List<String> ftSkorlari = new ArrayList<>();   // sürpriz maçların FT skorları (sezon başına 1)
         /** hitSatirlari ile aynı sırada: sürpriz maçın {ev, deplasman} isimleri (yıldız kontrolü için). */
         final List<String[]> surprizCiftleri = new ArrayList<>();
         /** hitSatirlari ile aynı sırada: günlük hesabat üçün sübut oyunları. */
@@ -540,7 +512,6 @@ public class TemasTakimiAnalyzer {
                     String htFt, String temasVenue) {
             // Aynı sezonda aynı çift birden fazla kez düşerse sadece ilkini yaz
             if (!seasons.add(season)) return;
-            ftSkorlari.add(surprizMac.ftScore);
             surprizCiftleri.add(new String[]{surprizMac.homeTeam, surprizMac.awayTeam});
             kanitlar.add(Finding.ev(season, surprizMac.dateStr, surprizMac.homeTeam, surprizMac.awayTeam,
                             surprizMac.ftScore, surprizMac.htScore)
@@ -553,53 +524,31 @@ public class TemasTakimiAnalyzer {
                     htFt,
                     temasMac.homeTeam, temasMac.awayTeam, temasVenue));
         }
-
-        /**
-         * Tüm sezonlardaki sürpriz maçlar AYNI skorla (ters-düz dahil) bittiyse
-         * o skoru döndürür; örn. 3-1, 1-3, 3-1 → "3-1". Aksi halde null.
-         */
-        String correctScore() {
-            if (ftSkorlari.size() < MIN_SEZON_TEKRARI) return null;
-            String canon = null;
-            for (String s : ftSkorlari) {
-                int[] p = parseScore(s);
-                if (p == null) return null;
-                int hi = Math.max(p[0], p[1]);
-                int lo = Math.min(p[0], p[1]);
-                String c = hi + "-" + lo;
-                if (canon == null) canon = c;
-                else if (!canon.equals(c)) return null;   // sezonlardan biri farklı skor → yok
-            }
-            return canon;   // hi-lo formunda; ters-düz iki yön de geçerli
-        }
     }
 
     // ─── HT/FT SÜRPRİZ HESABI ───────────────────────────────────────────────
     static final String BERABERLIK_COMEBACK = "BERABERLIK COMEBACK";
     static final String FULL_COMEBACK       = "FULL COMEBACK";
 
-    /**
-     * 1/X ve 2/X → beraberlik comeback, 1/2 ve 2/1 → full comeback.
-     * 4 sonuç 4 ayrı tahmin olarak DEĞİL, bu 2 grup olarak sayılır.
-     */
+    /** 1/2 ve 2/1 → full comeback (surprizHtFt artık yalnız bunları döndürür). */
     static String comebackGrubu(String htFt) {
         return ("1/2".equals(htFt) || "2/1".equals(htFt)) ? FULL_COMEBACK : BERABERLIK_COMEBACK;
     }
 
     /**
-     * İlk yarıyı önde kapatan takım maçı kazanamadıysa sürprizdir.
-     * Dönüş: "1/X", "1/2", "2/X", "2/1" veya null.
+     * İlk yarıyı önde kapatan takım maçı KAYBETTİYSE sürprizdir.
+     * Dönüş: "1/2", "2/1" veya null.
      */
     static String surprizHtFt(String htScore, String ftScore) {
         int[] ht = parseScore(htScore);
         int[] ft = parseScore(ftScore);
         if (ht == null || ft == null) return null;
 
+        // Yalnız TAM DÖNÜŞ: 1/X və 2/X (heç-heçə dönüşü) statistik olaraq təsadüfdən
+        // zəif çıxdığı üçün (25/267 = 9% vs təbii 12%) artıq sürpriz sayılmır.
         if (ht[0] > ht[1]) {                       // ilk yarı ev önde
-            if (ft[0] == ft[1]) return "1/X";
             if (ft[1] > ft[0])  return "1/2";
         } else if (ht[1] > ht[0]) {                // ilk yarı deplasman önde
-            if (ft[0] == ft[1]) return "2/X";
             if (ft[0] > ft[1])  return "2/1";
         }
         return null;

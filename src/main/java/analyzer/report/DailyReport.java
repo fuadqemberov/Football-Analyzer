@@ -54,12 +54,9 @@ public final class DailyReport {
     /** Analiz kodu → hesabatda görünən ad (iş axınındakı sıra ilə). */
     static final Map<String, String> ANALYZERS = new LinkedHashMap<>();
     static {
-        ANALYZERS.put("NG_TEAM_ROUND", "NowGoal · Eyni tur İY/MS");
-        ANALYZERS.put("NG_BRIDGE",     "NowGoal · Körpü (comeback)");
-        ANALYZERS.put("TEMAS",         "Temas komandası");
-        ANALYZERS.put("HAFTA_DONGU",   "Həftə dövrü");
+        // 30.10.2026 isabət ölçümünə görə yalnız təsadüfdən güclü olan 2 taktika saxlanılıb.
+        ANALYZERS.put("TEMAS",         "Temas komandası (tam dönüş)");
         ANALYZERS.put("SEASON_XTH",    "X. rəsmi oyun İY/MS");
-        ANALYZERS.put("SEZON_DENKLEMI","Sezon denklemi");
     }
 
     // ═══════════════════════════════════════════════════════════════════════
