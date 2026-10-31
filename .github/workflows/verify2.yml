@@ -1,0 +1,152 @@
+name: Verify 2 tactics (temporary)
+
+on:
+  push:
+    branches: [report-verify2]
+permissions:
+  contents: write
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    # Adım limitlərinin cəmi (2 × 110 dəq) + quraşdırma/hesabat payı.
+    timeout-minutes: 260
+
+    env:
+      # Geçmiş sezon sayfaları değişmez veridir. Bu dizin adımlar arasında
+      # paylaşıldığı için temas/dongu/xthmatch aynı sayfayı bir kez indirir
+      # (~3 kat az istek → çok daha az timeout).
+      MACKOLIK_CACHE_DIR: ${{ github.workspace }}/.mackolik-cache
+
+      # Mackolik sorğuları Tor üzərindən (bax: "Start Tor" addımı, analyzer.util.TorEgress)
+      MACKOLIK_TOR_PORTS: "9060-9075"
+      MACKOLIK_TOR_CONTROL: "9151"
+
+      # Bütün analizlər nəticələrini bu fayla yazır; sonda "Build daily report"
+      # addımı hamısını oyun üzrə birləşdirib TƏK hesabat qurur (analyzer.report.DailyReport).
+      ANALYZER_REPORT_FILE: ${{ github.workspace }}/findings.jsonl
+      REPORT_TZ: Asia/Baku
+
+      # Çıktı .txt dosyaya yönlendirildiği için Java System.out'u konsol değil,
+      # "native.encoding" (yani runner'ın locale'i) ile yazar. Locale UTF-8
+      # değilse ⭐ ve 🎯 gibi karakterler eke "?" olarak düşer. Aşağıdakiler
+      # hem locale'i hem de JVM'in stdout kodlamasını UTF-8'e sabitler.
+      LANG: C.UTF-8
+      LC_ALL: C.UTF-8
+      MAVEN_OPTS: "-Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dstderr.encoding=UTF-8"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          # 21, pom.xml'deki maven.compiler.release ile aynı olmalı. Adsız değişken
+          # (catch (Exception _)) kullanımları "ignored" olarak değiştirildiği için
+          # artık Java 22'ye gerek yok.
+          java-version: '21'
+          distribution: 'temurin'
+          cache: maven
+
+      # Geçmiş sezonlar değişmediği için önbellek günler arasında da taşınır:
+      # ertesi gün yalnızca güncel sezon + yeni takımların geçmişi indirilir.
+      # Anahtar her çalışmada benzersiz, restore-keys ile en son önbellek geri
+      # yüklenir → her koşu bir öncekinin üstüne ekleyerek büyür.
+      - name: Restore mackolik season cache
+        uses: actions/cache@v4
+        with:
+          path: .mackolik-cache
+          key: mackolik-cache-${{ github.run_id }}
+          restore-keys: |
+            mackolik-cache-
+
+      - name: Prune stale cache entries
+        run: |
+          mkdir -p .mackolik-cache
+          # Koddaki 30 günlük TTL ile aynı: bayat girdiler zaten kullanılmıyor, diskten de silinsin.
+          find .mackolik-cache -type f -mtime +30 -delete || true
+          echo "Önbellek: $(find .mackolik-cache -type f | wc -l) dosya, $(du -sh .mackolik-cache | cut -f1)"
+
+      # arsiv.mackolik.com bulud IP-lərini 403 ilə bloklayır, arsiv2 isə bir IP-yə
+      # ~40 sorğu verib 429 qaytarır. Tor-un hər SOCKS portu ayrı çıxış IP-sidir;
+      # MackolikHttpFetcher limit dolanda portu dəyişir və ControlPort-dan NEWNYM
+      # ilə yeni IP-lər alır. Tor başlamasa analizlər birbaşa bağlantı ilə davam edir.
+      - name: Start Tor (mackolik IP limiti)
+        run: |
+          sudo apt-get install -y -qq tor > /dev/null 2>&1 || sudo apt-get install -y tor
+          sudo systemctl stop tor tor@default 2>/dev/null || true
+          sudo pkill -x tor || true; sleep 1
+          TD="$RUNNER_TEMP/tor"; mkdir -p "$TD" && chmod 700 "$TD"
+          { for p in $(seq 9060 9075); do echo "SocksPort $p"; done
+            echo "ControlPort 9151"; echo "CookieAuthentication 0"; echo "DataDirectory $TD"; } > "$RUNNER_TEMP/torrc"
+          nohup tor -f "$RUNNER_TEMP/torrc" > "$RUNNER_TEMP/tor.log" 2>&1 &
+          for i in $(seq 1 90); do grep -q "Bootstrapped 100" "$RUNNER_TEMP/tor.log" && break; sleep 2; done
+          if grep -q "Bootstrapped 100" "$RUNNER_TEMP/tor.log"; then
+            echo "Tor hazırdır: $(curl -s -m 20 --socks5 127.0.0.1:9060 https://api.ipify.org)"
+          else
+            echo "Tor başlamadı — mackolik birbaşa bağlantı ilə işləyəcək"; tail -20 "$RUNNER_TEMP/tor.log"
+            echo "MACKOLIK_TOR_PORTS=" >> "$GITHUB_ENV"
+          fi
+
+      - name: Compile
+        run: |
+          mvn -B compile -DskipTests
+          rm -f findings.jsonl
+
+      # Yalnız statistik olaraq işləyən 2 taktika saxlanılıb (30.10.2026 nəticələri):
+      #   Temas komandası (tam dönüş 2/1, 1/2) və X. rəsmi oyun (2/1, 1/2).
+      # Digər analizlər çıxarıldığı üçün hər birinə daha çox vaxt verilir —
+      # əvvəllər vaxt limitində kəsilib bütün takımları tarama bilmirdilər.
+      - name: 1) TemasTakimiAnalyzer
+        run: |
+          echo "===== TemasTakimiAnalyzer START =====" > temas.txt
+          timeout -k 30 5m mvn -B exec:java \
+            -Dexec.mainClass="analyzer.mackolik.temas.TemasTakimiAnalyzer" \
+            -Dexec.classpathScope=compile \
+            >> temas.txt 2>&1 || echo "[workflow] step timed out or failed (exit $?)" >> temas.txt
+          echo "===== TemasTakimiAnalyzer END =====" >> temas.txt
+          tail -n 20 temas.txt
+
+      - name: 2) SeasonXthOfficialMatchAnalyzer
+        run: |
+          echo "===== SeasonXthOfficialMatchAnalyzer START =====" > season_xth.txt
+          timeout -k 30 5m mvn -B exec:java \
+            -Dexec.mainClass="analyzer.mackolik.xthmatch.SeasonXthOfficialMatchAnalyzer" \
+            -Dexec.classpathScope=compile \
+            >> season_xth.txt 2>&1 || echo "[workflow] step timed out or failed (exit $?)" >> season_xth.txt
+          echo "===== SeasonXthOfficialMatchAnalyzer END =====" >> season_xth.txt
+          tail -n 20 season_xth.txt
+
+      - name: Build daily report
+        if: always()
+        run: |
+          touch findings.jsonl
+          mvn -B -q exec:java \
+            -Dexec.mainClass="analyzer.report.DailyReport" \
+            -Dexec.classpathScope=compile \
+            -Dexec.args="--in findings.jsonl --html report.html --email-html email.html --txt report.txt --log TEMAS=temas.txt --log SEASON_XTH=season_xth.txt" \
+            || { echo "<html><body><p>Hesabat qurulmadı — xam loglar GitHub Actions-da (raw-logs artefaktı).</p></body></html>" > report.html; cp report.html email.html; }
+          echo "REPORT_DATE=$(TZ=Asia/Baku date +%d.%m.%Y)" >> "$GITHUB_ENV"
+          [ -f report.txt ] && head -n 40 report.txt || true
+
+      # Xam loglar e-poçta getmir — lazım olanda Actions səhifəsindən endirilir.
+      - name: Upload raw logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: raw-logs-${{ github.run_number }}
+          path: |
+            temas.txt
+            season_xth.txt
+            findings.jsonl
+            report.txt
+          retention-days: 14
+          if-no-files-found: ignore
+
+      - name: Commit report
+        if: always()
+        run: |
+          mkdir -p verify && cp -f email.html report.txt findings.jsonl verify/ 2>/dev/null || true
+          git config user.name verify-bot; git config user.email verify@users.noreply.github.com
+          git add -f verify && git commit -m "verify report" && git push
