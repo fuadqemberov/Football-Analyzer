@@ -1,4 +1,4 @@
-name: Daily All Analyzers
+name: Daily Analyzers (Temas + X. rəsmi oyun)
 
 on:
   schedule:
@@ -9,8 +9,8 @@ on:
 jobs:
   run:
     runs-on: ubuntu-latest
-    # Adım limitlerinin toplamı (250dk) + derleme/kurulum payı.
-    timeout-minutes: 300
+    # Adım limitlərinin cəmi (2 × 110 dəq) + quraşdırma/hesabat payı.
+    timeout-minutes: 260
 
     env:
       # Geçmiş sezon sayfaları değişmez veridir. Bu dizin adımlar arasında
@@ -68,13 +68,6 @@ jobs:
           find .mackolik-cache -type f -mtime +30 -delete || true
           echo "Önbellek: $(find .mackolik-cache -type f | wc -l) dosya, $(du -sh .mackolik-cache | cut -f1)"
 
-      - name: Install Chrome
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y google-chrome-stable || true
-          sudo apt-get install -y chromium-browser || sudo apt-get install -y chromium || true
-          google-chrome --version || chromium --version || chromium-browser --version || true
-
       # arsiv.mackolik.com bulud IP-lərini 403 ilə bloklayır, arsiv2 isə bir IP-yə
       # ~40 sorğu verib 429 qaytarır. Tor-un hər SOCKS portu ayrı çıxış IP-sidir;
       # MackolikHttpFetcher limit dolanda portu dəyişir və ControlPort-dan NEWNYM
@@ -101,68 +94,29 @@ jobs:
           mvn -B compile -DskipTests
           rm -f findings.jsonl
 
-      - name: 1) NowGoalTeamRoundHTFT
-        run: |
-          echo "===== NowGoalTeamRoundHTFT START =====" > team_round.txt
-          timeout -k 30 25m mvn -B exec:java \
-            -Dexec.mainClass="analyzer.nowgoal.NowGoalTeamRoundHTFT" \
-            -Dexec.classpathScope=compile \
-            >> team_round.txt 2>&1 || echo "[workflow] step timed out or failed (exit $?)" >> team_round.txt
-          echo "===== NowGoalTeamRoundHTFT END =====" >> team_round.txt
-          tail -n 20 team_round.txt
-
-      - name: 2) NowGoalHTFT
-        run: |
-          echo "===== NowGoalHTFT START =====" > nowgoal_htft.txt
-          timeout -k 30 25m mvn -B exec:java \
-            -Dexec.mainClass="analyzer.nowgoal.NowGoalHTFT" \
-            -Dexec.classpathScope=compile \
-            >> nowgoal_htft.txt 2>&1 || echo "[workflow] step timed out or failed (exit $?)" >> nowgoal_htft.txt
-          echo "===== NowGoalHTFT END =====" >> nowgoal_htft.txt
-          tail -n 20 nowgoal_htft.txt
-
-      # Mackolik analizörleri 1500+ takım × ~20 sezon tarıyor; 25dk'ya sığmıyordu
-      # ve tarama yarıda kesiliyordu. İlk çalışan temas önbelleği soğuktan
-      # doldurduğu için en geniş bütçe onda.
-      - name: 3) TemasTakimiAnalyzer
+      # Yalnız statistik olaraq işləyən 2 taktika saxlanılıb (30.10.2026 nəticələri):
+      #   Temas komandası (tam dönüş 2/1, 1/2) və X. rəsmi oyun (2/1, 1/2).
+      # Digər analizlər çıxarıldığı üçün hər birinə daha çox vaxt verilir —
+      # əvvəllər vaxt limitində kəsilib bütün takımları tarama bilmirdilər.
+      - name: 1) TemasTakimiAnalyzer
         run: |
           echo "===== TemasTakimiAnalyzer START =====" > temas.txt
-          timeout -k 30 60m mvn -B exec:java \
+          timeout -k 30 110m mvn -B exec:java \
             -Dexec.mainClass="analyzer.mackolik.temas.TemasTakimiAnalyzer" \
             -Dexec.classpathScope=compile \
             >> temas.txt 2>&1 || echo "[workflow] step timed out or failed (exit $?)" >> temas.txt
           echo "===== TemasTakimiAnalyzer END =====" >> temas.txt
           tail -n 20 temas.txt
 
-      - name: 4) HaftaDonguAnalyzer
-        run: |
-          echo "===== HaftaDonguAnalyzer START =====" > hafta_dongu.txt
-          timeout -k 30 45m mvn -B exec:java \
-            -Dexec.mainClass="analyzer.mackolik.dongu.HaftaDonguAnalyzer" \
-            -Dexec.classpathScope=compile \
-            >> hafta_dongu.txt 2>&1 || echo "[workflow] step timed out or failed (exit $?)" >> hafta_dongu.txt
-          echo "===== HaftaDonguAnalyzer END =====" >> hafta_dongu.txt
-          tail -n 20 hafta_dongu.txt
-
-      - name: 5) SeasonXthOfficialMatchAnalyzer
+      - name: 2) SeasonXthOfficialMatchAnalyzer
         run: |
           echo "===== SeasonXthOfficialMatchAnalyzer START =====" > season_xth.txt
-          timeout -k 30 45m mvn -B exec:java \
+          timeout -k 30 110m mvn -B exec:java \
             -Dexec.mainClass="analyzer.mackolik.xthmatch.SeasonXthOfficialMatchAnalyzer" \
             -Dexec.classpathScope=compile \
             >> season_xth.txt 2>&1 || echo "[workflow] step timed out or failed (exit $?)" >> season_xth.txt
           echo "===== SeasonXthOfficialMatchAnalyzer END =====" >> season_xth.txt
           tail -n 20 season_xth.txt
-
-      - name: 6) SezonDenklemiAnalyzer
-        run: |
-          echo "===== SezonDenklemiAnalyzer START =====" > sezon_denklemi.txt
-          timeout -k 30 45m mvn -B exec:java \
-            -Dexec.mainClass="analyzer.mackolik.triplepattern.SezonDenklemiAnalyzer" \
-            -Dexec.classpathScope=compile \
-            >> sezon_denklemi.txt 2>&1 || echo "[workflow] step timed out or failed (exit $?)" >> sezon_denklemi.txt
-          echo "===== SezonDenklemiAnalyzer END =====" >> sezon_denklemi.txt
-          tail -n 20 sezon_denklemi.txt
 
       - name: Build daily report
         if: always()
@@ -171,7 +125,7 @@ jobs:
           mvn -B -q exec:java \
             -Dexec.mainClass="analyzer.report.DailyReport" \
             -Dexec.classpathScope=compile \
-            -Dexec.args="--in findings.jsonl --html report.html --email-html email.html --txt report.txt --log NG_TEAM_ROUND=team_round.txt --log NG_BRIDGE=nowgoal_htft.txt --log TEMAS=temas.txt --log HAFTA_DONGU=hafta_dongu.txt --log SEASON_XTH=season_xth.txt --log SEZON_DENKLEMI=sezon_denklemi.txt" \
+            -Dexec.args="--in findings.jsonl --html report.html --email-html email.html --txt report.txt --log TEMAS=temas.txt --log SEASON_XTH=season_xth.txt" \
             || { echo "<html><body><p>Hesabat qurulmadı — xam loglar GitHub Actions-da (raw-logs artefaktı).</p></body></html>" > report.html; cp report.html email.html; }
           echo "REPORT_DATE=$(TZ=Asia/Baku date +%d.%m.%Y)" >> "$GITHUB_ENV"
           [ -f report.txt ] && head -n 40 report.txt || true
@@ -183,12 +137,8 @@ jobs:
         with:
           name: raw-logs-${{ github.run_number }}
           path: |
-            team_round.txt
-            nowgoal_htft.txt
             temas.txt
-            hafta_dongu.txt
             season_xth.txt
-            sezon_denklemi.txt
             findings.jsonl
             report.txt
           retention-days: 14
